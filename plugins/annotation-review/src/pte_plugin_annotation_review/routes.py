@@ -24,6 +24,7 @@ from fastapi_app.lib.secrets import MissingSecretError, secret_required_detail
 from pte_plugin_annotation_review.prompts import UnusableResponseError
 from pte_plugin_annotation_review.review_logic import (
     NoRuleExcerptsError,
+    chunk_range,
     count_chunks,
     run_review,
 )
@@ -66,6 +67,10 @@ class ReviewResponse(BaseModel):
     chunk_count: int
     # Findings the model proposed whose "old" did not occur exactly once in the document
     discarded: int = 0
+    # Position of the reviewed chunk in `xml` (UTF-16 code units, as JavaScript string offsets);
+    # None if it cannot be determined
+    chunk_start: int | None = None
+    chunk_end: int | None = None
 
 
 class PlanRequest(BaseModel):
@@ -131,6 +136,11 @@ async def review(
         logger.warning(f"annotation-review: provider '{body.provider_id}' request failed: {e}")
         raise HTTPException(status_code=502, detail=f"LLM provider request failed: {_upstream_error_message(e)}") from e
 
+    position = chunk_range(body.xml, body.chunk_index, body.scope)
     return ReviewResponse(
-        findings=[FindingResponse(**f) for f in findings], chunk_count=chunk_count, discarded=discarded
+        findings=[FindingResponse(**f) for f in findings],
+        chunk_count=chunk_count,
+        discarded=discarded,
+        chunk_start=position[0] if position else None,
+        chunk_end=position[1] if position else None,
     )

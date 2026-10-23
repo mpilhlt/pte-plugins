@@ -94,6 +94,7 @@ class TestReviewRoute(unittest.TestCase):
         self.assertEqual(body["findings"][0]["old"], "<persName>J. Doe</persName>")
         self.assertEqual(body["chunk_count"], 1)
         self.assertEqual(body["discarded"], 0)
+        self.assertTrue(TEI_DOC[body["chunk_start"]:body["chunk_end"]].startswith("<text"))
 
     def test_plan_returns_the_chunk_count_without_calling_the_provider(self):
         response = self.client.post("/api/plugins/annotation-review/plan", json={"xml": TEI_DOC})

@@ -25,7 +25,7 @@ class FakeFrontendExtensionPlugin {
 global.FrontendExtensionPlugin = FakeFrontendExtensionPlugin;
 global.document = { createElement: () => ({ addEventListener(t, fn) { this._click = fn; }, style: {} }) };
 
-const { default: AnnotationReviewExtension, locateFinding, buildModifiedText, findingsToDiagnostics, FindingsCache, CACHE_VERSION } =
+const { default: AnnotationReviewExtension, locateFinding, buildModifiedText, findingsToDiagnostics, FindingsCache, CACHE_VERSION, unitMarksForChunk } =
   await import('../extensions/annotation-review.js');
 
 /**
@@ -716,6 +716,52 @@ describe('node-scoped review', () => {
     await ext.runReview();
     assert.deepStrictEqual(reviewArgs, [null]);
     assert.match(confirmCalls[0].message, /current document/);
+  });
+});
+
+describe('unit review marks', () => {
+  const doc = '<TEI><text><listBibl><bibl>A <title>T1</title></bibl><bibl>B <title>T2</title></bibl><bibl>C</bibl></listBibl></text></TEI>';
+  /** @param {string} needle @param {string} fingerprint */
+  const unit = (needle, fingerprint) => {
+    const from = doc.indexOf(needle);
+    return { fingerprint, from, to: from + needle.length, name: 'bibl' };
+  };
+  const units = [unit('<bibl>A <title>T1</title></bibl>', 'a'), unit('<bibl>B <title>T2</title></bibl>', 'b'), unit('<bibl>C</bibl>', 'c')];
+
+  it('marks the units of the chunk, not OK where a finding falls into them', () => {
+    const chunk = doc.slice(doc.indexOf('<bibl>A'), doc.indexOf('<bibl>C'));
+    const marks = unitMarksForChunk(units, doc, chunk, [
+      { id: 0, old: '<title>T2</title>', new: '<title level="a">T2</title>', rationale: 'missing level' },
+    ]);
+    assert.deepStrictEqual(marks, [
+      { fingerprint: 'a', state: 'ok', comment: '' },
+      { fingerprint: 'b', state: 'not-ok', comment: 'missing level' },
+    ]);
+  });
+
+  it('records the marks through the unit review plugin when review mode is on', async () => {
+    const calls = [];
+    const { ext } = buildExtension({ docText: doc });
+    ext._deps['unit-review'] = {
+      isEnabled: () => true,
+      getUnits: () => units,
+      setMarks: async (reviewer, marks) => { calls.push({ reviewer, marks }); return true; },
+    };
+    await ext._recordUnitReview(doc, { findings: [], chunk_start: 0, chunk_end: doc.length }, { providerId: 'kisski', modelId: 'llama 3.3' });
+    assert.strictEqual(calls.length, 1);
+    assert.deepStrictEqual(calls[0].reviewer, { id: 'llm-kisski-llama-3.3', name: 'kisski label/llama 3.3 label' });
+    assert.deepStrictEqual(calls[0].marks.map(m => m.state), ['ok', 'ok', 'ok']);
+  });
+
+  it('records nothing when review mode is off, unit review is missing, or the chunk position is unknown', async () => {
+    const calls = [];
+    const { ext } = buildExtension({ docText: doc });
+    await ext._recordUnitReview(doc, { findings: [], chunk_start: 0, chunk_end: doc.length }, { providerId: 'p', modelId: 'm' });
+    ext._deps['unit-review'] = { isEnabled: () => false, getUnits: () => units, setMarks: async () => { calls.push(1); } };
+    await ext._recordUnitReview(doc, { findings: [], chunk_start: 0, chunk_end: doc.length }, { providerId: 'p', modelId: 'm' });
+    ext._deps['unit-review'].isEnabled = () => true;
+    await ext._recordUnitReview(doc, { findings: [] }, { providerId: 'p', modelId: 'm' });
+    assert.strictEqual(calls.length, 0);
   });
 });
 
