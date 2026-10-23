@@ -18,6 +18,12 @@ class TestExtractorInfoValidation(unittest.TestCase):
         info = GrobidTrainingExtractor.get_info()
         ExtractorInfo(**{**info, "available": True})
 
+    def test_review_units_are_variants(self):
+        from pte_plugin_grobid.extractor import GrobidTrainingExtractor
+        info = GrobidTrainingExtractor.get_info()
+        self.assertEqual(info["reviewUnits"]["grobid.training.references"], ".//listBibl/bibl")
+        self.assertTrue(set(info["reviewUnits"]) <= set(info["variants"]))
+
 
 if __name__ == "__main__":
     unittest.main()

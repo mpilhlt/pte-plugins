@@ -22,6 +22,7 @@ from pte_plugin_grobid.config import (
     get_grobid_server_url,
     get_model_path,
     get_navigation_xpath,
+    get_review_units,
     get_schema_url,
     get_supported_variants,
     is_grobid_cache_disabled,
@@ -86,6 +87,7 @@ class GrobidTrainingExtractor(BaseExtractor):
             "navigation_xpath": get_navigation_xpath(),
             "annotationGuides": get_annotation_guides(),
             "annotationTags": get_annotation_tags(),
+            "reviewUnits": get_review_units(),
         }
 
     @classmethod
