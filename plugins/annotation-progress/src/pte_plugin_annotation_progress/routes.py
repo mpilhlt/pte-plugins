@@ -555,14 +555,14 @@ def _extract_annotation_info(xml_content: str, file_metadata) -> dict | None:
         annotation_label = get_artifact_label(root) or "Untitled"
 
         # Count all change elements (revision count)
-        change_elements = root.findall(".//tei:revisionDesc/tei:change", ns)
+        change_elements = root.findall(".//tei:teiHeader/tei:revisionDesc/tei:change", ns)
         revision_count = len(change_elements)
 
         # Extract change signatures for ancestry tracking
         change_signatures = extract_change_signatures(root)
 
         # Get the last change element
-        last_change = root.find(".//tei:revisionDesc/tei:change[last()]", ns)
+        last_change = root.find(".//tei:teiHeader/tei:revisionDesc/tei:change[last()]", ns)
 
         last_change_desc = ""
         last_annotator = ""
