@@ -108,6 +108,31 @@ class TestExtractRevisionEntries(unittest.TestCase):
         self.assertEqual(entries[0].when, datetime(2026, 1, 1, 5, 0, 0))
 
 
+    def test_stand_off_changes_are_ignored(self):
+        """Unit comments and reviews in standOff have revisionDesc/change elements of their own."""
+        tei_with_standoff = TEI_SAMPLE.replace("</TEI>", """  <standOff>
+    <listAnnotation type="unit-comment">
+      <annotation xml:id="uc-000001" motivation="commenting" target="#xpath(/TEI/text)" resp="#jdoe">
+        <revisionDesc>
+          <change when="2026-04-01T10:00:00" who="#jdoe" status="draft"/>
+        </revisionDesc>
+        <note type="comment">A comment</note>
+      </annotation>
+    </listAnnotation>
+  </standOff>
+</TEI>""")
+
+        entries = extract_revision_entries(
+            tei_with_standoff,
+            stable_id="stable-1",
+            doc_label="Sample Doc",
+            collection_id="col-1",
+            included_statuses=["draft"],
+        )
+
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0].description, "First pass")
+
 class TestBuildAtomFeed(unittest.TestCase):
     def setUp(self):
         self.entries = [
