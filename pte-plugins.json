@@ -233,7 +233,7 @@
       "package": "pte-plugin-revision-feed",
       "module": "pte_plugin_revision_feed",
       "path": "plugins/revision-feed",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "description": "Per-project Atom feeds of document revisions",
       "requires": [],
       "dependencies": [],
