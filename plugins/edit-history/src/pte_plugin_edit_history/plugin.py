@@ -132,7 +132,7 @@ class EditHistoryPlugin(Plugin):
             )
 
             # Get the last change element
-            last_change = root.find(".//tei:revisionDesc/tei:change[last()]", ns)
+            last_change = root.find(".//tei:teiHeader/tei:revisionDesc/tei:change[last()]", ns)
 
             if last_change is None:
                 return []

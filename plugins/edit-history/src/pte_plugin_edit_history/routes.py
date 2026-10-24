@@ -421,7 +421,7 @@ def _extract_revision_info(xml_content: str, file_metadata) -> list[dict]:
         doc_label = get_artifact_label(root) or "Untitled"
 
         # Get ALL change elements
-        change_elements = root.findall(".//tei:revisionDesc/tei:change", ns)
+        change_elements = root.findall(".//tei:teiHeader/tei:revisionDesc/tei:change", ns)
 
         if not change_elements:
             return []
