@@ -40,7 +40,7 @@ def extract_revision_entries(
     root = etree.fromstring(xml_content.encode("utf-8"))
     entries: list[RevisionEntry] = []
 
-    for change in root.findall(".//tei:revisionDesc/tei:change", TEI_NS):
+    for change in root.findall(".//tei:teiHeader/tei:revisionDesc/tei:change", TEI_NS):
         status = change.get("status", "draft")
         if status not in included_statuses:
             continue
