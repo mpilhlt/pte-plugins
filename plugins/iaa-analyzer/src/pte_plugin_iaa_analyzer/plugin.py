@@ -205,7 +205,7 @@ class IAAAnalyzerPlugin(Plugin):
             # Extract last annotator from revisionDesc
             ns = {"tei": "http://www.tei-c.org/ns/1.0"}
             last_change_elem = root.find(
-                ".//tei:revisionDesc/tei:change[last()]", ns
+                ".//tei:teiHeader/tei:revisionDesc/tei:change[last()]", ns
             )
             annotator = "Unknown"
             annotator_id = ""
