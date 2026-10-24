@@ -20,7 +20,7 @@
       "package": "pte-plugin-annotation-progress",
       "module": "pte_plugin_annotation_progress",
       "path": "plugins/annotation-progress",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "description": "View annotation progress in the current collection",
       "requires": [],
       "dependencies": [],
