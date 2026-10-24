@@ -141,7 +141,7 @@
       "package": "pte-plugin-iaa-analyzer",
       "module": "pte_plugin_iaa_analyzer",
       "path": "plugins/iaa-analyzer",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "description": "Compute agreement between annotation versions by comparing element positions in <text>",
       "requires": [],
       "dependencies": [],
