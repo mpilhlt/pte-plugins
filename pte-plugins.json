@@ -6,7 +6,7 @@
       "package": "pte-plugin-annotation-history",
       "module": "pte_plugin_annotation_history",
       "path": "plugins/annotation-history",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "description": "Shows detailed annotation history for PDF documents",
       "requires": [],
       "dependencies": [],
