@@ -115,7 +115,7 @@ class AnnotationHistoryPlugin(Plugin):
 
             # Extract ALL change elements
             ns = {"tei": "http://www.tei-c.org/ns/1.0"}
-            change_elements = root.findall(".//tei:revisionDesc/tei:change", ns)
+            change_elements = root.findall(".//tei:teiHeader/tei:revisionDesc/tei:change", ns)
 
             revisions = []
             for change_elem in change_elements:
