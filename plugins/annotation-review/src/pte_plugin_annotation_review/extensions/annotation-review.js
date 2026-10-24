@@ -7,7 +7,9 @@
  * merged into the editor's diagnostic set, each with a "Propose fix" action
  * that opens the merge view and a `replacement` that the diagnostics drawer
  * applies directly. When node navigation is on (the `xpath` state is
- * set), only the navigated-to node is reviewed. See
+ * set), only the navigated-to node is reviewed. While the editor's unit review mode is
+ * on, the model also records its result as a reviewer: the review units of each chunk
+ * are marked OK, or not OK with the rationale of the findings in them. See
  * docs/superpowers/specs/2026-09-24-llm-annotation-review-design.md
  * for the design rationale.
  *
@@ -37,6 +39,41 @@ export function locateFinding(finding, docText) {
   const from = docText.indexOf(finding.old);
   if (from === -1 || docText.indexOf(finding.old, from + 1) !== -1) return null;
   return { from, to: from + finding.old.length };
+}
+
+/** Maximum length of the comment of a unit marked not OK by the LLM. */
+const UNIT_COMMENT_MAX = 200;
+
+/**
+ * @typedef {{fingerprint: string, from: number, to: number, name: string}} ReviewUnit
+ * @typedef {{fingerprint: string, state: 'ok'|'not-ok', comment: string}} UnitMark
+ */
+
+/**
+ * Unit review marks for one reviewed chunk: each review unit whose text lies in the chunk is
+ * not OK if a finding falls into it (with the findings' rationales as comment), OK otherwise.
+ * @param {ReviewUnit[]} units - Review units with positions in docText
+ * @param {string} docText - Current editor text
+ * @param {string} chunkText - Text of the reviewed chunk
+ * @param {Finding[]} findings - Findings of the chunk
+ * @returns {UnitMark[]}
+ */
+export function unitMarksForChunk(units, docText, chunkText, findings) {
+  const ranges = findings
+    .map(finding => ({ finding, range: locateFinding(finding, docText) }))
+    .filter(entry => entry.range !== null);
+  /** @type {UnitMark[]} */
+  const marks = [];
+  for (const unit of units) {
+    if (!chunkText.includes(docText.slice(unit.from, unit.to))) continue;
+    const rationales = ranges
+      .filter(({ range }) => range.from < unit.to && range.to > unit.from)
+      .map(({ finding }) => finding.rationale);
+    let comment = rationales.join('; ');
+    if (comment.length > UNIT_COMMENT_MAX) comment = comment.slice(0, UNIT_COMMENT_MAX - 1) + '…';
+    marks.push({ fingerprint: unit.fingerprint, state: rationales.length ? 'not-ok' : 'ok', comment });
+  }
+  return marks;
 }
 
 /**
@@ -486,6 +523,38 @@ export default class AnnotationReviewExtension extends FrontendExtensionPlugin {
   }
 
   /**
+   * Records the review of a chunk in the editor's unit review mode (if it is on): the review units
+   * of the chunk are marked OK or not OK by the model, as a reviewer of its own. Editors without
+   * unit review, and responses without the chunk position, are ignored.
+   * @param {string} xml - The document text sent for review
+   * @param {{findings: Finding[], chunk_start?: number|null, chunk_end?: number|null}} response
+   * @param {{providerId: string, modelId: string}} model
+   * @returns {Promise<void>}
+   */
+  async _recordUnitReview(xml, response, model) {
+    if (response.chunk_start == null || response.chunk_end == null) return;
+    let unitReview;
+    try {
+      unitReview = this.getDependency('unit-review');
+    } catch {
+      return;
+    }
+    if (!unitReview?.isEnabled?.()) return;
+    const docText = this.getDependency('xmleditor').getView().state.doc.toString();
+    const chunkText = xml.slice(response.chunk_start, response.chunk_end);
+    const marks = unitMarksForChunk(unitReview.getUnits(), docText, chunkText, response.findings);
+    if (!marks.length) return;
+    let name = model.modelId;
+    try {
+      name = this.getDependency('inference-settings').getModelLabel(model.providerId, model.modelId) || name;
+    } catch {
+      // keep the model id
+    }
+    const id = `llm-${model.providerId}-${model.modelId}`.replace(/[^\w.-]/g, '-');
+    await unitReview.setMarks({ id, name }, marks);
+  }
+
+  /**
    * Review the current editor document's annotations against its own
    * editorialDecl rules, one backend chunk at a time. Resolves provider/model
    * from the given override, or from the shared default (Part F), unless one
@@ -554,6 +623,7 @@ export default class AnnotationReviewExtension extends FrontendExtensionPlugin {
         total = response.chunk_count ?? total;
         for (const finding of response.findings) findings.push({ ...finding, id: findings.length });
         if (response.discarded) hooks.onDiscarded?.(response.discarded);
+        await this._recordUnitReview(xml, response, resolved);
       } catch (err) {
         this.getDependency('sl-utils').notify(
           `Annotation review failed${total > 1 ? ` in part ${index + 1} of ${total}` : ''}: ${err.message}`,

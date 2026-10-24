@@ -23,6 +23,7 @@ from pte_plugin_grobid.config.annotation_tags_scope import ANNOTATION_TAG_SCOPE
 from pte_plugin_grobid.config.content_locations import VARIANT_CONTENT_LOCATIONS, VariantContentLocations
 from pte_plugin_grobid.config.form_options import FORM_OPTIONS, FormOptions
 from pte_plugin_grobid.config.navigation import NAVIGATION_XPATH, NavigationXPath
+from pte_plugin_grobid.config.review_units import REVIEW_UNITS, ReviewUnits
 from pte_plugin_grobid.config.variants import PROCESSING_FLAVORS, SUPPORTED_VARIANTS
 
 logger = logging.getLogger(__name__)
@@ -243,6 +244,11 @@ def get_form_options() -> FormOptions:
 def get_navigation_xpath() -> NavigationXPath:
     """Return navigation XPath expressions for each variant."""
     return copy.deepcopy(NAVIGATION_XPATH)
+
+
+def get_review_units() -> ReviewUnits:
+    """Return the path of the review units below TEI/text for each variant (unit review mode)."""
+    return dict(REVIEW_UNITS)
 
 
 def get_model_path(variant_id: str) -> str:

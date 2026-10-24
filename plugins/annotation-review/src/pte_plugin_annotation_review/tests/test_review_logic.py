@@ -13,6 +13,7 @@ from fastapi_app.lib.utils.annotation_rules_utils import RuleFetchError
 from pte_plugin_annotation_review.review_logic import (
     NoRuleExcerptsError,
     _is_safe_fetch_url,
+    chunk_range,
     count_chunks,
     extract_text_content,
     gather_rule_excerpts,
@@ -425,6 +426,26 @@ class TestIsSafeFetchUrl(unittest.TestCase):
 
     def test_rejects_malformed_url(self):
         self.assertFalse(_is_safe_fetch_url("not a url"))
+
+
+class TestChunkRange(unittest.TestCase):
+    def test_chunks_cover_the_text_element_in_utf16_offsets(self):
+        bibls = "".join(f"<bibl>Autor {i:03d} 😀, <title>Titel {i:03d}</title>.</bibl>\n" for i in range(400))
+        doc = TEI_DOC.replace(
+            "<persName>J. Doe</persName> wrote <title>A Paper</title>.", f"<listBibl>{bibls}</listBibl>"
+        )
+        utf16 = doc.encode("utf-16-le")
+        count = count_chunks(doc)
+        self.assertGreater(count, 2)
+        ranges = [chunk_range(doc, i) for i in range(count)]
+        texts = [utf16[start * 2:end * 2].decode("utf-16-le") for start, end in ranges]
+        self.assertEqual("".join(texts), extract_text_content(doc))
+        self.assertIn("Titel 399", texts[-1])
+        self.assertIsNone(chunk_range(doc, count))
+
+    def test_scope_range(self):
+        start, end = chunk_range(TEI_DOC, 0, scope="<persName>J. Doe</persName>")
+        self.assertEqual(TEI_DOC[start:end], "<persName>J. Doe</persName>")
 
 
 if __name__ == "__main__":

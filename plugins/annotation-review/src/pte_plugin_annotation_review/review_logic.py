@@ -212,6 +212,31 @@ def count_chunks(xml_string: str, scope: str | None = None) -> int:
     return len(split_into_chunks(review_source(xml_string, scope)[0]))
 
 
+def chunk_range(xml_string: str, chunk_index: int, scope: str | None = None) -> tuple[int, int] | None:
+    """
+    Position of a chunk in the document string, as (start, end) offsets in UTF-16 code units, so
+    that the editor can use them directly on the text it sent. The editor uses them to mark the
+    review units inside the chunk as reviewed (unit review mode). Returns None if the reviewed text
+    is not a substring of the document (the rare fallback in extract_text_content()) or the index
+    is out of range.
+
+    Raises:
+        ValueError: see review_source().
+    """
+    review_text = review_source(xml_string, scope)[0]
+    base = xml_string.find(review_text)
+    chunks = split_into_chunks(review_text)
+    if base == -1 or not 0 <= chunk_index < len(chunks):
+        return None
+    start = base + sum(len(chunk) for chunk in chunks[:chunk_index])
+    end = start + len(chunks[chunk_index])
+
+    def utf16(offset: int) -> int:
+        return len(xml_string[:offset].encode("utf-16-le")) // 2
+
+    return utf16(start), utf16(end)
+
+
 async def run_review(
     xml_string: str,
     provider: LLMProvider,
