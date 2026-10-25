@@ -139,12 +139,14 @@ def gather_rule_excerpts(
     fails to fetch, is skipped (logged), not raised.
 
     The override lookup is keyed by the category's *representative* ref
-    (its "human" ref when present - see interpretation_ref_kind.py's
-    representative_ref(), matching how the document-rules registry stores
-    and selects overrides for this resource), not the "machine" ref used
-    for the actual fetch: the two refs normalize to different resource
-    keys (their fragments differ), so looking up by the machine ref would
-    silently miss every selected override.
+    (see interpretation_ref_kind.py's representative_ref(), matching how
+    the document-rules registry stores and selects overrides for this
+    resource): its "machine" ref when present - the same ref fetched below,
+    so an override replaces exactly the machine rules the editor showed -
+    else its sole "human" ref. Always go through representative_ref()
+    rather than picking a subtype here: the refs normalize to different
+    resource keys (their fragments differ), so a lookup by any other ref
+    would silently miss every selected override.
     """
     excerpts: list[tuple[str, str]] = []
     for rule_ref in extract_annotation_rule_refs(xml_string):
