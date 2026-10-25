@@ -198,7 +198,7 @@ class TestGatherRuleExcerpts(unittest.TestCase):
         # second category (as in TEI_DOC) would spuriously "match" too and either
         # over-assert the single-element result or fall through to an unmocked, DNS-
         # dependent fetch for that second category. See test 2 below for the
-        # human-vs-machine-ref key targeting, which needs a store keyed on the resource.
+        # machine-vs-human-ref key targeting, which needs a store keyed on the resource.
         store = mock.MagicMock()
         store.get_selected_override_text.return_value = "Overridden rule text."
 
@@ -208,7 +208,8 @@ class TestGatherRuleExcerpts(unittest.TestCase):
         mock_fetch.assert_not_called()
 
     @mock.patch("pte_plugin_annotation_review.review_logic.fetch_rule_excerpt")
-    def test_override_lookup_uses_the_human_ref_key_not_the_machine_ref_key(self, mock_fetch):
+    def test_override_lookup_uses_the_machine_ref_key_not_the_human_ref_key(self, mock_fetch):
+        # Document rules overrides target the machine rules (pdf-tei-editor#645)
         from fastapi_app.lib.doc_rules.resource_key import normalize_resource_key
 
         doc_with_human_and_machine_refs = """<?xml version="1.0"?>
@@ -235,7 +236,7 @@ class TestGatherRuleExcerpts(unittest.TestCase):
 
         store.get_selected_override_text.assert_called_once_with(
             "interpretation-ref",
-            normalize_resource_key("https://raw.example.org/guide.md#heading"),
+            normalize_resource_key("https://raw.example.org/guide.md#L10-L20"),
             "alice",
         )
         mock_fetch.assert_not_called()
