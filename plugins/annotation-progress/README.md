@@ -19,14 +19,17 @@ Backend plugin that provides an overview of annotation progress for documents in
 
 ## Output
 
-The plugin generates a sortable DataTables page with:
+The plugin generates a DataTables page with one row per version history of each document, sorted by document label:
 
-- **Document ID**: The identifier for each document in the collection
-- **Annotations**: Comma-separated list of annotation labels with revision counts in brackets
-  - Example: `Manual Annotation (5), Gold Standard (3)`
-  - Each label is clickable and opens the corresponding annotation
+- **Document**: the document label (as in the app's PDF menu, shortened with an ellipsis; the full label is shown on hover) and **Document ID**, which opens the PDF. They are shown in the first row of the document only, so that its further histories look indented
+- **Version History**: a version history is a group of current versions that were copied from the same version, as in the app's "Target XML" and "Compare with version" menus. Each gold standard (🥇) and each version without a parent forms a history of its own. Clicking **(see history)** after the labels expands the superseded versions of the history below them; every label opens its version.
+- **Last Change**, **Last Annotator**, **Status**, **Date**: from the last `<change>` of the most recently edited current version of the history
 
-Documents without any annotations are listed with "No annotations" in the annotations column.
+Documents without any annotations show "No annotations". Sorting is disabled so that the rows of a document stay together; the search shows a document with all its histories if any of their rows match.
+
+### Share link
+
+The **Share link** button above the summary copies a link to the app that opens the view for the same collection and variant, e.g. `https://host/#plugin=annotation-progress/show_progress&collection=batch-1&variant=grobid`. Users who are not logged in see the view after logging in. This relies on the endpoint's `url_openable` flag, which requires a PDF-TEI-Editor version that supports opening backend plugin endpoints from the URL hash.
 
 ## Configuration
 
@@ -47,7 +50,7 @@ The environment variable sets the initial value when the key is not yet in `conf
 - Category: `collection` (appears under Collection menu)
 - Requires: User role or higher
 - State parameters: `collection`, `variant`
-- Uses DataTables for sortable, searchable table display
+- Uses DataTables for a searchable table display
 - Extracts edition title from TEI `<editionStmt>` or falls back to main title
 - Counts all `<change>` elements in `<revisionDesc>` for revision count
 

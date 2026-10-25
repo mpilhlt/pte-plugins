@@ -107,14 +107,18 @@ async def view_progress(
                 f for f in tei_files if getattr(f, "variant", None) == variant
             ]
 
-        # Build map of doc_id -> PDF stable_id (first PDF found per doc_id)
+        # Build map of doc_id -> PDF (first PDF found per doc_id)
         pdf_files = [f for f in all_files if f.file_type == "pdf"]
-        doc_pdf_stable_id: dict[str, str] = {}
+        doc_pdf: dict[str, FileMetadata] = {}
         for f in pdf_files:
             if f.doc_id and f.stable_id:
                 normalized = normalize_legacy_encoding(f.doc_id)
-                if normalized not in doc_pdf_stable_id:
-                    doc_pdf_stable_id[normalized] = f.stable_id
+                if normalized not in doc_pdf:
+                    doc_pdf[normalized] = f
+
+        # Versions that another version was copied from (read-only history)
+        frozen_ids = file_repo.get_frozen_stable_ids()
+        show_variant = not variant or variant == "all"
 
         # Group annotations by doc_id
         doc_annotations = defaultdict(list)
@@ -165,50 +169,43 @@ async def view_progress(
         avg_progress = (total_progress_sum / total_docs) if total_docs > 0 else 0
 
         # Prepare table data
-        headers = ["Document ID", "Version History", "Last Change", "Last Annotator", "Status", "Date"]
+        headers = ["Document", "Document ID", "Version History", "Last Change", "Last Annotator", "Status", "Date"]
         rows = []
 
-        # Sort by doc_id and include all documents even if they have no annotations
-        for doc_id in sorted(all_doc_ids):
+        # One row per version history, sorted by document label. The first row of a document
+        # carries its label and id; the cells stay empty in the following rows so that these
+        # look indented. Rows stay in this order (see HISTORY_TABLE_JS).
+        documents = sorted(
+            ((_document_label(doc_pdf.get(doc_id), doc_id), doc_id) for doc_id in all_doc_ids),
+            key=lambda item: (item[0].lower(), item[1]),
+        )
+        for label, doc_id in documents:
             annotations = doc_annotations[doc_id]
 
-            # Representative annotation for this document: the version
-            # furthest along the lifecycle, falling back to the most
-            # recently changed one if none carry a recognized status.
-            rep = _select_representative_annotation(annotations, lifecycle_order)
-            newest_change_desc = rep.get("last_change_desc", "") if rep else ""
-            newest_annotator = rep.get("last_annotator", "") if rep else ""
-            newest_status = rep.get("last_change_status", "") if rep else ""
-            newest_timestamp = rep.get("last_change_timestamp") if rep else None
-
-            # Format annotations as version history chains
-            annotations_cell = _format_version_chains_html(annotations)
-            last_change_cell = escape_html(newest_change_desc) if newest_change_desc else ""
-            last_annotator_cell = escape_html(newest_annotator) if newest_annotator else ""
-
-            # Create visual status indicator
-            status_cell = _create_status_indicator(newest_status, lifecycle_order)
-
-            # Format timestamp for display (human-readable)
-            date_cell = ""
-            if newest_timestamp:
-                date_cell = newest_timestamp.strftime("%Y-%m-%d %H:%M")
-
+            label_cell = f'<span class="doc-label" title="{escape_html(label)}">{escape_html(label)}</span>'
             # Make doc_id clickable if a PDF exists for it
-            pdf_stable_id = doc_pdf_stable_id.get(doc_id)
-            if pdf_stable_id:
-                doc_id_cell = f'<a href="#" onclick="sandbox.load({{pdf:\'{pdf_stable_id}\'}}); return false;" class="version-link">{escape_html(doc_id)}</a>'
+            pdf = doc_pdf.get(doc_id)
+            if pdf:
+                doc_id_cell = f'<a href="#" onclick="sandbox.load({{pdf:\'{pdf.stable_id}\'}}); return false;" class="version-link">{escape_html(doc_id)}</a>'
             else:
                 doc_id_cell = escape_html(doc_id)
 
-            rows.append([
-                doc_id_cell,
-                annotations_cell,
-                last_change_cell,
-                last_annotator_cell,
-                status_cell,
-                date_cell
-            ])
+            histories = _group_histories(annotations, frozen_ids)
+            if not histories:
+                rows.append([label_cell, doc_id_cell, "No annotations", "", "", "", ""])
+
+            for index, history in enumerate(histories):
+                latest = _latest_annotation(history["leaves"] or history["ancestors"])
+                timestamp = latest.get("last_change_timestamp")
+                rows.append([
+                    label_cell if index == 0 else "",
+                    doc_id_cell if index == 0 else "",
+                    _format_history_html(history, show_variant),
+                    escape_html(latest.get("last_change_desc", "")),
+                    escape_html(latest.get("last_annotator", "")),
+                    _create_status_indicator(latest.get("last_change_status", ""), lifecycle_order),
+                    f'<span class="date">{timestamp.strftime("%Y-%m-%d %H:%M")}</span>' if timestamp else "",
+                ])
 
         # Generate summary card HTML
         summary_html = _create_summary_card(
@@ -229,7 +226,7 @@ async def view_progress(
             headers=headers,
             rows=rows,
             table_id="annotationProgressTable",
-            page_length=25,
+            page_length=50,
             default_sort_col=0,
             default_sort_dir="asc",
             enable_sandbox_client=True,
@@ -320,12 +317,67 @@ async def view_progress(
                 .version-link:hover {
                     color: #004499;
                 }
-                .arrow {
-                    color: #6c757d;
-                    margin: 0 2px;
+                .doc-label {
+                    display: block;
+                    max-width: 16em;
+                    font-weight: 600;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
                 }
-            """,
-            extra_content_before_table=summary_html
+                #annotationProgressTable td:nth-child(3) {
+                    min-width: 16em;
+                }
+                #annotationProgressTable td:nth-child(4) {
+                    min-width: 10em;
+                }
+                #annotationProgressTable tbody td {
+                    background-color: #fff;
+                    box-shadow: none !important;
+                    vertical-align: top;
+                }
+                #annotationProgressTable tbody tr:has(.doc-label) td {
+                    border-top: 1px solid #ced4da;
+                }
+                .date {
+                    white-space: nowrap;
+                }
+                .history-toggle {
+                    white-space: nowrap;
+                    color: #6c757d;
+                    font-size: 0.9em;
+                    margin-left: 4px;
+                }
+                .share-bar {
+                    display: flex;
+                    justify-content: flex-end;
+                    align-items: center;
+                    gap: 8px;
+                    margin: -10px 0 10px;
+                }
+                .share-bar button {
+                    font: inherit;
+                    font-size: 0.9em;
+                    padding: 4px 12px;
+                    border: 1px solid #ced4da;
+                    border-radius: 4px;
+                    background: #fff;
+                    cursor: pointer;
+                }
+                .share-bar button:hover {
+                    background: #f1f3f5;
+                }
+                .share-status {
+                    font-size: 0.85em;
+                    color: #6c757d;
+                }
+                .variant-suffix {
+                    color: #6c757d;
+                    font-size: 0.9em;
+                }
+            """ + LINEAGE_CSS,
+            custom_js=HISTORY_TABLE_JS,
+            extra_content_before_table=_share_link_html(collection, variant) + summary_html
         )
 
         return HTMLResponse(content=html)
@@ -605,6 +657,9 @@ def _extract_annotation_info(xml_content: str, file_metadata) -> dict | None:
             "last_change_timestamp": last_change_timestamp,
             "change_signatures": change_signatures,
             "is_gold_standard": getattr(file_metadata, "is_gold_standard", False),
+            "parent_stable_id": getattr(file_metadata, "parent_stable_id", None),
+            "version": getattr(file_metadata, "version", None),
+            "variant": getattr(file_metadata, "variant", None),
         }
 
     except Exception as e:
@@ -612,72 +667,286 @@ def _extract_annotation_info(xml_content: str, file_metadata) -> dict | None:
         return None
 
 
-def _format_version_chains_html(annotations: list[dict]) -> str:
-    """
-    Format annotation versions as HTML showing linear ancestry chains.
+# Lines connecting superseded versions to the current versions of their history, as in the
+# "Target XML" and "Compare with version" menus of the app (app/web/app.css)
+LINEAGE_CSS = """
+    .lineage {
+        --lineage-x: 0.6em;
+        --lineage-color: #adb5bd;
+    }
+    .lineage-ancestor {
+        position: relative;
+        padding: 1px 0 1px calc(var(--lineage-x) + 1em);
+    }
+    /* vertical line, ending in the middle of the last ancestor */
+    .lineage-ancestor::before {
+        content: "";
+        position: absolute;
+        left: var(--lineage-x);
+        top: 0;
+        bottom: 0;
+        border-left: 1px solid var(--lineage-color);
+    }
+    .lineage-ancestor:last-child::before {
+        bottom: 50%;
+    }
+    /* horizontal tick towards the label */
+    .lineage-ancestor::after {
+        content: "";
+        position: absolute;
+        left: var(--lineage-x);
+        top: 50%;
+        width: 0.8em;
+        border-top: 1px solid var(--lineage-color);
+    }
+    /* the line's upper end with an arrowhead, below the current versions */
+    .lineage-arrow {
+        position: relative;
+        height: 0.9em;
+    }
+    .lineage-arrow::before {
+        content: "";
+        position: absolute;
+        left: var(--lineage-x);
+        top: 0.15em;
+        bottom: 0;
+        border-left: 1px solid var(--lineage-color);
+    }
+    .lineage-arrow::after {
+        content: "";
+        position: absolute;
+        left: calc(var(--lineage-x) - 0.25em + 0.5px);
+        top: 0;
+        border: 0.25em solid transparent;
+        border-top: 0;
+        border-bottom: 0.35em solid var(--lineage-color);
+    }
+"""
 
-    The gold standard version is marked with 🥇 emoji.
-    The version with the newest timestamp is marked with ⭐ emoji (only if not gold).
+# Keeps each document row together with the rows of its version histories: sorting is disabled
+# and the search shows a document with all its histories if any of their rows match.
+HISTORY_TABLE_JS = """
+    window.toggleHistory = function (link) {
+        var lineage = link.closest('.history').querySelector('.lineage');
+        lineage.hidden = !lineage.hidden;
+        link.textContent = lineage.hidden ? '(see history)' : '(hide history)';
+    };
+
+    var pageLength = table.page.len();
+    table.destroy();
+    $('#annotationProgressTable thead th').removeClass('sorting sorting_asc sorting_desc');
+
+    var groupOf = [];
+    var group = -1;
+    $('#annotationProgressTable tbody tr').each(function () {
+        if ($(this).find('.doc-label').length) group++;
+        groupOf.push(group);
+    });
+
+    var matchedGroups = null;
+    $.fn.dataTable.ext.search.push(function (settings, data, dataIndex) {
+        return matchedGroups === null || matchedGroups.has(groupOf[dataIndex]);
+    });
+
+    table = $('#annotationProgressTable').DataTable({ ordering: false, pageLength: pageLength });
+
+    $('#annotationProgressTable_filter input').off().on('input', function () {
+        var query = this.value.trim().toLowerCase();
+        if (!query) {
+            matchedGroups = null;
+        } else {
+            matchedGroups = new Set();
+            table.rows().every(function (rowIdx) {
+                if ($(this.node()).text().toLowerCase().includes(query)) matchedGroups.add(groupOf[rowIdx]);
+            });
+        }
+        table.draw();
+    });
+"""
+
+
+def _share_link_html(collection: str, variant: str | None) -> str:
+    """
+    A "Share link" button that copies a link to the app which opens this view for the
+    collection and variant (see the `url_openable` endpoint metadata in plugin.py).
+
+    The link is built from the location of the app window: the parent window when the view is
+    shown in the app's dialog, the opener when it is shown in a window of its own.
 
     Args:
-        annotations: List of annotation info dicts with 'annotation_label',
-                     'stable_id', 'change_signatures', 'last_change_timestamp',
-                     and 'is_gold_standard' keys
+        collection: Collection ID
+        variant: Variant filter, if any
 
     Returns:
-        HTML string with version chains, each on a separate line
+        HTML with the button and its script
     """
-    from fastapi_app.lib.utils.tei_utils import build_version_ancestry_chains
+    import json
+    from urllib.parse import urlencode
+
+    hash_params = {"plugin": "annotation-progress/show_progress", "collection": collection}
+    if variant:
+        hash_params["variant"] = variant
+    hash_json = json.dumps("#" + urlencode(hash_params, safe="/")).replace("</", "<\\/")
+    return f"""
+    <div class="share-bar">
+        <span class="share-status" id="shareStatus" aria-live="polite"></span>
+        <button type="button" id="shareLinkBtn" title="Copy a link that opens this view">Share link</button>
+    </div>
+    <script>
+        (function () {{
+            function appUrl() {{
+                for (const win of [window.parent, window.opener]) {{
+                    try {{
+                        if (win && win !== window) return win.location.origin + win.location.pathname;
+                    }} catch (e) {{ /* other origin */ }}
+                }}
+                return window.location.origin + '/';
+            }}
+            document.getElementById('shareLinkBtn').addEventListener('click', async function () {{
+                const link = appUrl() + {hash_json};
+                const status = document.getElementById('shareStatus');
+                try {{
+                    await navigator.clipboard.writeText(link);
+                    status.textContent = 'Link copied to clipboard';
+                }} catch (e) {{
+                    window.prompt('Copy this link:', link);
+                    status.textContent = '';
+                }}
+                setTimeout(function () {{ status.textContent = ''; }}, 3000);
+            }});
+        }})();
+    </script>
+    """
+
+
+def _document_label(pdf: FileMetadata | None, doc_id: str) -> str:
+    """
+    Label of a document as shown in the app's PDF menu: the PDF's label, else the title from
+    its metadata, else the document id.
+
+    Args:
+        pdf: The document's PDF file, if any
+        doc_id: The (normalized) document id
+
+    Returns:
+        The document label
+    """
+    if pdf:
+        if pdf.label and pdf.label.lower() not in ("untitled", "unknown title"):
+            return pdf.label
+        title = (pdf.doc_metadata or {}).get("title", "")
+        if isinstance(title, str) and title and title.lower() not in ("untitled", "unknown title"):
+            return title
+    return doc_id
+
+
+def _group_histories(annotations: list[dict], frozen_ids: set[str]) -> list[dict[str, list[dict]]]:
+    """
+    Group the TEI files of a document into version histories.
+
+    Mirrors `groupVersionsByLineage` in the app's file-data-utils.js: a history consists of the
+    current (non-frozen) versions that were copied from the same version ("leaves"), followed by
+    that version and its ancestors, nearest first ("ancestors"). Unlike in the app's menus,
+    current versions without a parent each form a history of their own. Each gold standard
+    forms a history of its own and ends the ancestor chain of the versions copied from it.
+    Frozen versions that are no ancestor of a current version form a last history without
+    leaves, so that no version is lost.
+
+    Args:
+        annotations: Annotation info dicts of one document (as produced by `_extract_annotation_info`)
+        frozen_ids: Stable ids of the files that another file was copied from
+
+    Returns:
+        List of {"leaves": [...], "ancestors": [...]} dicts, gold standards first
+    """
+    by_id = {ann["stable_id"]: ann for ann in annotations}
+
+    def by_version(ann: dict) -> tuple[int, str]:
+        return (ann.get("version") or 0, ann.get("annotation_label", ""))
+
+    def ancestors_of(parent_id: str | None) -> list[dict]:
+        ancestors: list[dict] = []
+        seen: set[str] = set()
+        while parent_id and parent_id in by_id and parent_id not in seen and not by_id[parent_id].get("is_gold_standard"):
+            seen.add(parent_id)
+            ancestors.append(by_id[parent_id])
+            parent_id = by_id[parent_id].get("parent_stable_id")
+        return ancestors
+
+    histories: list[dict[str, list[dict]]] = []
+    for gold in sorted((a for a in annotations if a.get("is_gold_standard")), key=by_version):
+        histories.append({"leaves": [gold], "ancestors": ancestors_of(gold.get("parent_stable_id"))})
+
+    leaves_by_parent: dict[str, list[dict]] = {}
+    for leaf in sorted(annotations, key=by_version):
+        if leaf.get("is_gold_standard") or leaf["stable_id"] in frozen_ids:
+            continue
+        parent_id = leaf.get("parent_stable_id")
+        has_parent = parent_id in by_id and not by_id[parent_id].get("is_gold_standard")
+        leaves_by_parent.setdefault(parent_id if has_parent else leaf["stable_id"], []).append(leaf)
+
+    for key, leaves in leaves_by_parent.items():
+        parent_id = leaves[0].get("parent_stable_id") if key != leaves[0]["stable_id"] else None
+        histories.append({"leaves": leaves, "ancestors": ancestors_of(parent_id)})
+
+    shown = {ann["stable_id"] for history in histories for ann in history["leaves"] + history["ancestors"]}
+    rest = sorted((a for a in annotations if a["stable_id"] not in shown), key=by_version)
+    if rest:
+        histories.append({"leaves": [], "ancestors": rest})
+    return histories
+
+
+def _latest_annotation(annotations: list[dict]) -> dict:
+    """
+    The most recently changed of a non-empty list of annotations; the first one if none has a timestamp.
+    """
+    timestamped = [a for a in annotations if a.get("last_change_timestamp")]
+    if not timestamped:
+        return annotations[0]
+    return max(timestamped, key=lambda a: a["last_change_timestamp"])
+
+
+def _format_history_html(history: dict[str, list[dict]], show_variant: bool) -> str:
+    """
+    Format a version history: the labels of its current versions, followed by a "(see history)"
+    link that expands the superseded versions below them. All labels open the respective version.
+    The gold standard is marked with 🥇.
+
+    Args:
+        history: {"leaves": [...], "ancestors": [...]} as returned by `_group_histories`
+        show_variant: Whether to append the variant to the labels (when not filtering by variant)
+
+    Returns:
+        HTML string
+    """
     from fastapi_app.lib.plugins.plugin_tools import escape_html
 
-    if not annotations:
-        return "No annotations"
+    def link(ann: dict) -> str:
+        prefix = "🥇 " if ann.get("is_gold_standard") else ""
+        html = f'<a href="#" onclick="sandbox.openDocument(\'{ann["stable_id"]}\'); return false;" class="version-link">{prefix}{escape_html(ann["annotation_label"])}</a>'
+        if show_variant and ann.get("variant"):
+            # last segment of dotted variant names only, to save space
+            short_variant = ann["variant"].rsplit(".", 1)[-1]
+            html += f' <span class="variant-suffix" title="{escape_html(ann["variant"])}">({escape_html(short_variant)})</span>'
+        return html
 
-    # Build ancestry chains
-    chains = build_version_ancestry_chains(annotations)
+    leaves, ancestors = history["leaves"], history["ancestors"]
+    if not leaves:
+        items = "".join(f'<div class="lineage-ancestor">{link(ann)}</div>' for ann in ancestors)
+        return f'<div class="history"><div class="lineage">{items}</div></div>'
 
-    if not chains:
-        return "No annotations"
+    leaf_htmls = [link(ann) for ann in leaves]
+    if not ancestors:
+        return '<div class="history">' + "".join(f'<div class="history-leaf">{html}</div>' for html in leaf_htmls) + "</div>"
 
-    # Find the version with the newest timestamp
-    newest_stable_id = None
-    newest_timestamp = None
-    for ann in annotations:
-        ts = ann.get("last_change_timestamp")
-        if ts and (newest_timestamp is None or ts > newest_timestamp):
-            newest_timestamp = ts
-            newest_stable_id = ann["stable_id"]
-
-    # Find the gold standard version
-    gold_stable_id = None
-    for ann in annotations:
-        if ann.get("is_gold_standard"):
-            gold_stable_id = ann["stable_id"]
-            break
-
-    # Format each chain as: version foo → version bar → 🥇 version baz
-    chain_htmls = []
-    for chain in chains:
-        version_links = []
-        for version in chain:
-            label = version["annotation_label"]
-            stable_id = version["stable_id"]
-            # Determine prefix: gold gets medal, latest gets star (only if not gold)
-            is_gold = stable_id == gold_stable_id
-            is_newest = stable_id == newest_stable_id
-            if is_gold:
-                prefix = "🥇 "
-            elif is_newest:
-                prefix = "⭐ "
-            else:
-                prefix = ""
-            link = f'<a href="#" onclick="sandbox.openDocument(\'{stable_id}\'); return false;" class="version-link">{prefix}{escape_html(label)}</a>'
-            version_links.append(link)
-
-        chain_html = ' <span class="arrow">→</span> '.join(version_links)
-        chain_htmls.append(f'<div class="version-chain">{chain_html}</div>')
-
-    return "\n".join(chain_htmls)
+    leaf_htmls[-1] += ' <a href="#" class="history-toggle" onclick="toggleHistory(this); return false;">(see history)</a>'
+    items = "".join(f'<div class="lineage-ancestor">{link(ann)}</div>' for ann in ancestors)
+    return (
+        '<div class="history">'
+        + "".join(f'<div class="history-leaf">{html}</div>' for html in leaf_htmls)
+        + f'<div class="lineage" hidden><div class="lineage-arrow" aria-hidden="true"></div>{items}</div>'
+        + "</div>"
+    )
 
 
 def _get_stage_color(stage_index: int, total_stages: int) -> tuple[str, str]:

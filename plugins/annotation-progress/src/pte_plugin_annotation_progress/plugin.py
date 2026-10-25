@@ -47,6 +47,7 @@ class AnnotationProgressPlugin(Plugin):
                     "description": "Display annotation overview for current collection",
                     "icon": "graph-up-arrow",
                     "state_params": ["collection", "variant"],
+                    "url_openable": True,
                 },
             ],
         }

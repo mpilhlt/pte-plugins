@@ -11,9 +11,13 @@ from unittest.mock import MagicMock
 
 from pte_plugin_annotation_progress.plugin import AnnotationProgressPlugin
 from pte_plugin_annotation_progress.routes import (
+    _document_label,
     _extract_annotation_info,
-    _format_version_chains_html,
+    _format_history_html,
+    _group_histories,
+    _latest_annotation,
     _select_representative_annotation,
+    _share_link_html,
 )
 
 
@@ -39,6 +43,7 @@ class TestAnnotationProgressPlugin(unittest.TestCase):
         self.assertEqual(endpoint["label"], "Show Annotation Progress")
         self.assertIn("collection", endpoint["state_params"])
         self.assertIn("variant", endpoint["state_params"])
+        self.assertTrue(endpoint["url_openable"])
 
     def test_get_endpoints(self):
         """Test endpoint registration."""
@@ -224,125 +229,121 @@ class TestSelectRepresentativeAnnotation(unittest.TestCase):
         self.assertIsNone(_select_representative_annotation([], self.lifecycle_order))
 
 
-class TestFormatVersionChainsHtml(unittest.TestCase):
-    """Test cases for version chain HTML formatting."""
+def _ann(stable_id, version=1, parent=None, gold=False, ts=None, variant=None):
+    """Annotation info dict as produced by `_extract_annotation_info`."""
+    return {
+        "annotation_label": f"Label {stable_id}",
+        "stable_id": stable_id,
+        "version": None if gold else version,
+        "parent_stable_id": parent,
+        "is_gold_standard": gold,
+        "last_change_timestamp": ts,
+        "variant": variant,
+    }
 
-    def test_format_version_chains_html(self):
-        """Test HTML formatting of version chains without gold standard."""
+
+def _ids(anns):
+    return [a["stable_id"] for a in anns]
+
+
+class TestGroupHistories(unittest.TestCase):
+    """Test cases for grouping a document's versions into version histories."""
+
+    def test_unrelated_versions_form_separate_histories(self):
+        histories = _group_histories([_ann("a", 1), _ann("b", 2)], set())
+        self.assertEqual([(_ids(h["leaves"]), _ids(h["ancestors"])) for h in histories], [(["a"], []), (["b"], [])])
+
+    def test_chain_with_siblings(self):
+        # a -> b -> (c, d); a and b are frozen
+        anns = [_ann("a", 1), _ann("b", 2, "a"), _ann("c", 3, "b"), _ann("d", 4, "b")]
+        histories = _group_histories(anns, {"a", "b"})
+        self.assertEqual(len(histories), 1)
+        self.assertEqual(_ids(histories[0]["leaves"]), ["c", "d"])
+        self.assertEqual(_ids(histories[0]["ancestors"]), ["b", "a"])
+
+    def test_gold_is_own_history_and_ends_chain(self):
+        # gold -> a -> b
+        anns = [_ann("g", gold=True), _ann("a", 1, "g"), _ann("b", 2, "a")]
+        histories = _group_histories(anns, {"g", "a"})
+        self.assertEqual([(_ids(h["leaves"]), _ids(h["ancestors"])) for h in histories], [(["g"], []), (["b"], ["a"])])
+
+    def test_orphaned_frozen_versions_are_kept(self):
+        # x is frozen, but its child is not in the list (e.g. other variant filtered out)
+        histories = _group_histories([_ann("x", 1)], {"x"})
+        self.assertEqual([(_ids(h["leaves"]), _ids(h["ancestors"])) for h in histories], [([], ["x"])])
+
+    def test_empty(self):
+        self.assertEqual(_group_histories([], set()), [])
+
+
+class TestLatestAnnotation(unittest.TestCase):
+    def test_picks_newest_timestamp(self):
         from datetime import datetime
 
-        annotations = [
-            {
-                "annotation_label": "Version A",
-                "stable_id": "id-a",
-                "change_signatures": [("user1", "2024-01-01", "created")],
-                "last_change_timestamp": datetime(2024, 1, 1, 10, 0, 0),
-                "is_gold_standard": False,
-            },
-            {
-                "annotation_label": "Version B",
-                "stable_id": "id-b",
-                "change_signatures": [
-                    ("user1", "2024-01-01", "created"),
-                    ("user1", "2024-01-02", "updated"),
-                ],
-                "last_change_timestamp": datetime(2024, 1, 2, 10, 0, 0),
-                "is_gold_standard": False,
-            },
-        ]
+        old, new = _ann("a", ts=datetime(2024, 1, 1)), _ann("b", ts=datetime(2024, 2, 1))
+        self.assertIs(_latest_annotation([old, new, _ann("c")]), new)
 
-        html = _format_version_chains_html(annotations)
+    def test_falls_back_to_first(self):
+        first = _ann("a")
+        self.assertIs(_latest_annotation([first, _ann("b")]), first)
 
-        # Should contain version links and arrow
-        self.assertIn("Version A", html)
-        self.assertIn("Version B", html)
-        self.assertIn("→", html)
-        self.assertIn("id-a", html)
-        self.assertIn("id-b", html)
-        self.assertIn("version-chain", html)
-        # Version B has the newest timestamp, so it should have a star
-        self.assertIn("⭐", html)
-        self.assertIn("⭐ Version B", html)
-        # Version A should not have a star
-        self.assertNotIn("⭐ Version A", html)
-        # No gold medal since no gold standard
-        self.assertNotIn("🥇", html)
 
-    def test_format_version_chains_html_with_gold_standard(self):
-        """Test HTML formatting with gold standard version."""
-        from datetime import datetime
+class TestFormatHistoryHtml(unittest.TestCase):
+    """Test cases for version history HTML formatting."""
 
-        annotations = [
-            {
-                "annotation_label": "Version A",
-                "stable_id": "id-a",
-                "change_signatures": [("user1", "2024-01-01", "created")],
-                "last_change_timestamp": datetime(2024, 1, 1, 10, 0, 0),
-                "is_gold_standard": True,  # Gold standard
-            },
-            {
-                "annotation_label": "Version B",
-                "stable_id": "id-b",
-                "change_signatures": [
-                    ("user1", "2024-01-01", "created"),
-                    ("user1", "2024-01-02", "updated"),
-                ],
-                "last_change_timestamp": datetime(2024, 1, 2, 10, 0, 0),
-                "is_gold_standard": False,
-            },
-        ]
+    def test_without_ancestors_has_no_toggle(self):
+        html = _format_history_html({"leaves": [_ann("a")], "ancestors": []}, False)
+        self.assertIn("sandbox.openDocument('a')", html)
+        self.assertNotIn("see history", html)
 
-        html = _format_version_chains_html(annotations)
+    def test_with_ancestors_has_collapsed_lineage(self):
+        html = _format_history_html({"leaves": [_ann("c"), _ann("d")], "ancestors": [_ann("b"), _ann("a")]}, False)
+        self.assertEqual(html.count("(see history)"), 1)
+        # the toggle follows the last current version
+        self.assertLess(html.index("Label d"), html.index("(see history)"))
+        self.assertIn('<div class="lineage" hidden>', html)
+        self.assertIn("lineage-arrow", html)
+        self.assertEqual(html.count('class="lineage-ancestor"'), 2)
+        self.assertIn("sandbox.openDocument('a')", html)
 
-        # Version A should have gold medal (gold standard)
-        self.assertIn("🥇", html)
-        self.assertIn("🥇 Version A", html)
-        # Version B should have star (newest but not gold)
-        self.assertIn("⭐", html)
-        self.assertIn("⭐ Version B", html)
-        # Neither should have the other's marker
-        self.assertNotIn("🥇 Version B", html)
-        self.assertNotIn("⭐ Version A", html)
+    def test_gold_and_variant(self):
+        html = _format_history_html({"leaves": [_ann("g", gold=True, variant="grobid.v1")], "ancestors": []}, True)
+        self.assertIn("🥇 Label g", html)
+        self.assertIn("(v1)", html)
+        self.assertIn('title="grobid.v1"', html)
+        html = _format_history_html({"leaves": [_ann("g", gold=True, variant="grobid.v1")], "ancestors": []}, False)
+        self.assertNotIn("(v1)", html)
 
-    def test_format_version_chains_html_gold_is_newest(self):
-        """Test HTML formatting when gold standard is also the newest version."""
-        from datetime import datetime
+    def test_escapes_labels(self):
+        ann = _ann("a")
+        ann["annotation_label"] = "<b>x</b>"
+        html = _format_history_html({"leaves": [ann], "ancestors": []}, False)
+        self.assertNotIn("<b>x</b>", html)
 
-        annotations = [
-            {
-                "annotation_label": "Version A",
-                "stable_id": "id-a",
-                "change_signatures": [("user1", "2024-01-01", "created")],
-                "last_change_timestamp": datetime(2024, 1, 1, 10, 0, 0),
-                "is_gold_standard": False,
-            },
-            {
-                "annotation_label": "Version B",
-                "stable_id": "id-b",
-                "change_signatures": [
-                    ("user1", "2024-01-01", "created"),
-                    ("user1", "2024-01-02", "updated"),
-                ],
-                "last_change_timestamp": datetime(2024, 1, 2, 10, 0, 0),
-                "is_gold_standard": True,  # Gold standard AND newest
-            },
-        ]
 
-        html = _format_version_chains_html(annotations)
+class TestShareLinkHtml(unittest.TestCase):
+    def test_link_hash_opens_view_for_collection_and_variant(self):
+        from urllib.parse import parse_qs
 
-        # Version B should have gold medal (gold standard takes precedence)
-        self.assertIn("🥇", html)
-        self.assertIn("🥇 Version B", html)
-        # No star should appear since gold version is also newest
-        self.assertNotIn("⭐", html)
-        # Version A should have no marker
-        self.assertNotIn("🥇 Version A", html)
-        self.assertNotIn("⭐ Version A", html)
+        html = _share_link_html("batch-1", "grobid.v1")
+        start = html.index('"#') + 2
+        hash_params = parse_qs(html[start:html.index('"', start)])
+        self.assertEqual(hash_params, {"plugin": ["annotation-progress/show_progress"], "collection": ["batch-1"], "variant": ["grobid.v1"]})
+        self.assertIn('id="shareLinkBtn"', html)
 
-    def test_format_version_chains_html_empty(self):
-        """Test HTML formatting with no annotations."""
-        html = _format_version_chains_html([])
-        self.assertEqual(html, "No annotations")
+    def test_collection_cannot_end_script(self):
+        self.assertNotIn("</script><x>", _share_link_html("</script><x>", None))
+
+
+class TestDocumentLabel(unittest.TestCase):
+    def test_prefers_pdf_label_then_title_then_doc_id(self):
+        pdf = MagicMock(label="My Label", doc_metadata={"title": "Title"})
+        self.assertEqual(_document_label(pdf, "doc"), "My Label")
+        pdf = MagicMock(label="Untitled", doc_metadata={"title": "Title"})
+        self.assertEqual(_document_label(pdf, "doc"), "Title")
+        pdf = MagicMock(label=None, doc_metadata={})
+        self.assertEqual(_document_label(pdf, "doc"), "doc")
+        self.assertEqual(_document_label(None, "doc"), "doc")
 
 
 if __name__ == "__main__":
