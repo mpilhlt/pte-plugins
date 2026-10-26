@@ -243,6 +243,15 @@ class TestGatherRuleExcerpts(unittest.TestCase):
         )
         mock_fetch.assert_not_called()
 
+    @mock.patch("pte_plugin_annotation_review.review_logic.fetch_rule_excerpt", return_value="x")
+    @mock.patch("pte_plugin_annotation_review.review_logic.selected_rule_override_text", return_value=None)
+    def test_override_lookup_is_given_the_ssrf_check(self, mock_lookup, mock_fetch):
+        from pte_plugin_annotation_review.review_logic import _is_safe_fetch_url
+
+        gather_rule_excerpts(SINGLE_CATEGORY_TEI_DOC, cache=mock.MagicMock(), store=mock.MagicMock(), owner="alice")
+
+        self.assertIs(mock_lookup.call_args.kwargs["is_safe_url"], _is_safe_fetch_url)
+
     @mock.patch("pte_plugin_annotation_review.review_logic.fetch_rule_excerpt")
     def test_override_lookup_uses_the_machine_key_when_machine_rules_are_a_separate_file(self, mock_fetch):
         from fastapi_app.lib.doc_rules.resource_key import normalize_resource_key

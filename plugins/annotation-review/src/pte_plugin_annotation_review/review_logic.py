@@ -11,7 +11,7 @@ import ipaddress
 import logging
 import re
 import socket
-from typing import Optional
+from typing import Callable, Optional
 from urllib.parse import urlparse
 
 from lxml import etree
@@ -41,7 +41,12 @@ try:
 except ImportError:  # editor older than the two-layer document rules (pdf-tei-editor#666)
     from fastapi_app.lib.doc_rules.interpretation_ref_kind import representative_ref
 
-    def selected_rule_override_text(store: DocumentRulesStore, entry: AnnotationRuleRef, owner: str) -> Optional[str]:
+    def selected_rule_override_text(
+        store: DocumentRulesStore,
+        entry: AnnotationRuleRef,
+        owner: str,
+        is_safe_url: Optional[Callable[[str], bool]] = None,
+    ) -> Optional[str]:
         """Pre-#666 lookup: the override stored under the representative ref's key."""
         rep_ref = representative_ref(entry["refs"])
         if rep_ref is None:
@@ -158,7 +163,7 @@ def gather_rule_excerpts(
     """
     excerpts: list[tuple[str, str]] = []
     for rule_ref in extract_annotation_rule_refs(xml_string):
-        override_text = selected_rule_override_text(store, rule_ref, owner)
+        override_text = selected_rule_override_text(store, rule_ref, owner, is_safe_url=_is_safe_fetch_url)
         if override_text is not None:
             excerpts.append((rule_ref["category"], override_text))
             continue
