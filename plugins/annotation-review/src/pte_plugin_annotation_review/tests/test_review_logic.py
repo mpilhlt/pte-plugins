@@ -20,6 +20,14 @@ from pte_plugin_annotation_review.review_logic import (
     run_review,
 )
 
+try:
+    from fastapi_app.lib.doc_rules.interpretation_ref_kind import selected_rule_override_text  # noqa: F401
+    EDITOR_HAS_LAYER_LOOKUP = True
+except ImportError:
+    # Editors before pdf-tei-editor#666: review_logic falls back to the machine-ref key
+    EDITOR_HAS_LAYER_LOOKUP = False
+
+
 def _no_override_store() -> mock.MagicMock:
     """A DocumentRulesStore stand-in reporting no selected override for anything."""
     store = mock.MagicMock()
@@ -207,20 +215,17 @@ class TestGatherRuleExcerpts(unittest.TestCase):
         self.assertEqual(excerpts, [("primary", "Overridden rule text.")])
         mock_fetch.assert_not_called()
 
-    @mock.patch("pte_plugin_annotation_review.review_logic.fetch_rule_excerpt")
-    def test_override_lookup_uses_the_machine_ref_key_not_the_human_ref_key(self, mock_fetch):
-        # Document rules overrides target the machine rules (pdf-tei-editor#645)
-        from fastapi_app.lib.doc_rules.resource_key import normalize_resource_key
-
-        doc_with_human_and_machine_refs = """<?xml version="1.0"?>
+    @staticmethod
+    def _doc_with_refs(human: str, machine: str) -> str:
+        return f"""<?xml version="1.0"?>
 <TEI xmlns="http://www.tei-c.org/ns/1.0">
   <teiHeader>
     <encodingDesc>
       <editorialDecl>
         <interpretation type="primary">
           <p>
-            <ref target="https://raw.example.org/guide.md#heading" subtype="human" type="markdown"/>
-            <ref target="https://raw.example.org/guide.md#L10-L20" subtype="machine"/>
+            <ref target="{human}" subtype="human" type="markdown"/>
+            <ref target="{machine}" subtype="machine"/>
           </p>
         </interpretation>
       </editorialDecl>
@@ -229,15 +234,62 @@ class TestGatherRuleExcerpts(unittest.TestCase):
   <text><body>x</body></text>
 </TEI>
 """
+
+    @unittest.skipIf(EDITOR_HAS_LAYER_LOOKUP, "editor has the layer-aware lookup")
+    @mock.patch("pte_plugin_annotation_review.review_logic.fetch_rule_excerpt")
+    def test_override_lookup_falls_back_to_the_machine_ref_key_on_older_editors(self, mock_fetch):
+        from fastapi_app.lib.doc_rules.resource_key import normalize_resource_key
+
+        doc = self._doc_with_refs("https://raw.example.org/guide.md#heading", "https://raw.example.org/guide.md#L10-L20")
         store = mock.MagicMock()
         store.get_selected_override_text.return_value = "Overridden."
 
-        gather_rule_excerpts(doc_with_human_and_machine_refs, cache=mock.MagicMock(), store=store, owner="alice")
+        gather_rule_excerpts(doc, cache=mock.MagicMock(), store=store, owner="alice")
 
         store.get_selected_override_text.assert_called_once_with(
-            "interpretation-ref",
-            normalize_resource_key("https://raw.example.org/guide.md#L10-L20"),
-            "alice",
+            "interpretation-ref", normalize_resource_key("https://raw.example.org/guide.md#L10-L20"), "alice"
+        )
+        mock_fetch.assert_not_called()
+
+    @unittest.skipUnless(EDITOR_HAS_LAYER_LOOKUP, "editor before pdf-tei-editor#666")
+    @mock.patch("pte_plugin_annotation_review.review_logic.fetch_rule_excerpt")
+    def test_override_lookup_uses_the_human_key_when_machine_excerpt_is_in_the_same_file(self, mock_fetch):
+        # The machine excerpt is folded into the human layer (pdf-tei-editor#666)
+        from fastapi_app.lib.doc_rules.resource_key import normalize_resource_key
+
+        doc = self._doc_with_refs("https://raw.example.org/guide.md#heading", "https://raw.example.org/guide.md#L10-L20")
+        store = mock.MagicMock()
+        store.get_selected_override_text.return_value = "Overridden."
+
+        gather_rule_excerpts(doc, cache=mock.MagicMock(), store=store, owner="alice")
+
+        store.get_selected_override_text.assert_called_once_with(
+            "interpretation-ref", normalize_resource_key("https://raw.example.org/guide.md#heading"), "alice"
+        )
+        mock_fetch.assert_not_called()
+
+    @mock.patch("pte_plugin_annotation_review.review_logic.fetch_rule_excerpt", return_value="x")
+    @mock.patch("pte_plugin_annotation_review.review_logic.selected_rule_override_text", return_value=None)
+    def test_override_lookup_is_given_the_ssrf_check(self, mock_lookup, mock_fetch):
+        from pte_plugin_annotation_review.review_logic import _is_safe_fetch_url
+
+        gather_rule_excerpts(SINGLE_CATEGORY_TEI_DOC, cache=mock.MagicMock(), store=mock.MagicMock(), owner="alice")
+
+        self.assertIs(mock_lookup.call_args.kwargs["is_safe_url"], _is_safe_fetch_url)
+
+    @unittest.skipUnless(EDITOR_HAS_LAYER_LOOKUP, "editor before pdf-tei-editor#666")
+    @mock.patch("pte_plugin_annotation_review.review_logic.fetch_rule_excerpt")
+    def test_override_lookup_uses_the_machine_key_when_machine_rules_are_a_separate_file(self, mock_fetch):
+        from fastapi_app.lib.doc_rules.resource_key import normalize_resource_key
+
+        doc = self._doc_with_refs("https://raw.example.org/guide.md#heading", "https://raw.example.org/machine.md#heading")
+        store = mock.MagicMock()
+        store.get_selected_override_text.return_value = "Overridden."
+
+        gather_rule_excerpts(doc, cache=mock.MagicMock(), store=store, owner="alice")
+
+        store.get_selected_override_text.assert_called_once_with(
+            "interpretation-ref", normalize_resource_key("https://raw.example.org/machine.md#heading"), "alice"
         )
         mock_fetch.assert_not_called()
 
