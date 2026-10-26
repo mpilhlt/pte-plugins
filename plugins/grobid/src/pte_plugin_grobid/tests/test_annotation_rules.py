@@ -14,7 +14,7 @@ from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent.parent))
 
-from pte_plugin_grobid.annotation_rules import build_editorial_decl_entries
+from pte_plugin_grobid.annotation_rules import GrobidRulesProvider, build_editorial_decl_entries
 
 
 class TestBuildEditorialDeclEntriesVariantMatching(unittest.TestCase):
@@ -279,6 +279,44 @@ class TestBuildEditorialDeclEntriesLabel(unittest.TestCase):
         entries = build_editorial_decl_entries("v1", MagicMock())
 
         self.assertEqual(entries[0]["n"], "Citation model guidelines")
+
+
+class TestGetCondensePrompt(unittest.TestCase):
+    GUIDES = [
+        {"variant_ids": ["v1"], "category": "primary", "type": "markdown",
+         "url": "https://github.com/x/y/blob/main/g.md#model-a", "label": "A",
+         "condense_prompt": "custom prompt"},
+        {"variant_ids": ["v2"], "category": "primary", "type": "markdown",
+         "url": "https://github.com/x/y/blob/main/g.md#model-b", "label": "B"},
+    ]
+
+    @patch("pte_plugin_grobid.annotation_rules.get_annotation_guides")
+    def test_pinned_url_matches_branch_url(self, mock_get_guides):
+        mock_get_guides.return_value = self.GUIDES
+        pinned = "https://github.com/x/y/blob/0123456789abcdef0123456789abcdef01234567/g.md#model-a"
+        self.assertEqual(GrobidRulesProvider().get_condense_prompt(pinned), "custom prompt")
+
+    @patch("pte_plugin_grobid.annotation_rules.get_annotation_guides")
+    def test_guide_without_prompt_returns_none(self, mock_get_guides):
+        mock_get_guides.return_value = self.GUIDES
+        url = "https://github.com/x/y/blob/main/g.md#model-b"
+        self.assertIsNone(GrobidRulesProvider().get_condense_prompt(url))
+
+    @patch("pte_plugin_grobid.annotation_rules.get_annotation_guides")
+    def test_unknown_guide_returns_none(self, mock_get_guides):
+        mock_get_guides.return_value = self.GUIDES
+        url = "https://github.com/x/y/blob/main/other.md"
+        self.assertIsNone(GrobidRulesProvider().get_condense_prompt(url))
+
+    @patch("pte_plugin_grobid.annotation_rules.get_annotation_guides")
+    def test_later_guide_with_same_url_and_prompt_wins(self, mock_get_guides):
+        url = "https://github.com/x/y/blob/main/g.md#model-a"
+        mock_get_guides.return_value = [
+            {"variant_ids": ["v1"], "category": "primary", "type": "markdown", "url": url, "label": "A"},
+            {"variant_ids": ["v2"], "category": "other", "type": "markdown", "url": url, "label": "A2",
+             "condense_prompt": "second"},
+        ]
+        self.assertEqual(GrobidRulesProvider().get_condense_prompt(url), "second")
 
 
 if __name__ == "__main__":
