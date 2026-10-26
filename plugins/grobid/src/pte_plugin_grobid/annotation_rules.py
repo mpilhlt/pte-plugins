@@ -13,6 +13,7 @@ docs/superpowers/specs/2026-09-22-annotation-guide-dual-target-refs-design.md
 from typing import Optional
 
 from fastapi_app.lib.core.url_cache import UrlCache
+from fastapi_app.lib.doc_rules.resource_key import normalize_resource_key
 from fastapi_app.lib.utils.annotation_rules_utils import (
     AnnotationRuleRef,
     AnnotationRuleRefTarget,
@@ -148,3 +149,10 @@ class GrobidRulesProvider:
 
     def get_schema_url(self, variant_id: str) -> Optional[str]:
         return get_schema_url(variant_id)
+
+    def get_condense_prompt(self, guide_url: str) -> Optional[str]:
+        key = normalize_resource_key(guide_url)
+        for guide in get_annotation_guides():
+            if normalize_resource_key(guide["url"]) == key:
+                return guide.get("condense_prompt")
+        return None

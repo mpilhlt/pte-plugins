@@ -27,6 +27,9 @@ class AnnotationGuide(TypedDict):
     same section (a markdown heading-anchor or line-range URL). If set, the
     "machine" ref sent to LLMs is derived from it instead of from `url`,
     which then serves human readers only.
+
+    `condense_prompt` optionally overrides the editor's default prompt for
+    condensing this guide's section into its machine layer.
     """
 
     variant_ids: list[str]
@@ -35,6 +38,7 @@ class AnnotationGuide(TypedDict):
     url: str
     label: str
     machine_url: NotRequired[str]
+    condense_prompt: NotRequired[str]
 
 
 ANNOTATION_GUIDES: list[AnnotationGuide] = [
