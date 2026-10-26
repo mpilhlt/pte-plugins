@@ -11,16 +11,17 @@ import ipaddress
 import logging
 import re
 import socket
+from typing import Optional
 from urllib.parse import urlparse
 
 from lxml import etree
 
 from fastapi_app.lib.core.url_cache import UrlCache
-from fastapi_app.lib.doc_rules.interpretation_ref_kind import representative_ref
 from fastapi_app.lib.doc_rules.resource_key import normalize_resource_key
 from fastapi_app.lib.doc_rules.storage import DocumentRulesStore
 from fastapi_app.plugin_api import LLMProvider
 from fastapi_app.lib.utils.annotation_rules_utils import (
+    AnnotationRuleRef,
     extract_annotation_rule_refs,
     fetch_rule_excerpt,
 )
@@ -34,6 +35,18 @@ from .prompts import (
     build_user_prompt,
     validate_findings,
 )
+
+try:
+    from fastapi_app.lib.doc_rules.interpretation_ref_kind import selected_rule_override_text
+except ImportError:  # editor older than the two-layer document rules (pdf-tei-editor#666)
+    from fastapi_app.lib.doc_rules.interpretation_ref_kind import representative_ref
+
+    def selected_rule_override_text(store: DocumentRulesStore, entry: AnnotationRuleRef, owner: str) -> Optional[str]:
+        """Pre-#666 lookup: the override stored under the representative ref's key."""
+        rep_ref = representative_ref(entry["refs"])
+        if rep_ref is None:
+            return None
+        return store.get_selected_override_text("interpretation-ref", normalize_resource_key(rep_ref["target"]), owner)
 
 logger = logging.getLogger(__name__)
 
@@ -138,25 +151,17 @@ def gather_rule_excerpts(
     relevant excerpt. A category with no machine ref, or whose excerpt
     fails to fetch, is skipped (logged), not raised.
 
-    The override lookup is keyed by the category's *representative* ref
-    (see interpretation_ref_kind.py's representative_ref(), matching how
-    the document-rules registry stores and selects overrides for this
-    resource): its "machine" ref when present - the same ref fetched below,
-    so an override replaces exactly the machine rules the editor showed -
-    else its sole "human" ref. Always go through representative_ref()
-    rather than picking a subtype here: the refs normalize to different
-    resource keys (their fragments differ), so a lookup by any other ref
-    would silently miss every selected override.
+    The override is looked up by the editor's selected_rule_override_text(),
+    which picks the layer the reviewer reads (the separate machine layer if
+    the category has one, else the human layer) and its resource key. Do not
+    derive the key here: it must match how the editor stores overrides.
     """
     excerpts: list[tuple[str, str]] = []
     for rule_ref in extract_annotation_rule_refs(xml_string):
-        rep_ref = representative_ref(rule_ref["refs"])
-        if rep_ref is not None:
-            resource_key = normalize_resource_key(rep_ref["target"])
-            override_text = store.get_selected_override_text("interpretation-ref", resource_key, owner)
-            if override_text is not None:
-                excerpts.append((rule_ref["category"], override_text))
-                continue
+        override_text = selected_rule_override_text(store, rule_ref, owner)
+        if override_text is not None:
+            excerpts.append((rule_ref["category"], override_text))
+            continue
 
         machine_ref = next((r for r in rule_ref["refs"] if r["subtype"] == "machine"), None)
         if machine_ref is None:
