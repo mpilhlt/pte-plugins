@@ -1,5 +1,5 @@
 {
-  "version": "1.1.0",
+  "version": "1.2.0",
   "readme": "https://github.com/mpilhlt/pte-plugins/tree/main/plugins/annotation-review#readme",
   "engines": {
     "pte": ">=0.76.0",

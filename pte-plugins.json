@@ -34,7 +34,7 @@
       "package": "pte-plugin-annotation-review",
       "module": "pte_plugin_annotation_review",
       "path": "plugins/annotation-review",
-      "version": "1.1.0",
+      "version": "1.2.0",
       "description": "Reviews a document's annotations against its own editorialDecl-linked rules using an LLM",
       "requires": [],
       "dependencies": [],
