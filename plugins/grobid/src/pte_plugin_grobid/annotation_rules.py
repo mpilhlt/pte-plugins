@@ -151,8 +151,15 @@ class GrobidRulesProvider:
         return get_schema_url(variant_id)
 
     def get_condense_prompt(self, guide_url: str) -> Optional[str]:
+        """
+        The `condense_prompt` of the first guide that sets one and whose `url`
+        matches guide_url. Matching uses the human `url` only (not
+        `machine_url`), with the fragment kept and the git ref normalized.
+        """
         key = normalize_resource_key(guide_url)
         for guide in get_annotation_guides():
+            if "condense_prompt" not in guide:
+                continue
             if normalize_resource_key(guide["url"]) == key:
-                return guide.get("condense_prompt")
+                return guide["condense_prompt"]
         return None

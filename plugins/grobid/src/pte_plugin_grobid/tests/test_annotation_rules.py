@@ -308,6 +308,16 @@ class TestGetCondensePrompt(unittest.TestCase):
         url = "https://github.com/x/y/blob/main/other.md"
         self.assertIsNone(GrobidRulesProvider().get_condense_prompt(url))
 
+    @patch("pte_plugin_grobid.annotation_rules.get_annotation_guides")
+    def test_later_guide_with_same_url_and_prompt_wins(self, mock_get_guides):
+        url = "https://github.com/x/y/blob/main/g.md#model-a"
+        mock_get_guides.return_value = [
+            {"variant_ids": ["v1"], "category": "primary", "type": "markdown", "url": url, "label": "A"},
+            {"variant_ids": ["v2"], "category": "other", "type": "markdown", "url": url, "label": "A2",
+             "condense_prompt": "second"},
+        ]
+        self.assertEqual(GrobidRulesProvider().get_condense_prompt(url), "second")
+
 
 if __name__ == "__main__":
     unittest.main()
