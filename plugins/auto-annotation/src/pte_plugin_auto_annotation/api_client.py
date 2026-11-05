@@ -14,6 +14,7 @@ from dataclasses import dataclass
 
 import requests
 
+from .correction import TransientError
 from .evaluation import EvalSource
 
 # Completions of large batches on slow models take minutes
@@ -24,13 +25,21 @@ class ApiError(RuntimeError):
     """The server answered with an error status."""
 
 
+class TransientApiError(ApiError, TransientError):
+    """The server answered 429 or 503: retrying may help."""
+
+
+TRANSIENT_STATUSES = frozenset({429, 503})
+
+
 def _check(response: requests.Response) -> dict[str, object]:
     if not response.ok:
         try:
             detail = response.json().get("detail", response.text)
         except ValueError:
             detail = response.text
-        raise ApiError(f"{response.request.method} {response.url}: {response.status_code} {detail}")
+        error = TransientApiError if response.status_code in TRANSIENT_STATUSES else ApiError
+        raise error(f"{response.request.method} {response.url}: {response.status_code} {detail}")
     return response.json()
 
 
@@ -54,20 +63,25 @@ class ApiSession:
     def headers(self) -> dict[str, str]:
         return {"X-Session-ID": self.session_id}
 
-    def eval_source(self, gold_stable_id: str, input_stable_id: str | None = None, with_rules: bool = True) -> EvalSource:
-        """The gold version, the input version, the unit path and the rules."""
-        params: dict[str, str] = {"gold": gold_stable_id, "rules": "true" if with_rules else "false"}
-        if input_stable_id:
-            params["input"] = input_stable_id
+    def eval_source(
+        self, doc_id: str | None = None, variant: str | None = None, reference_stable_id: str | None = None,
+        input_stable_id: str | None = None, with_rules: bool = True,
+    ) -> EvalSource:
+        """The reference version (the document's gold version, or the given one), the input version, the unit path and the rules."""
+        params: dict[str, str] = {"rules": "true" if with_rules else "false"}
+        for name, value in (("doc", doc_id), ("variant", variant), ("reference", reference_stable_id), ("input", input_stable_id)):
+            if value:
+                params[name] = value
         data = _check(requests.get(f"{self.base_url}/api/plugins/auto-annotation/eval-source", params=params, headers=self.headers, timeout=120))
         rules = data["rules"]
         assert isinstance(rules, list)
         return EvalSource(
-            gold_stable_id=str(data["gold_stable_id"]), input_stable_id=str(data["input_stable_id"]),
+            reference_stable_id=str(data["reference_stable_id"]), input_stable_id=str(data["input_stable_id"]),
             variant=data["variant"] if isinstance(data["variant"], str) else None,
             unit_path=data["unit_path"] if isinstance(data["unit_path"], str) else None,
             gold_xml=str(data["gold_xml"]), input_xml=str(data["input_xml"]),
             rules=[(str(r["category"]), str(r["text"])) for r in rules],
+            doc_id=str(data["doc_id"]), reference_is_gold=bool(data["reference_is_gold"]), input_choice=str(data["input_choice"]),
         )
 
     def resolve_model(self, spec: str) -> tuple[str, str]:
@@ -76,13 +90,16 @@ class ApiSession:
         return str(data["provider_id"]), str(data["model_id"])
 
     def complete(self, provider_id: str, model_id: str, system_prompt: str, user_prompt: str, temperature: float) -> str:
-        """One completion through the server."""
-        data = _check(requests.post(
-            f"{self.base_url}/api/plugins/auto-annotation/complete",
-            json={"provider_id": provider_id, "model_id": model_id, "system_prompt": system_prompt, "user_prompt": user_prompt, "temperature": temperature},
-            headers=self.headers, timeout=self.timeout,
-        ))
-        return str(data["text"])
+        """One completion through the server; raises TransientError when retrying may help."""
+        try:
+            response = requests.post(
+                f"{self.base_url}/api/plugins/auto-annotation/complete",
+                json={"provider_id": provider_id, "model_id": model_id, "system_prompt": system_prompt, "user_prompt": user_prompt, "temperature": temperature},
+                headers=self.headers, timeout=self.timeout,
+            )
+        except (requests.ConnectionError, requests.Timeout) as e:
+            raise TransientError(f"{type(e).__name__}: {e}") from e
+        return str(_check(response)["text"])
 
 
 @dataclass

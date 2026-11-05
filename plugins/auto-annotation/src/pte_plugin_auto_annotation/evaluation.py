@@ -1,7 +1,7 @@
 """
-Evaluating one model on one gold document across batch sizes and output modes.
+Evaluating one model on one document (against a reference, normally its gold version) across batch sizes and output modes.
 
-The input is an EvalSource: the gold version, the version the model corrects (normally GROBID's
+The input is an EvalSource: the reference version, the version the model corrects (normally GROBID's
 first extraction of the same document), the unit path and the rules, all fixed for the run. For
 every (batch spec, output mode, repetition) the aligned input units are corrected with
 correct_units() and every outcome is scored against its gold unit.
@@ -17,7 +17,7 @@ from typing import Callable, Sequence
 
 from .batching import BatchSpec
 from .checks import ProposalStatus
-from .correction import BatchRecord, ChatClient, CorrectionRun, correct_units
+from .correction import BatchRecord, ChatClient, CorrectionRun, RetryPolicy, correct_units
 from .prompts import PROMPT_VERSION, OutputMode
 from .scoring import Alignment, UnitScore, align_documents, f1, ratio, score_unit
 
@@ -26,13 +26,18 @@ from .scoring import Alignment, UnitScore, align_documents, f1, ratio, score_uni
 class EvalSource:
     """Everything a run is computed from, as the server's /eval-source returns it."""
 
-    gold_stable_id: str
+    reference_stable_id: str
     input_stable_id: str
     variant: str | None
     unit_path: str | None
     gold_xml: str
     input_xml: str
     rules: list[tuple[str, str]]
+    doc_id: str = ""
+    # False when the reference is not the document's gold version (probe --reference)
+    reference_is_gold: bool = True
+    # How the input was chosen: "given", "lineage" (root of the reference's lineage) or "earliest"
+    input_choice: str = "given"
 
     @property
     def rules_hash(self) -> str:
@@ -59,7 +64,7 @@ class UnitRecord:
     """One scored unit of one run; a row of the units CSV."""
 
     model: str
-    gold_stable_id: str
+    reference_stable_id: str
     batching: str
     mode: str
     repeat: int
@@ -83,12 +88,17 @@ class Summary:
     """Micro-averaged scores of one (model, batching, mode) cell over its repetitions."""
 
     model: str
-    gold_stable_id: str
+    reference_stable_id: str
     batching: str
     mode: str
     repeats: int
     units: int
     calls: int
+    # Retries after transient provider errors
+    retries: int
+    # Units whose request failed (provider error, also after retries); left out of all scores below
+    error_rate: float
+    # Units the model answered without a usable proposal, among the units with an answer
     failure_rate: float
     status_counts: dict[str, int]
     exact_rate: float
@@ -122,8 +132,11 @@ class EvaluationResult:
         """Run parameters for the report."""
         return {
             "model": self.model,
-            "gold_stable_id": self.source.gold_stable_id,
+            "doc_id": self.source.doc_id,
+            "reference_stable_id": self.source.reference_stable_id,
+            "reference_is_gold": self.source.reference_is_gold,
             "input_stable_id": self.source.input_stable_id,
+            "input_choice": self.source.input_choice,
             "variant": self.source.variant,
             "unit_path": self.source.unit_path,
             "rules_hash": self.source.rules_hash,
@@ -136,16 +149,23 @@ class EvaluationResult:
 
 
 def summarize(
-    model: str, gold_stable_id: str, batching: str, mode: str, records: Sequence[UnitRecord],
+    model: str, reference_stable_id: str, batching: str, mode: str, records: Sequence[UnitRecord],
     batches: Sequence[BatchRecord], repeats: int,
 ) -> Summary:
-    """Aggregate the unit records (and the batches that produced them) of one cell."""
-    def total(attr: str) -> int:
-        return sum(getattr(r, attr) for r in records)
-
+    """
+    Aggregate the unit records (and the batches that produced them) of one cell. Units whose
+    request failed say nothing about the model and are left out of the scores.
+    """
     status_counts: dict[str, int] = {}
     for r in records:
         status_counts[r.status] = status_counts.get(r.status, 0) + 1
+    errors = status_counts.get(ProposalStatus.ERROR.value, 0)
+    all_records = records
+    records = [r for r in records if r.status != ProposalStatus.ERROR.value]
+
+    def total(attr: str) -> int:
+        return sum(getattr(r, attr) for r in records)
+
     failures = sum(n for s, n in status_counts.items() if ProposalStatus(s).is_failure)
     edit_p = ratio(total("correct_edits"), total("made"))
     edit_r = ratio(total("correct_edits"), total("needed"))
@@ -156,8 +176,10 @@ def summarize(
         in_q = [r for r in records if min(3, r.position * 4 // max(1, r.batch_size)) == q]
         quarters.append(ratio(sum(r.correct_edits for r in in_q), sum(r.needed for r in in_q)))
     return Summary(
-        model=model, gold_stable_id=gold_stable_id, batching=batching, mode=mode, repeats=repeats,
-        units=len(records), calls=len(batches), failure_rate=failures / len(records) if records else 0.0,
+        model=model, reference_stable_id=reference_stable_id, batching=batching, mode=mode, repeats=repeats,
+        units=len(all_records), calls=len(batches), retries=sum(b.retries for b in batches),
+        error_rate=errors / len(all_records) if all_records else 0.0,
+        failure_rate=failures / len(records) if records else 0.0,
         status_counts=status_counts, exact_rate=sum(r.exact for r in records) / len(records) if records else 0.0,
         edit_precision=edit_p, edit_recall=edit_r, edit_f1=f1(edit_p, edit_r),
         field_precision=field_p, field_recall=field_r, field_f1=f1(field_p, field_r),
@@ -174,7 +196,7 @@ def _records(model: str, source: EvalSource, config: RunConfig, alignment: Align
         gold = gold_by_input[outcome.unit.index]
         score: UnitScore = score_unit(outcome.unit.xml, gold.xml, outcome.proposal)
         records.append(UnitRecord(
-            model=model, gold_stable_id=source.gold_stable_id, batching=config.spec.label, mode=config.mode,
+            model=model, reference_stable_id=source.reference_stable_id, batching=config.spec.label, mode=config.mode,
             repeat=config.repeat, unit_index=outcome.unit.index, fingerprint=outcome.unit.fingerprint,
             batch_index=outcome.batch_index, position=outcome.position, batch_size=outcome.batch_size,
             status=outcome.status.value, **asdict(score),
@@ -195,16 +217,18 @@ async def evaluate(
     concurrency: int = 1,
     progress: ProgressCallback | None = None,
     max_units: int | None = None,
+    retry: RetryPolicy | None = None,
 ) -> EvaluationResult:
     """
     Run every config and score it; with max_units, only the first aligned units are evaluated.
+    Requests failing with a transient error are retried as `retry` allows.
 
     Raises:
         ValueError: a document is not well-formed, the unit path is invalid, or no unit could be aligned.
     """
     alignment = align_documents(source.input_xml, source.gold_xml, source.unit_path)
     if not alignment.pairs:
-        raise ValueError("No unit of the input version matches a unit of the gold version by its text")
+        raise ValueError("No unit of the input version matches a unit of the reference version by its text")
     if max_units is not None:
         alignment = Alignment(alignment.pairs[:max_units], alignment.unmatched_input, alignment.unmatched_gold)
     units = [pair.input for pair in alignment.pairs]
@@ -212,19 +236,19 @@ async def evaluate(
 
     baseline_records = [
         UnitRecord(
-            model="baseline (input)", gold_stable_id=source.gold_stable_id, batching="-", mode="-", repeat=1,
+            model="baseline (input)", reference_stable_id=source.reference_stable_id, batching="-", mode="-", repeat=1,
             unit_index=p.input.index, fingerprint=p.input.fingerprint, batch_index=0, position=0, batch_size=1,
             status=ProposalStatus.OK.value, **asdict(score_unit(p.input.xml, p.gold.xml, None)),
         )
         for p in alignment.pairs
     ]
-    result.baseline = summarize("baseline (input)", source.gold_stable_id, "-", "-", baseline_records, [], 1)
+    result.baseline = summarize("baseline (input)", source.reference_stable_id, "-", "-", baseline_records, [], 1)
 
     cells: dict[tuple[str, str], tuple[list[UnitRecord], list[BatchRecord], int]] = {}
     for number, config in enumerate(configs, start=1):
         if progress:
             progress(number, len(configs), config)
-        run = await correct_units(client, source.rules, units, config.spec, config.mode, concurrency=concurrency)
+        run = await correct_units(client, source.rules, units, config.spec, config.mode, concurrency=concurrency, retry=retry)
         records = _records(model, source, config, alignment, run)
         result.units.extend(records)
         for batch in run.batches:
@@ -237,5 +261,5 @@ async def evaluate(
         cells[key] = (cell_records + records, cell_batches + run.batches, cell_repeats + 1)
 
     for (batching, mode), (records, batches, repeats) in cells.items():
-        result.summaries.append(summarize(model, source.gold_stable_id, batching, mode, records, batches, repeats))
+        result.summaries.append(summarize(model, source.reference_stable_id, batching, mode, records, batches, repeats))
     return result

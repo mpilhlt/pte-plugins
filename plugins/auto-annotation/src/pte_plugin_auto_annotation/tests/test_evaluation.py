@@ -18,7 +18,7 @@ from pte_plugin_auto_annotation.units import document_units
 from .fixtures import GOLD_UNITS, GOLD_XML, INPUT_XML, EchoClient, OracleClient
 
 SOURCE = EvalSource(
-    gold_stable_id="gold1", input_stable_id="in1", variant="grobid.training.references",
+    reference_stable_id="gold1", input_stable_id="in1", variant="grobid.training.references",
     unit_path=".//listBibl/bibl", gold_xml=GOLD_XML, input_xml=INPUT_XML, rules=[("references", "rules")],
 )
 
@@ -86,6 +86,26 @@ class TestReport(unittest.TestCase):
         report = markdown_report([result])
         self.assertIn("| units:2 | changed |", report)
         self.assertIn("| - | - |", report)  # baseline row
+
+
+    def test_failed_requests_are_left_out_of_the_scores(self):
+        class SecondCallFails:
+            def __init__(self, client):
+                self.client, self.calls = client, 0
+
+            async def complete(self, system_prompt, user_prompt):
+                self.calls += 1
+                if self.calls == 2:
+                    raise RuntimeError("provider down")
+                return await self.client.complete(system_prompt, user_prompt)
+
+        result = asyncio.run(evaluate(SecondCallFails(OracleClient(_mapping())), "mock/oracle", SOURCE, sweep([BatchSpec(max_units=2)], ["all"], 1)))
+        summary = result.summaries[0]
+        self.assertEqual((summary.units, summary.error_rate, summary.failure_rate), (4, 0.5, 0.0))
+        self.assertEqual((summary.edit_precision, summary.exact_rate), (1.0, 1.0))  # the two answered units are right
+        self.assertEqual(summary.status_counts, {"ok": 2, "error": 2})
+        report = markdown_report([result])
+        self.assertIn("| units:2 | all | 1 | 2 | 0 | 50.0 | 0.0 | 100.0 |", report)
 
 
 if __name__ == "__main__":

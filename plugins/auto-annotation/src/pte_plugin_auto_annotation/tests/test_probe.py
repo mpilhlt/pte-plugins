@@ -23,12 +23,13 @@ class FakeSession:
     def __init__(self):
         self.mapping = {u.xml: g for u, g in zip(document_units(INPUT_XML, ".//listBibl/bibl"), GOLD_UNITS)}
         self.completions: list[tuple[str, str]] = []
-        self.sources: list[tuple[str, str | None, bool]] = []
+        self.sources: list[tuple[str | None, str | None, str | None, str | None, bool]] = []
 
-    def eval_source(self, gold, input_id=None, with_rules=True):
-        self.sources.append((gold, input_id, with_rules))
-        return EvalSource(gold, "v1", "grobid.training.references", ".//listBibl/bibl", GOLD_XML, INPUT_XML,
-                          [("references", "RULES")] if with_rules else [])
+    def eval_source(self, doc_id=None, variant=None, reference_stable_id=None, input_stable_id=None, with_rules=True):
+        self.sources.append((doc_id, variant, reference_stable_id, input_stable_id, with_rules))
+        return EvalSource(reference_stable_id or "gold1", "v1", "grobid.training.references", ".//listBibl/bibl", GOLD_XML, INPUT_XML,
+                          [("references", "RULES")] if with_rules else [], doc_id=doc_id or "doc1",
+                          reference_is_gold=reference_stable_id is None)
 
     def resolve_model(self, spec):
         return "endpoint-local", spec.split("/")[-1]
@@ -49,13 +50,14 @@ class TestProbeCli(unittest.TestCase):
     def test_runs_and_writes_report(self):
         with tempfile.TemporaryDirectory() as tmp:
             code, out, session = self.run_main(
-                "--model", "local/qwen", "--model", "local/llama", "--gold", "gold1",
+                "--model", "local/qwen", "--model", "local/llama", "--doc", "doc1",
                 "--batches", "units:1,units:4", "--modes", "all,changed", "--out", tmp,
             )
             self.assertEqual(code, 0)
             self.assertTrue((Path(tmp) / "report.md").is_file())
-        self.assertIn("## endpoint-local/qwen on gold1", out)
-        self.assertIn("## endpoint-local/llama on gold1", out)
+        self.assertIn("## endpoint-local/qwen on doc1", out)
+        self.assertIn("## endpoint-local/llama on doc1", out)
+        self.assertIn("Reference version `gold1` (gold)", out)
         # 2 models x (4 + 1 calls) x 2 modes
         self.assertEqual(len(session.completions), 20)
 
@@ -63,14 +65,23 @@ class TestProbeCli(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             rules = Path(tmp) / "rules.md"
             rules.write_text("PINNED RULES")
-            code, _, session = self.run_main("--model", "m", "--gold", "gold1", "--batches", "units:4", "--rules-file", str(rules), "--out", tmp)
+            code, out, session = self.run_main("--model", "m", "--doc", "doc1", "--batches", "units:4", "--rules-file", str(rules), "--out", tmp)
         self.assertEqual(code, 0)
-        self.assertEqual(session.sources, [("gold1", None, False)])
+        self.assertEqual(session.sources, [("doc1", None, None, None, False)])
         self.assertIn("PINNED RULES", session.completions[0][1])
+        self.assertIn("## endpoint-local/m on doc1", out)  # the pinned source keeps the document id
+
+    def test_reference_replaces_the_gold_version(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            code, out, session = self.run_main("--model", "m", "--reference", "v7", "--variant", "x", "--input", "v1", "--batches", "units:4", "--out", tmp)
+        self.assertEqual(code, 0)
+        self.assertEqual(session.sources, [(None, "x", "v7", "v1", True)])
+        self.assertIn("Reference version `v7` (not the gold version)", out)
 
     def test_argument_errors(self):
-        for args in (["--model", "m", "--gold", "a", "--gold", "b", "--input", "x"], ["--model", "m", "--gold", "a", "--modes", "diff"],
-                     ["--model", "m", "--gold", "a", "--batches", "8"]):
+        for args in (["--model", "m"], ["--model", "m", "--doc", "a", "--doc", "b", "--input", "x"],
+                     ["--model", "m", "--doc", "a", "--doc", "b", "--reference", "x"],
+                     ["--model", "m", "--doc", "a", "--modes", "diff"], ["--model", "m", "--doc", "a", "--batches", "8"]):
             with self.subTest(args=args), self.assertRaises(SystemExit):
                 self.run_main(*args)
 

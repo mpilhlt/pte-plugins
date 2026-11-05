@@ -1,10 +1,12 @@
 """
 Server side: resolving the inputs of an evaluation from the editor's data.
 
-Given a gold version's stable id, finds the version the model corrects (by default the earliest
-version of the same document and variant, which is normally the extraction), the variant's unit
-path (from the extractors' `reviewUnits`) and the rules (the machine refs of the gold version's
-editorialDecl, without user overrides, so that every model sees the same text).
+Given a document id and a variant, finds the reference version (the document's gold version of the
+variant, or any version given by its stable id), the version the model corrects (by default the
+first version of the reference's lineage, i.e. the extraction it was derived from, else the
+earliest version of the same document and variant), the
+variant's unit path (from the extractors' `reviewUnits`) and the rules (the machine refs of the
+reference version's editorialDecl, without user overrides, so that every model sees the same text).
 """
 
 from __future__ import annotations
@@ -26,6 +28,8 @@ from fastapi_app.lib.utils.annotation_rules_utils import extract_annotation_rule
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_VARIANT = "grobid.training.references"
+
 
 class SourceError(Exception):
     """An input of the evaluation cannot be resolved; `status` is the HTTP status to answer with."""
@@ -39,8 +43,11 @@ class SourceError(Exception):
 class ResolvedSource:
     """The inputs of an evaluation (see evaluation.EvalSource)."""
 
-    gold_stable_id: str
+    doc_id: str
+    reference_stable_id: str
+    reference_is_gold: bool
     input_stable_id: str
+    input_choice: str  # how the input was chosen: "given", "lineage" or "earliest"
     variant: str | None
     unit_path: str | None
     gold_xml: str
@@ -102,7 +109,7 @@ def gather_rules(
         except Exception as e:  # noqa: BLE001 - one unreachable category is skipped, not fatal
             logger.warning(f"auto-annotation: skipping rule category '{entry['category']}' - {url}: {e}")
     if not rules:
-        raise SourceError("No annotation rules could be resolved from the gold version's editorialDecl")
+        raise SourceError("No annotation rules could be resolved from the reference version's editorialDecl")
     return rules
 
 
@@ -113,8 +120,66 @@ def _read(storage: FileStorage, file: FileMetadata) -> str:
     return content.decode("utf-8")
 
 
+def _tei_file(repo: FileRepository, stable_id: str) -> FileMetadata:
+    file = repo.get_file_by_stable_id(stable_id)
+    if file is None or file.file_type != "tei":
+        raise SourceError(f"No TEI file with stable id {stable_id}", 404)
+    return file
+
+
+def find_reference(
+    repo: FileRepository, doc_id: str | None, variant: str | None, reference_stable_id: str | None
+) -> FileMetadata:
+    """
+    The reference version: the one given by its stable id, else the document's gold version of the
+    variant (default: DEFAULT_VARIANT).
+
+    Raises:
+        SourceError: neither a document nor a reference is given, the reference belongs to another
+            document or variant, or the document has no or several gold versions of the variant.
+    """
+    if reference_stable_id:
+        reference = _tei_file(repo, reference_stable_id)
+        if doc_id and reference.doc_id != doc_id:
+            raise SourceError(f"{reference_stable_id} belongs to document {reference.doc_id}, not {doc_id}")
+        if variant and reference.variant != variant:
+            raise SourceError(f"{reference_stable_id} is of variant {reference.variant!r}, not {variant!r}")
+        return reference
+    if not doc_id:
+        raise SourceError("Pass a document id or the stable id of a reference version")
+    variant = variant or DEFAULT_VARIANT
+    golds = [
+        f for f in repo.get_files_by_doc_id(doc_id)
+        if f.file_type == "tei" and f.variant == variant and f.is_gold_standard
+    ]
+    if len(golds) != 1:
+        found = "no gold version" if not golds else f"{len(golds)} gold versions ({', '.join(f.stable_id for f in golds)})"
+        raise SourceError(f"Document {doc_id} has {found} of variant {variant!r}; pass the reference version explicitly", 404 if not golds else 422)
+    return golds[0]
+
+
+def lineage_root(repo: FileRepository, reference: FileMetadata) -> FileMetadata | None:
+    """
+    The first version the reference was derived from (following parent_stable_id) that has the
+    same document and variant, or None if the reference has no such ancestor.
+    """
+    root: FileMetadata | None = None
+    seen = {reference.stable_id}
+    parent_id = reference.parent_stable_id
+    while parent_id and parent_id not in seen:
+        seen.add(parent_id)
+        parent = repo.get_file_by_stable_id(parent_id)
+        if parent is None or parent.file_type != "tei" or parent.doc_id != reference.doc_id or parent.variant != reference.variant:
+            break
+        root = parent
+        parent_id = parent.parent_stable_id
+    return root
+
+
 def resolve_source(
-    gold_stable_id: str,
+    doc_id: str | None,
+    variant: str | None,
+    reference_stable_id: str | None,
     input_stable_id: str | None,
     user: dict[str, object],
     repo: FileRepository,
@@ -123,43 +188,51 @@ def resolve_source(
     with_rules: bool = True,
 ) -> ResolvedSource:
     """
-    Resolve the gold version, the input version, the unit path and the rules.
+    Resolve the reference version (see find_reference), the input version, the unit path and the rules.
+    The input version is the given one, else the root of the reference's lineage (see lineage_root),
+    else the earliest version of the document and variant.
 
     Raises:
-        SourceError: a file is missing, not readable by the user, not a gold version, or no input
-            version or rule can be found.
+        SourceError: a file is missing or not readable by the user, or no reference, input version
+            or rule can be found.
     """
-    gold = repo.get_file_by_stable_id(gold_stable_id)
-    if gold is None or gold.file_type != "tei":
-        raise SourceError(f"No TEI file with stable id {gold_stable_id}", 404)
-    if not check_file_access(gold, user, "read"):
-        raise SourceError(f"No read access to {gold_stable_id}", 403)
-    if not gold.is_gold_standard:
-        raise SourceError(f"{gold_stable_id} is not a gold version")
+    reference = find_reference(repo, doc_id, variant, reference_stable_id)
+    if not check_file_access(reference, user, "read"):
+        raise SourceError(f"No read access to {reference.stable_id}", 403)
 
     if input_stable_id:
-        source = repo.get_file_by_stable_id(input_stable_id)
-        if source is None or source.file_type != "tei":
-            raise SourceError(f"No TEI file with stable id {input_stable_id}", 404)
-        if source.doc_id != gold.doc_id:
-            raise SourceError(f"{input_stable_id} belongs to another document than {gold_stable_id}")
+        source = _tei_file(repo, input_stable_id)
+        if source.doc_id != reference.doc_id:
+            raise SourceError(f"{input_stable_id} belongs to another document than {reference.stable_id}")
+        input_choice = "given"
+    elif (root := lineage_root(repo, reference)) is not None:
+        source = root
+        input_choice = "lineage"
     else:
-        versions = repo.get_all_versions(gold.doc_id, gold.variant)
+        # get_all_versions() leaves out gold versions; a non-gold reference is left out here
+        versions = sorted(
+            (v for v in repo.get_all_versions(reference.doc_id, reference.variant) if v.stable_id != reference.stable_id),
+            key=lambda v: (v.version or 0, str(v.created_at)),
+        )
         if not versions:
             raise SourceError(
-                f"Document {gold.doc_id} has no version of variant {gold.variant!r} besides the gold one; pass the input version explicitly",
+                f"Document {reference.doc_id} has no version of variant {reference.variant!r} besides the reference; pass the input version explicitly",
                 404,
             )
         source = versions[0]
+        input_choice = "earliest"
     if not check_file_access(source, user, "read"):
         raise SourceError(f"No read access to {source.stable_id}", 403)
 
-    gold_xml = _read(storage, gold)
+    gold_xml = _read(storage, reference)
     return ResolvedSource(
-        gold_stable_id=gold.stable_id,
+        doc_id=reference.doc_id,
+        reference_stable_id=reference.stable_id,
+        reference_is_gold=bool(reference.is_gold_standard),
         input_stable_id=source.stable_id,
-        variant=gold.variant,
-        unit_path=review_unit_path(gold.variant),
+        input_choice=input_choice,
+        variant=reference.variant,
+        unit_path=review_unit_path(reference.variant),
         gold_xml=gold_xml,
         input_xml=_read(storage, source),
         rules=gather_rules(gold_xml, cache) if with_rules else [],

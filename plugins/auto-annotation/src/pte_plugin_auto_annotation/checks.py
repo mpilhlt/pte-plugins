@@ -21,11 +21,12 @@ class ProposalStatus(StrEnum):
     MALFORMED = "malformed"  # not well-formed XML
     WRONG_ROOT = "wrong_root"  # not exactly one element, or a different outermost element
     TEXT_CHANGED = "text_changed"  # the text (ignoring whitespace) differs from the input
+    ERROR = "error"  # the request failed (provider error, also after retries): no answer to judge
 
     @property
     def is_failure(self) -> bool:
-        """Structural failure: the model gave no usable proposal for the unit."""
-        return self not in (ProposalStatus.OK, ProposalStatus.UNCHANGED)
+        """Structural failure: the model gave no usable proposal for the unit (not a failed request)."""
+        return self not in (ProposalStatus.OK, ProposalStatus.UNCHANGED, ProposalStatus.ERROR)
 
 
 def check_proposal(original_xml: str, proposal_xml: str) -> ProposalStatus:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pte_plugin_auto_annotation.correction import TransientError
 from pte_plugin_auto_annotation.prompts import parse_unit_answer
 
 HEADER = """<?xml version="1.0" encoding="UTF-8"?>
@@ -78,3 +79,18 @@ class EchoClient:
 class FailingClient:
     async def complete(self, system_prompt: str, user_prompt: str) -> str:
         raise RuntimeError("provider down")
+
+
+class FlakyClient:
+    """Fails with TransientError for the first `failures` requests, then answers like the wrapped client."""
+
+    def __init__(self, client: object, failures: int):
+        self.client = client
+        self.failures = failures
+        self.calls = 0
+
+    async def complete(self, system_prompt: str, user_prompt: str) -> str:
+        self.calls += 1
+        if self.calls <= self.failures:
+            raise TransientError("503 This model is currently experiencing high demand")
+        return await self.client.complete(system_prompt, user_prompt)  # type: ignore[attr-defined]

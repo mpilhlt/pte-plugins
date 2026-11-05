@@ -1,9 +1,9 @@
 """
 Routes of the auto-annotation plugin, used by the model probe CLI.
 
-  GET  /api/plugins/auto-annotation/eval-source   gold version, input version, unit path and rules
+  GET  /api/plugins/auto-annotation/eval-source   reference version, input version, unit path and rules
   POST /api/plugins/auto-annotation/resolve-model model name -> (provider id, model id)
-  POST /api/plugins/auto-annotation/complete      one chat completion with a resolved model
+  POST /api/plugins/auto-annotation/complete      one chat completion with a resolved model (503 when retrying may help)
 
 All routes are for reviewers and admins. The completion route only relays prompts the client
 built; it applies the same model access rules as the LLM Reviewer.
@@ -27,8 +27,9 @@ from fastapi_app.lib.secrets import MissingSecretError, secret_required_detail
 from fastapi_app.lib.storage.file_storage import FileStorage
 from fastapi_app.plugin_api import get_settings
 
+from .correction import is_transient_message
 from .model_spec import ModelSpecError, ProviderInfo, resolve_model_spec
-from .sources import SourceError, resolve_source
+from .sources import DEFAULT_VARIANT, SourceError, resolve_source
 
 logger = logging.getLogger(__name__)
 
@@ -42,8 +43,11 @@ class RuleResponse(BaseModel):
 
 
 class EvalSourceResponse(BaseModel):
-    gold_stable_id: str
+    doc_id: str
+    reference_stable_id: str
+    reference_is_gold: bool
     input_stable_id: str
+    input_choice: str
     variant: str | None
     unit_path: str | None
     gold_xml: str
@@ -75,9 +79,11 @@ class CompleteResponse(BaseModel):
 
 @router.get("/eval-source", response_model=EvalSourceResponse)
 def eval_source(
-    gold: str = Query(..., description="Stable id of the gold version"),
-    input: str | None = Query(None, description="Stable id of the version to correct; default: the document's earliest version of the same variant"),
-    rules: bool = Query(True, description="Resolve the rules from the gold version's editorialDecl"),
+    doc: str | None = Query(None, description="Document id; its gold version of the variant is the reference"),
+    variant: str | None = Query(None, description=f"Variant (default: {DEFAULT_VARIANT}, or the reference's variant)"),
+    reference: str | None = Query(None, description="Stable id of the reference version, instead of the document's gold version"),
+    input: str | None = Query(None, description="Stable id of the version to correct; default: the first version the reference was derived from, else the document's earliest version of the variant"),
+    rules: bool = Query(True, description="Resolve the rules from the reference version's editorialDecl"),
     current_user: dict = Depends(require_reviewer_or_admin),
     repo: FileRepository = Depends(get_file_repository),
     storage: FileStorage = Depends(get_file_storage),
@@ -85,12 +91,13 @@ def eval_source(
     """The fixed inputs of an evaluation run."""
     cache = UrlCache(get_settings().annotation_rules_cache_dir)
     try:
-        source = resolve_source(gold, input, current_user, repo, storage, cache, with_rules=rules)
+        source = resolve_source(doc, variant, reference, input, current_user, repo, storage, cache, with_rules=rules)
     except SourceError as e:
         raise HTTPException(status_code=e.status, detail=str(e)) from e
     return EvalSourceResponse(
-        gold_stable_id=source.gold_stable_id, input_stable_id=source.input_stable_id, variant=source.variant,
-        unit_path=source.unit_path, gold_xml=source.gold_xml, input_xml=source.input_xml,
+        doc_id=source.doc_id, reference_stable_id=source.reference_stable_id, reference_is_gold=source.reference_is_gold,
+        input_stable_id=source.input_stable_id, input_choice=source.input_choice, variant=source.variant, unit_path=source.unit_path,
+        gold_xml=source.gold_xml, input_xml=source.input_xml,
         rules=[RuleResponse(category=c, text=t, url=u) for c, t, u in source.rules],
     )
 
@@ -150,5 +157,7 @@ async def complete(
         raise HTTPException(status_code=403, detail=str(e)) from e
     except (LLMProviderError, requests.RequestException) as e:
         logger.warning(f"auto-annotation: provider '{body.provider_id}' failed: {e}")
-        raise HTTPException(status_code=502, detail=f"LLM provider request failed: {e}") from e
+        # 503 tells the client that retrying may help (overload, rate limit, timeout)
+        transient = isinstance(e, (requests.ConnectionError, requests.Timeout)) or is_transient_message(str(e))
+        raise HTTPException(status_code=503 if transient else 502, detail=f"LLM provider request failed: {e}") from e
     return CompleteResponse(text=text, seconds=time.monotonic() - started)

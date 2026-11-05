@@ -11,7 +11,10 @@ Pure module.
 from __future__ import annotations
 
 import asyncio
+import random
+import re
 import time
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Protocol, Sequence
 
@@ -19,6 +22,38 @@ from .batching import BatchSpec, make_batches
 from .checks import ProposalStatus, check_proposal
 from .prompts import OutputMode, build_system_prompt, build_user_prompt, parse_unit_answer
 from .units import Unit
+
+
+class TransientError(RuntimeError):
+    """A request failed for a reason unrelated to the prompt (overload, rate limit); retrying may help."""
+
+
+# HTTP statuses and wordings with which providers report overload and rate limits
+_TRANSIENT = re.compile(
+    r"\b(429|500|502|503|504)\b|overload|high demand|rate.?limit|too many requests|resource.?exhausted|temporarily unavailable|try again",
+    re.IGNORECASE,
+)
+
+
+def is_transient_message(message: str) -> bool:
+    """Whether a provider error message reports a temporary condition."""
+    return bool(_TRANSIENT.search(message))
+
+
+@dataclass(frozen=True)
+class RetryPolicy:
+    """Retries of requests failing with TransientError, with exponential backoff and jitter."""
+
+    retries: int = 4
+    base_delay: float = 2.0
+    max_delay: float = 60.0
+
+    def delay(self, attempt: int) -> float:
+        """Seconds to wait before retry number `attempt` (1-based)."""
+        return min(self.max_delay, self.base_delay * 2 ** (attempt - 1)) * random.uniform(0.75, 1.25)
+
+
+Sleep = Callable[[float], Awaitable[None]]
 
 
 class ChatClient(Protocol):
@@ -42,7 +77,12 @@ class ProviderChatClient:
     temperature: float = 0.0
 
     async def complete(self, system_prompt: str, user_prompt: str) -> str:
-        return await self.provider.chat_completion(self.model_id, system_prompt, user_prompt, self.temperature)
+        try:
+            return await self.provider.chat_completion(self.model_id, system_prompt, user_prompt, self.temperature)
+        except Exception as e:
+            if is_transient_message(str(e)):
+                raise TransientError(str(e)) from e
+            raise
 
 
 @dataclass
@@ -71,6 +111,8 @@ class BatchRecord:
     error: str | None = None
     # Index of the batch this one was split from by split_on_failure, else None
     split_from: int | None = None
+    # Retries after transient errors (see RetryPolicy)
+    retries: int = 0
 
 
 @dataclass
@@ -93,12 +135,15 @@ async def correct_units(
     mode: OutputMode = "all",
     concurrency: int = 1,
     split_on_failure: float | None = None,
+    retry: RetryPolicy | None = None,
+    sleep: Sleep = asyncio.sleep,
 ) -> CorrectionRun:
     """
     Send the units to the model in batches and check every proposed unit.
 
-    Units are numbered 1..n within each batch. A failed request (exception from the client) marks
-    all of its units MISSING and is recorded with its error. With split_on_failure set (a share
+    Units are numbered 1..n within each batch. A request failing with TransientError is retried
+    as `retry` allows (the wait does not count towards the request's seconds). A failed request
+    marks all of its units ERROR and is recorded with its error. With split_on_failure set (a share
     between 0 and 1), a batch of more than one unit whose share of failed units exceeds it is split
     in half and each half is retried, recursively; the experiment leaves it off to measure the raw
     behaviour, the pipeline turns it on.
@@ -114,25 +159,38 @@ async def correct_units(
         user_prompt = build_user_prompt(rules, batch, ids)
         error: str | None = None
         raw = ""
+        retries = 0
+        seconds = 0.0
         async with semaphore:
-            started = time.monotonic()
-            try:
-                raw = await client.complete(system_prompt, user_prompt)
-            except Exception as e:  # noqa: BLE001 - a failed request is a measured outcome, not a crash
-                error = f"{type(e).__name__}: {e}"
-            seconds = time.monotonic() - started
+            while True:
+                started = time.monotonic()
+                try:
+                    raw = await client.complete(system_prompt, user_prompt)
+                    error = None
+                except Exception as e:  # noqa: BLE001 - a failed request is a measured outcome, not a crash
+                    error = f"{type(e).__name__}: {e}"
+                    transient = isinstance(e, TransientError)
+                else:
+                    transient = False
+                seconds += time.monotonic() - started
+                if not (transient and retry is not None and retries < retry.retries):
+                    break
+                retries += 1
+                await sleep(retry.delay(retries))
         async with lock:
             batch_index = len(run.batches)
             run.batches.append(BatchRecord(
                 index=batch_index, unit_indices=[u.index for u in batch], prompt_chars=len(system_prompt) + len(user_prompt),
-                response_chars=len(raw), seconds=seconds, raw_response=raw, error=error, split_from=split_from,
+                response_chars=len(raw), seconds=seconds, raw_response=raw, error=error, split_from=split_from, retries=retries,
             ))
         answer = parse_unit_answer(raw) if error is None else {}
         outcomes: list[UnitOutcome] = []
         for position, (uid, unit) in enumerate(zip(ids, batch)):
             proposal = answer.get(uid)
-            if proposal is None:
-                status = ProposalStatus.UNCHANGED if mode == "changed" and error is None else ProposalStatus.MISSING
+            if error is not None:
+                status = ProposalStatus.ERROR
+            elif proposal is None:
+                status = ProposalStatus.UNCHANGED if mode == "changed" else ProposalStatus.MISSING
                 proposal = unit.xml if status == ProposalStatus.UNCHANGED else None
             else:
                 status = check_proposal(unit.xml, proposal)
