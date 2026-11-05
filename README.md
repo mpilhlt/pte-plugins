@@ -89,18 +89,18 @@ plugins/<name>/
 
 ## Development
 
-The tests run in the environment of an editor checkout, by default `../pdf-tei-editor` next to this repository (set `PTE_ROOT` otherwise). Install all plugins into it as editable packages:
+The plugins run and are tested in the environment of an editor checkout, by default `../pdf-tei-editor` next to this repository (set `PTE_ROOT` otherwise). Install all plugins into it as editable packages, with their Python dependencies:
 
 ```bash
-export PTE_ROOT=$(realpath ../pdf-tei-editor)
-uv pip install --python "$PTE_ROOT/.venv/bin/python" $(for d in plugins/*/; do echo "-e $d"; done)
+npm run dev:install
 ```
 
-As long as the editor still ships built-in copies of these plugins in `fastapi_app/plugins/`, remove them from that checkout first, since a plugin id must not be loaded twice. `uv sync` in the editor removes the editable installs again; `uv run` keeps them (set `UV_NO_SYNC=1` to be sure).
+The editor then loads the plugins from `plugins/*/src`, so changes take effect without publishing or reinstalling. The editor's dev server only watches its own checkout, so it does not reload on changes here; restart it to load them. `uv sync` in the editor removes the editable installs again, and `uv sync --extra <plugin>` replaces them with the released versions; run `npm run dev:install` again afterwards. `uv run` keeps them (set `UV_NO_SYNC=1` to be sure).
 
 Run the tests:
 
 ```bash
+export PTE_ROOT=$(realpath ../pdf-tei-editor)
 "$PTE_ROOT/.venv/bin/python" -m pytest        # Python unit tests of all plugins, plus tests/
 npm install && npm test                        # JavaScript unit tests
 
