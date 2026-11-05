@@ -95,7 +95,7 @@ The plugins run and are tested in the environment of an editor checkout, by defa
 npm run dev:install
 ```
 
-The editor then loads the plugins from `plugins/*/src`, so changes take effect without publishing or reinstalling. The editor's dev server only watches its own checkout, so it does not reload on changes here; restart it to load them. `uv sync` in the editor removes the editable installs again, and `uv sync --extra <plugin>` replaces them with the released versions; run `npm run dev:install` again afterwards. `uv run` keeps them (set `UV_NO_SYNC=1` to be sure).
+The editor then loads the plugins from `plugins/*/src`, so changes take effect without publishing or reinstalling. The editor's dev server (`npm run start:dev`) also reloads on changes in their directories; it determines them when it starts, so restart it after adding a plugin. `uv sync` in the editor removes the editable installs again, and `uv sync --extra <plugin>` replaces them with the released versions; run `npm run dev:install` again afterwards. `uv run` keeps them (set `UV_NO_SYNC=1` to be sure).
 
 Run the tests:
 
