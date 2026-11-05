@@ -76,6 +76,20 @@
       }
     },
     {
+      "id": "auto-annotation",
+      "package": "pte-plugin-auto-annotation",
+      "module": "pte_plugin_auto_annotation",
+      "path": "plugins/auto-annotation",
+      "version": "0.1.0",
+      "description": "Evaluates LLMs at correcting GROBID training annotations against gold versions (model probe)",
+      "requires": [],
+      "dependencies": [],
+      "engines": {
+        "pte": ">=0.81.0",
+        "pte-plugin-api": "^1.0"
+      }
+    },
+    {
       "id": "collection-overview",
       "package": "pte-plugin-collection-overview",
       "module": "pte_plugin_collection_overview",

@@ -1,0 +1,8 @@
+{
+  "version": "0.1.0",
+  "readme": "https://github.com/mpilhlt/pte-plugins/tree/main/plugins/auto-annotation#readme",
+  "engines": {
+    "pte": ">=0.81.0",
+    "pte-plugin-api": "^1.0"
+  }
+}
