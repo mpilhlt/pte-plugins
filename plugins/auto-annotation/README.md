@@ -16,7 +16,7 @@ uv run python -m pte_plugin_auto_annotation.probe \
 The installed package also provides the command `pte-model-probe` with the same options. Run `--help` for all options.
 
 - `--model`: a model as configured in the app: `default`, `<provider>`, or `<provider>/<model>`. `<provider>` is a provider id (`kisski`, `endpoint-ollama`), its label (an inference endpoint's name) or an endpoint id without the `endpoint-` prefix; `<model>` is a model id or label. With `<provider>` alone, the provider's only model or the default model is used.
-- `--doc`: a document id. Its gold version of `--variant` (default `grobid.training.references`) is the reference the model's corrections are scored against. The version the model corrects is the first version the reference was derived from (following the versions' parents, normally the extraction), else the earliest version of the same document and variant (ties by creation time); use `--input` to choose another one. The report says which rule chose it.
+- `--doc`: a document id. Its gold version of `--variant` (default `grobid.training.references`) is the reference the model's corrections are scored against. The version the model corrects is the extraction the reference was derived from (the oldest extraction among the versions' parents), else the earliest extraction of the same document and variant (ties by creation time); without an extraction, the probe stops and asks for `--input`. A version counts as an extraction if its revision history starts with the extraction and has only metadata changes after it (renamed, document rules updated); label and status are not reliable (`versions.py`). The report says how the input was chosen, and marks a given `--input` that is not an extraction.
 - `--reference`: the stable id of a version to score against instead of the gold version, e.g. for a document without a gold version yet; the report marks it as "not the gold version". Its document and variant are used, so `--doc` and `--variant` can be left out.
 - `--batches`: batch specs, `units:N` (at most N units per request) or `chars:N` (at most N characters of unit XML).
 - `--modes`: `all` (the model returns every unit) or `changed` (only the units it changed).
@@ -49,6 +49,7 @@ The modules other than `plugin.py`, `routes.py` and `sources.py` do not import t
 | `scoring.py` | Fields, edit and field scores, alignment of input and gold units |
 | `evaluation.py` | Sweeps of batch specs and modes on one gold document, summaries |
 | `report.py` | CSV, JSONL, JSON and Markdown output |
+| `versions.py` | Telling extractions from annotated versions by their revision history |
 | `model_spec.py` | Resolving model names |
 | `api_client.py` | HTTP client and `ServerChatClient` for the CLI |
 | `probe.py` | The CLI |

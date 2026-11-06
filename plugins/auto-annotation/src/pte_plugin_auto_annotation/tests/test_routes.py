@@ -19,7 +19,9 @@ from pte_plugin_auto_annotation import routes as routes_module
 from pte_plugin_auto_annotation import sources as sources_module
 from pte_plugin_auto_annotation.routes import router
 
-from .fixtures import GOLD_XML, INPUT_XML
+from .fixtures import CORRECTED, EXTRACTION, GOLD_XML, INPUT_UNITS, INPUT_XML, RENAMED, tei
+
+CORRECTED_COPY_XML = tei(INPUT_UNITS, changes=EXTRACTION + CORRECTED + RENAMED)
 
 
 def _file(stable_id: str, *, gold: bool = False, doc_id: str = "doc1", file_type: str = "tei", version: int = 1,
@@ -42,6 +44,10 @@ class FakeRepo:
             # doc5: the gold version's parent is of another variant, so the lineage gives no input
             _file("seg5", doc_id="doc5", variant="grobid.training.segmentation"), _file("x5", doc_id="doc5"),
             _file("g5", doc_id="doc5", gold=True, parent="seg5"),
+            # doc6: the lineage starts with a corrected copy (an older document), an unrelated extraction exists
+            _file("c6", doc_id="doc6"), _file("e6", doc_id="doc6", version=2), _file("g6", doc_id="doc6", gold=True, parent="c6"),
+            # doc7: no extraction at all
+            _file("c7", doc_id="doc7"), _file("g7", doc_id="doc7", gold=True, parent="c7"),
         )}
 
     def get_file_by_stable_id(self, stable_id):
@@ -57,7 +63,9 @@ class FakeRepo:
 class FakeStorage:
     def read_file(self, file_hash, file_type):
         return {"hash-gold1": GOLD_XML, "hash-v1": INPUT_XML, "hash-v2": GOLD_XML, "hash-other": INPUT_XML,
-                "hash-g4": GOLD_XML, "hash-x2": INPUT_XML, "hash-x0": INPUT_XML, "hash-g5": GOLD_XML, "hash-x5": INPUT_XML}.get(file_hash, "").encode() or None
+                "hash-g4": GOLD_XML, "hash-x2": INPUT_XML, "hash-x0": INPUT_XML, "hash-g5": GOLD_XML, "hash-x5": INPUT_XML,
+                "hash-g6": GOLD_XML, "hash-c6": CORRECTED_COPY_XML, "hash-e6": INPUT_XML,
+                "hash-g7": GOLD_XML, "hash-c7": CORRECTED_COPY_XML}.get(file_hash, "").encode() or None
 
 
 class StubProvider(LLMProvider):
@@ -116,6 +124,14 @@ class TestRoutes(unittest.TestCase):
         self.assertEqual((body["input_stable_id"], body["input_choice"]), ("x5", "earliest"))
         body = get(doc="doc4", input="x0")
         self.assertEqual((body["input_stable_id"], body["input_choice"]), ("x0", "given"))
+
+    def test_eval_source_uses_extractions_only(self):
+        get = lambda **p: self.client.get("/api/plugins/auto-annotation/eval-source", params={"rules": "false", **p})  # noqa: E731
+        body = get(doc="doc6").json()  # the corrected copy at the start of the lineage is skipped
+        self.assertEqual((body["input_stable_id"], body["input_choice"], body["input_is_extraction"]), ("e6", "earliest", True))
+        self.assertEqual(get(doc="doc7").status_code, 404)  # no extraction
+        body = get(doc="doc7", input="c7").json()  # a given input is used, and flagged
+        self.assertEqual((body["input_stable_id"], body["input_choice"], body["input_is_extraction"]), ("c7", "given", False))
 
     def test_eval_source_with_another_reference(self):
         get = lambda **p: self.client.get("/api/plugins/auto-annotation/eval-source", params={"rules": "false", **p})  # noqa: E731

@@ -5,6 +5,7 @@
 
 import asyncio
 import csv
+import dataclasses
 import json
 import tempfile
 import unittest
@@ -87,6 +88,11 @@ class TestReport(unittest.TestCase):
         self.assertIn("| units:2 | changed |", report)
         self.assertIn("| - | - |", report)  # baseline row
 
+
+    def test_report_flags_an_input_that_is_not_an_extraction(self):
+        source = dataclasses.replace(SOURCE, input_is_extraction=False)
+        result = asyncio.run(evaluate(EchoClient(), "mock/echo", source, sweep([BatchSpec(max_units=4)], ["all"], 1)))
+        self.assertIn("input version `in1` (given; NOT an extraction)", markdown_report([result]))
 
     def test_failed_requests_are_left_out_of_the_scores(self):
         class SecondCallFails:
