@@ -29,9 +29,6 @@ from .versions import is_extraction
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_VARIANT = "grobid.training.references"
-
-
 class SourceError(Exception):
     """An input of the evaluation cannot be resolved; `status` is the HTTP status to answer with."""
 
@@ -144,10 +141,10 @@ def find_reference(
 ) -> FileMetadata:
     """
     The reference version: the one given by its stable id, else the document's gold version of the
-    variant (default: DEFAULT_VARIANT).
+    variant.
 
     Raises:
-        SourceError: neither a document nor a reference is given, the reference belongs to another
+        SourceError: neither a document nor a reference is given, a document without a variant, the reference belongs to another
             document or variant, or the document has no or several gold versions of the variant.
     """
     if reference_stable_id:
@@ -159,7 +156,8 @@ def find_reference(
         return reference
     if not doc_id:
         raise SourceError("Pass a document id or the stable id of a reference version")
-    variant = variant or DEFAULT_VARIANT
+    if not variant:
+        raise SourceError("Pass the variant of the document's gold version, or the stable id of a reference version")
     golds = [
         f for f in repo.get_files_by_doc_id(doc_id)
         if f.file_type == "tei" and f.variant == variant and f.is_gold_standard

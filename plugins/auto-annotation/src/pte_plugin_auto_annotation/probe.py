@@ -42,7 +42,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--model", action="append", required=True, help="Model name as configured in the app: default, <provider>, or <provider>/<model> (repeatable)")
     parser.add_argument("--doc", action="append", default=[], help="Document id; its gold version of --variant is the reference (repeatable)")
-    parser.add_argument("--variant", help="Variant of the reference and input versions (default: grobid.training.references, or the variant of --reference)")
+    parser.add_argument("--variant", help="Variant of the reference and input versions (required with --doc; default with --reference: its variant)")
     parser.add_argument("--reference", help="Stable id of the version to score against instead of the document's gold version (only with at most one --doc)")
     parser.add_argument("--input", help="Stable id of the version to correct (only with a single document); default: the earliest version of the same variant")
     parser.add_argument("--batches", default=DEFAULT_BATCHES, help=f"Comma-separated batch specs units:N or chars:N (default: {DEFAULT_BATCHES})")
@@ -109,6 +109,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if not args.doc and not args.reference:
         parser.error("Pass --doc, or --reference")
+    if args.doc and not args.reference and not args.variant:
+        parser.error("Pass --variant with --doc")
     if (args.input or args.reference) and len(args.doc) > 1:
         parser.error("--input and --reference can only be used with a single document")
     try:

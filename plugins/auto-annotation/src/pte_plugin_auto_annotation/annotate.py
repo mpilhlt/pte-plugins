@@ -2,7 +2,8 @@
 Automated first annotation of documents or a whole collection, against a running editor.
 
     uv run python -m pte_plugin_auto_annotation.annotate \\
-      --model-a kisski/<model> --model-b google/<model> --arbiter anthropic/<model> --collection my-collection
+      --model-a kisski/<model> --model-b google/<model> --arbiter anthropic/<model> \\
+      --variant grobid.training.references --collection my-collection
 
 For each document, the earliest version of --variant (normally the extraction) is annotated on the
 server (two models, arbiter for disagreements, see pipeline.py) and saved as a new version of it.
@@ -30,9 +31,6 @@ from .batching import BatchSpec
 from .cli_common import add_connection_args, connection_from_args
 from .prompts import OUTPUT_MODES
 
-DEFAULT_VARIANT = "grobid.training.references"
-
-
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python -m pte_plugin_auto_annotation.annotate",
@@ -45,7 +43,7 @@ def build_parser() -> argparse.ArgumentParser:
     target.add_argument("--collection", help="All documents of a collection")
     target.add_argument("--doc", action="append", default=[], help="Document id (repeatable)")
     target.add_argument("--version", action="append", default=[], help="Stable id of a version to annotate (repeatable); no skipping")
-    parser.add_argument("--variant", default=DEFAULT_VARIANT, help=f"Variant to annotate (default: {DEFAULT_VARIANT})")
+    parser.add_argument("--variant", help="Variant to annotate (required with --collection and --doc), e.g. grobid.training.references")
     parser.add_argument("--force", action="store_true", help="Also annotate documents the pipeline has annotated before")
     parser.add_argument("--include-gold", action="store_true", help="Also annotate documents that have a gold version")
     parser.add_argument("--batch", default="units:16", help="Batch spec of models A and B (default: units:16)")
@@ -138,6 +136,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if sum(bool(x) for x in (args.collection, args.doc, args.version)) != 1:
         parser.error("Pass exactly one of --collection, --doc and --version")
+    if not args.version and not args.variant:
+        parser.error("Pass --variant with --collection or --doc")
     try:
         BatchSpec.parse(args.batch)
         BatchSpec.parse(args.arbiter_batch)

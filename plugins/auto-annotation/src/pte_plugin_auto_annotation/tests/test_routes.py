@@ -108,7 +108,7 @@ class TestRoutes(unittest.TestCase):
         self.addCleanup(LLMProviderRegistry.reset_instance)
 
     def test_eval_source_uses_the_gold_version_and_the_earliest_version(self):
-        response = self.client.get("/api/plugins/auto-annotation/eval-source", params={"doc": "doc1"})
+        response = self.client.get("/api/plugins/auto-annotation/eval-source", params={"doc": "doc1", "variant": "grobid.training.references"})
         self.assertEqual(response.status_code, 200, response.text)
         body = response.json()
         self.assertEqual((body["doc_id"], body["reference_stable_id"], body["reference_is_gold"]), ("doc1", "gold1", True))
@@ -117,7 +117,7 @@ class TestRoutes(unittest.TestCase):
         self.assertEqual(body["rules"], [{"category": "references", "text": "RULES", "url": "https://raw.example.org/guidelines-llm.md#L1-L5"}])
 
     def test_eval_source_follows_the_lineage_of_the_reference(self):
-        get = lambda **p: self.client.get("/api/plugins/auto-annotation/eval-source", params={"rules": "false", **p}).json()  # noqa: E731
+        get = lambda **p: self.client.get("/api/plugins/auto-annotation/eval-source", params={"rules": "false", "variant": "grobid.training.references", **p}).json()  # noqa: E731
         body = get(doc="doc4")
         self.assertEqual((body["reference_stable_id"], body["input_stable_id"], body["input_choice"]), ("g4", "x2", "lineage"))
         body = get(doc="doc5")  # lineage leaves the variant: fall back to the earliest version
@@ -126,7 +126,7 @@ class TestRoutes(unittest.TestCase):
         self.assertEqual((body["input_stable_id"], body["input_choice"]), ("x0", "given"))
 
     def test_eval_source_uses_extractions_only(self):
-        get = lambda **p: self.client.get("/api/plugins/auto-annotation/eval-source", params={"rules": "false", **p})  # noqa: E731
+        get = lambda **p: self.client.get("/api/plugins/auto-annotation/eval-source", params={"rules": "false", "variant": "grobid.training.references", **p})  # noqa: E731
         body = get(doc="doc6").json()  # the corrected copy at the start of the lineage is skipped
         self.assertEqual((body["input_stable_id"], body["input_choice"], body["input_is_extraction"]), ("e6", "earliest", True))
         self.assertEqual(get(doc="doc7").status_code, 404)  # no extraction
@@ -134,7 +134,7 @@ class TestRoutes(unittest.TestCase):
         self.assertEqual((body["input_stable_id"], body["input_choice"], body["input_is_extraction"]), ("c7", "given", False))
 
     def test_eval_source_with_another_reference(self):
-        get = lambda **p: self.client.get("/api/plugins/auto-annotation/eval-source", params={"rules": "false", **p})  # noqa: E731
+        get = lambda **p: self.client.get("/api/plugins/auto-annotation/eval-source", params={"rules": "false", "variant": "grobid.training.references", **p})  # noqa: E731
         body = get(reference="v2").json()
         self.assertEqual((body["doc_id"], body["reference_stable_id"], body["reference_is_gold"], body["input_stable_id"]), ("doc1", "v2", False, "v1"))
         self.assertEqual(get(doc="doc1", reference="v2").status_code, 200)
@@ -143,8 +143,9 @@ class TestRoutes(unittest.TestCase):
         self.assertEqual(get(reference="v1", input="v1").json()["input_stable_id"], "v1")
 
     def test_eval_source_errors(self):
-        get = lambda **p: self.client.get("/api/plugins/auto-annotation/eval-source", params=p).status_code  # noqa: E731
+        get = lambda **p: self.client.get("/api/plugins/auto-annotation/eval-source", params={"variant": "grobid.training.references", **p}).status_code  # noqa: E731
         self.assertEqual(get(), 422)  # neither document nor reference
+        self.assertEqual(self.client.get("/api/plugins/auto-annotation/eval-source", params={"doc": "doc1"}).status_code, 422)  # no variant
         self.assertEqual(get(doc="nope"), 404)  # no gold version
         self.assertEqual(get(doc="doc1", variant="grobid.training.references.referenceSegmenter"), 404)
         self.assertEqual(get(doc="doc3"), 422)  # several gold versions
@@ -190,7 +191,7 @@ class TestRoutes(unittest.TestCase):
 
         with mock.patch.object(api_client, "requests", Adapter()):
             session = api_client.ApiSession("http://test", "sid")
-            source = session.eval_source("doc1")
+            source = session.eval_source("doc1", "grobid.training.references")
             self.assertEqual((source.doc_id, source.reference_stable_id, source.reference_is_gold), ("doc1", "gold1", True))
             self.assertEqual((source.input_stable_id, source.rules), ("v1", [("references", "RULES")]))
             other = session.eval_source(reference_stable_id="v2", with_rules=False)
@@ -199,7 +200,7 @@ class TestRoutes(unittest.TestCase):
             chat = api_client.ServerChatClient(session, "endpoint-local", "qwen")
             self.assertEqual(asyncio.run(chat.complete("S", "U")), "### Unit 1\n<bibl/>")
             with self.assertRaises(api_client.ApiError):
-                session.eval_source("nope")
+                session.eval_source("nope", "grobid.training.references")
 
     def test_complete_reports_transient_provider_errors_as_503(self):
         request = {"provider_id": "endpoint-local", "model_id": "qwen", "system_prompt": "S", "user_prompt": "U"}

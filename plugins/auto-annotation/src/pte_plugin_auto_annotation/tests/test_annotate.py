@@ -61,9 +61,9 @@ class TestAnnotateCli(unittest.TestCase):
 
     def test_collection_saves_ready_documents_and_skips_others(self):
         with tempfile.TemporaryDirectory() as tmp:
-            code, err, session = self.run_main("--collection", "coll", "--out", tmp)
+            code, err, session = self.run_main("--collection", "coll", "--variant", "v.refs", "--out", tmp)
             self.assertEqual(code, 0)
-            self.assertEqual(session.target_calls, [(annotate.DEFAULT_VARIANT, "coll", None)])
+            self.assertEqual(session.target_calls, [("v.refs", "coll", None)])
             self.assertEqual(session.saved, [("<TEI>s1</TEI>", "s1")])
             self.assertEqual(session.released, ["s1-new"])
             log = json.loads((Path(tmp) / "doc1.json").read_text(encoding="utf-8"))
@@ -77,7 +77,7 @@ class TestAnnotateCli(unittest.TestCase):
 
     def test_force_and_include_gold(self):
         with tempfile.TemporaryDirectory() as tmp:
-            _, _, session = self.run_main("--doc", "doc1", "--doc", "doc2", "--force", "--include-gold", "--out", tmp)
+            _, _, session = self.run_main("--doc", "doc1", "--doc", "doc2", "--variant", "v.refs", "--force", "--include-gold", "--out", tmp)
         self.assertEqual(session.target_calls[0][2], ["doc1", "doc2"])
         self.assertEqual([p["stable_id"] for p in session.payloads], ["s1", "s2", "s3"])
 
@@ -105,7 +105,8 @@ class TestAnnotateCli(unittest.TestCase):
         self.assertIsNone(session.payloads[0]["split_on_failure"])
 
     def test_argument_errors(self):
-        for args in ([], ["--doc", "d", "--collection", "c"], ["--doc", "d", "--batch", "nonsense"]):
+        for args in ([], ["--doc", "d", "--collection", "c", "--variant", "v"], ["--doc", "d", "--variant", "v", "--batch", "nonsense"],
+                     ["--doc", "d"], ["--collection", "c"]):  # the last two: no --variant
             with self.subTest(args=args), self.assertRaises(SystemExit):
                 self.run_main(*args)
 

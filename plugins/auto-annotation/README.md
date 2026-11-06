@@ -1,6 +1,6 @@
 # Auto-annotation
 
-Building blocks for an automated first annotation of GROBID training data: cheap LLMs correct GROBID's output against the document's machine rules, a stronger model arbitrates where they disagree. The design is in the proposal `2026-11-05-auto-annotation-proposal.md` (project files; to be moved to `docs/history` in pdf-tei-editor with the implementation).
+Building blocks for an automated first annotation of TEI documents produced by any extractor: cheap LLMs correct the extractor's output against the document's machine rules, a stronger model arbitrates where they disagree. The design is in the proposal `2026-11-05-auto-annotation-proposal.md` (project files; to be moved to `docs/history` in pdf-tei-editor with the implementation).
 
 It contains:
 
@@ -12,14 +12,14 @@ It contains:
 ```bash
 uv run python -m pte_plugin_auto_annotation.probe \
   --model kisski/llama-3.3-70b-instruct --model endpoint-ollama/qwen2.5:14b \
-  --doc 10.1234__abc --doc 10.1234__def \
+  --variant grobid.training.references --doc 10.1234__abc --doc 10.1234__def \
   --batches units:1,units:4,units:8,units:16,units:32 --modes all,changed --repeats 2
 ```
 
 The installed package also provides the command `pte-model-probe` with the same options. Run `--help` for all options.
 
 - `--model`: a model as configured in the app: `default`, `<provider>`, or `<provider>/<model>`. `<provider>` is a provider id (`kisski`, `endpoint-ollama`), its label (an inference endpoint's name) or an endpoint id without the `endpoint-` prefix; `<model>` is a model id or label. With `<provider>` alone, the provider's only model or the default model is used.
-- `--doc`: a document id. Its gold version of `--variant` (default `grobid.training.references`) is the reference the model's corrections are scored against. The version the model corrects is the extraction the reference was derived from (the oldest extraction among the versions' parents), else the earliest extraction of the same document and variant (ties by creation time); without an extraction, the probe stops and asks for `--input`. A version counts as an extraction if its revision history starts with the extraction and has only metadata changes after it (renamed, document rules updated); label and status are not reliable (`versions.py`). The report says how the input was chosen, and marks a given `--input` that is not an extraction.
+- `--doc`: a document id. Its gold version of `--variant` (required with `--doc`, e.g. `grobid.training.references`) is the reference the model's corrections are scored against. The version the model corrects is the extraction the reference was derived from (the oldest extraction among the versions' parents), else the earliest extraction of the same document and variant (ties by creation time); without an extraction, the probe stops and asks for `--input`. A version counts as an extraction if its revision history starts with the extraction and has only metadata changes after it (renamed, document rules updated); label and status are not reliable (`versions.py`). The report says how the input was chosen, and marks a given `--input` that is not an extraction.
 - `--reference`: the stable id of a version to score against instead of the gold version, e.g. for a document without a gold version yet; the report marks it as "not the gold version". Its document and variant are used, so `--doc` and `--variant` can be left out.
 - `--batches`: batch specs, `units:N` (at most N units per request) or `chars:N` (at most N characters of unit XML).
 - `--modes`: `all` (the model returns every unit) or `changed` (only the units it changed).
@@ -52,14 +52,16 @@ For `grobid.training.references.referenceSegmenter`, correcting a unit means spl
 ```bash
 uv run python -m pte_plugin_auto_annotation.annotate \
   --model-a kisski/llama-3.3-70b-instruct --model-b gemini/gemini-2.5-flash-lite --arbiter anthropic/<model> \
-  --collection my-collection
+  --variant grobid.training.references --collection my-collection
 ```
 
 The installed package also provides the command `pte-auto-annotate`. Run `--help` for all options; the connection options are those of the probe.
 
+The plugin does not depend on a particular extractor or schema: the review units are those of the variant's `reviewUnits` path in the editor's configuration. `--variant` (e.g. `grobid.training.references`) has no default and is required with `--collection` and `--doc`.
+
 What to annotate (exactly one of):
 
-- `--collection`: all documents of a collection that have a version of `--variant` (default `grobid.training.references`);
+- `--collection`: all documents of a collection that have a version of `--variant`;
 - `--doc`: given document ids (repeatable);
 - `--version`: given stable ids (repeatable), annotated without the checks below.
 
@@ -111,7 +113,7 @@ The modules `plugin.py`, `routes.py`, `sources.py`, `models.py`, `annotation.py`
 
 All for reviewers and admins:
 
-- `GET /api/plugins/auto-annotation/eval-source?doc=<doc id>[&variant=<variant>][&reference=<id>][&input=<id>][&rules=false]`: reference (the document's gold version of the variant, or `reference`) and input XML, variant, unit path, and the rules (machine refs of the reference version's `editorialDecl`, else human refs, without user overrides).
+- `GET /api/plugins/auto-annotation/eval-source?doc=<doc id>&variant=<variant>[&reference=<id>][&input=<id>][&rules=false]`: reference (the document's gold version of the variant, or `reference`) and input XML, variant, unit path, and the rules; with `reference`, `doc` and `variant` may be left out. Rules are the machine refs of the reference version's `editorialDecl`, else human refs, without user overrides.
 - `POST /api/plugins/auto-annotation/resolve-model` `{"model": "<name>"}`: provider and model id, after checking model access.
 - `POST /api/plugins/auto-annotation/complete` `{"provider_id", "model_id", "system_prompt", "user_prompt", "temperature"}`: one completion with the same model access rules as the LLM Reviewer.
 - `GET /api/plugins/auto-annotation/targets?variant=<variant>&collection=<id>` or `&doc=<id>` (repeatable): per document, the version the pipeline would annotate and its state (`ready`, `annotated`, `gold`, `no-version`).

@@ -35,7 +35,7 @@ from .correction import RetryPolicy, is_transient_message
 from .pipeline import PipelineConfig
 from .prompts import OutputMode
 from .models import ModelResolutionError, ensure_model_access, provider_for_user, resolve_model_for_user
-from .sources import DEFAULT_VARIANT, SourceError, resolve_source
+from .sources import SourceError, resolve_source
 
 logger = logging.getLogger(__name__)
 
@@ -87,7 +87,7 @@ class CompleteResponse(BaseModel):
 @router.get("/eval-source", response_model=EvalSourceResponse)
 def eval_source(
     doc: str | None = Query(None, description="Document id; its gold version of the variant is the reference"),
-    variant: str | None = Query(None, description=f"Variant (default: {DEFAULT_VARIANT}, or the reference's variant)"),
+    variant: str | None = Query(None, description="Variant of the gold version (required with doc); default with reference: the reference's variant"),
     reference: str | None = Query(None, description="Stable id of the reference version, instead of the document's gold version"),
     input: str | None = Query(None, description="Stable id of the version to correct; default: the extraction the reference was derived from, else the document's earliest extraction of the variant"),
     rules: bool = Query(True, description="Resolve the rules from the reference version's editorialDecl"),
@@ -222,7 +222,7 @@ class TargetResponse(BaseModel):
 def targets(
     collection: str | None = Query(None, description="Collection id"),
     doc: list[str] | None = Query(None, description="Document ids (repeatable), instead of a collection"),
-    variant: str = Query(DEFAULT_VARIANT, description="Variant to annotate"),
+    variant: str = Query(..., description="Variant to annotate"),
     current_user: dict = Depends(require_reviewer_or_admin),
     repo: FileRepository = Depends(get_file_repository),
     storage: FileStorage = Depends(get_file_storage),

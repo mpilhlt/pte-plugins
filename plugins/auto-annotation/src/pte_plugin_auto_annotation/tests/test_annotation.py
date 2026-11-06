@@ -133,15 +133,16 @@ class TestAnnotationRoutes(unittest.TestCase):
             self.assertEqual(self.post(stable_id="d2v1").status_code, 403)
 
     def test_targets(self):
-        response = self.client.get("/api/plugins/auto-annotation/targets", params={"collection": "c1"})
+        response = self.client.get("/api/plugins/auto-annotation/targets", params={"collection": "c1", "variant": VARIANT})
         self.assertEqual(response.status_code, 200, response.text)
         self.assertEqual(
             [(t["doc_id"], t["input_stable_id"], t["state"], t["annotated_stable_id"]) for t in response.json()],
             [("doc1", "d1v1", "annotated", "d1v2"), ("doc2", "d2v1", "ready", None), ("doc3", "d3v1", "gold", None)],
         )
-        by_doc = self.client.get("/api/plugins/auto-annotation/targets", params=[("doc", "doc4"), ("doc", "doc2")]).json()
+        by_doc = self.client.get("/api/plugins/auto-annotation/targets", params=[("doc", "doc4"), ("doc", "doc2"), ("variant", VARIANT)]).json()
         self.assertEqual([(t["doc_id"], t["state"]) for t in by_doc], [("doc4", "no-version"), ("doc2", "ready")])
-        self.assertEqual(self.client.get("/api/plugins/auto-annotation/targets").status_code, 422)
+        self.assertEqual(self.client.get("/api/plugins/auto-annotation/targets", params={"variant": VARIANT}).status_code, 422)
+        self.assertEqual(self.client.get("/api/plugins/auto-annotation/targets", params={"collection": "c1"}).status_code, 422)  # no variant
 
 
 if __name__ == "__main__":
