@@ -8,7 +8,7 @@ editor's save API, which takes care of version numbers, collections, locks and e
 from __future__ import annotations
 
 import logging
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timezone
 
 from fastapi_app.lib.core.url_cache import UrlCache
@@ -21,7 +21,7 @@ from .correction import CorrectionRun, ProviderChatClient
 from .document import CHANGE_WHO, write_result
 from .models import resolve_model_for_user
 from .pipeline import PipelineConfig, PipelineResult, annotate_units
-from .sources import SourceError, gather_rules, read_tei, review_unit_path, tei_file
+from .sources import SourceError, gather_rules, is_segmenting_variant, read_tei, review_unit_path, tei_file
 from .units import document_units
 
 logger = logging.getLogger(__name__)
@@ -115,7 +115,7 @@ class AnnotationOutcome:
             "counts": self.counts,
             "units": [
                 {
-                    "index": d.unit.index, "fingerprint": d.unit.fingerprint, "decision": d.decision.value,
+                    "index": d.unit.index, "indices": list(d.covered), "fingerprint": d.unit.fingerprint, "decision": d.decision.value,
                     "changed": d.changed, "statuses": {k: v.value for k, v in d.statuses.items()},
                     "arbiter_status": d.arbiter_status.value if d.arbiter_status else None,
                     "chosen": d.chosen, "comment": d.comment,
@@ -156,7 +156,9 @@ async def annotate_file(
     label: str | None = "Auto-annotation",
 ) -> AnnotationOutcome:
     """
-    Annotate a stored version with the pipeline and return the new document (not saved).
+    Annotate a stored version with the pipeline and return the new document (not saved). Units are
+    split and merged if the variant's extractor declares it segmenting (config.segmenting is
+    overridden).
 
     Raises:
         SourceError: see load_input() and gather_rules(), or the version has no review units.
@@ -180,6 +182,7 @@ async def annotate_file(
         clients[label_] = ProviderChatClient(provider, model_id)
         models[label_] = f"{provider.id}/{model_id}"
 
+    config = replace(config, segmenting=is_segmenting_variant(file.variant))
     result = await annotate_units(
         units, [(c, t) for c, t, _ in rules], clients["A"], clients["B"], clients.get("arbiter"), config
     )

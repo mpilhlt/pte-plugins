@@ -60,6 +60,7 @@ class EvalSourceResponse(BaseModel):
     gold_xml: str
     input_xml: str
     rules: list[RuleResponse]
+    segmenting: bool = False
 
 
 class ResolveModelRequest(BaseModel):
@@ -105,7 +106,7 @@ def eval_source(
         doc_id=source.doc_id, reference_stable_id=source.reference_stable_id, reference_is_gold=source.reference_is_gold,
         input_stable_id=source.input_stable_id, input_choice=source.input_choice, input_is_extraction=source.input_is_extraction, variant=source.variant, unit_path=source.unit_path,
         gold_xml=source.gold_xml, input_xml=source.input_xml,
-        rules=[RuleResponse(category=c, text=t, url=u) for c, t, u in source.rules],
+        rules=[RuleResponse(category=c, text=t, url=u) for c, t, u in source.rules], segmenting=source.segmenting,
     )
 
 

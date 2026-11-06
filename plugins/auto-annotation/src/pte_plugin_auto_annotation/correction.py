@@ -159,6 +159,7 @@ async def correct_units(
     segmenting: bool = False,
     system_prompt: str | None = None,
     render: UnitRenderer | None = None,
+    move_text: bool = True,
 ) -> CorrectionRun:
     """
     Send the units to the model in batches and check every proposed unit.
@@ -176,6 +177,8 @@ async def correct_units(
 
     system_prompt and render replace the correction prompt and the text shown for each unit; the
     arbiter uses them to show the candidates. Answers are always checked against the unit's XML.
+    move_text=False keeps segmenting units from passing on their batch's text (the arbiter's units
+    are not neighbours).
     """
     run = CorrectionRun()
     semaphore = asyncio.Semaphore(max(1, concurrency))
@@ -225,7 +228,7 @@ async def correct_units(
             else:
                 status = check(unit.xml, proposal)
             outcomes.append(UnitOutcome(unit, status, proposal, batch_index, position, len(batch)))
-        if segmenting:
+        if segmenting and move_text:
             outcomes = _accept_moved_text(outcomes)
         for outcome in outcomes:
             if outcome.status.is_failure:

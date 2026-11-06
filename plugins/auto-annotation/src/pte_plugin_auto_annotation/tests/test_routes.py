@@ -5,6 +5,7 @@
 
 import asyncio
 import unittest
+from typing import cast
 from types import SimpleNamespace
 from unittest import mock
 
@@ -16,6 +17,7 @@ from fastapi_app.lib.llm import LLMModel, LLMProvider, LLMProviderError, LLMProv
 from fastapi_app.lib.llm.model_access import ModelAccessDenied
 from pte_plugin_auto_annotation import api_client
 from pte_plugin_auto_annotation import models as models_module
+from fastapi_app.lib.extraction.registry import ExtractorRegistry
 from pte_plugin_auto_annotation import sources as sources_module
 from pte_plugin_auto_annotation.routes import router
 
@@ -217,3 +219,22 @@ class TestRoutes(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestExtractorDeclarations(unittest.TestCase):
+    """Unit path and segmenting come from the extractors' info."""
+
+    class Registry:
+        def list_extractors(self, available_only=True):
+            return [
+                {"id": "x", "reviewUnits": {"x.refs": ".//listBibl/bibl"}},
+                {"id": "y", "reviewUnits": {"y.seg": "./*"}, "segmentingVariants": ["y.seg"]},
+            ]
+
+    def test_review_unit_path_and_segmenting(self):
+        registry = cast(ExtractorRegistry, self.Registry())
+        self.assertEqual(sources_module.review_unit_path("y.seg", registry), "./*")
+        self.assertIsNone(sources_module.review_unit_path("other", registry))
+        self.assertTrue(sources_module.is_segmenting_variant("y.seg", registry))
+        self.assertFalse(sources_module.is_segmenting_variant("x.refs", registry))
+        self.assertFalse(sources_module.is_segmenting_variant(None, registry))

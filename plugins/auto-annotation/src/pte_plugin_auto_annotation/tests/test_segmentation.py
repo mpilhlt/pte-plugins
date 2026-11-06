@@ -12,7 +12,7 @@ from pte_plugin_auto_annotation.checks import ProposalStatus, check_segments
 from pte_plugin_auto_annotation.correction import correct_units
 from pte_plugin_auto_annotation.evaluation import EvalSource, evaluate, sweep
 from pte_plugin_auto_annotation.report import markdown_report
-from pte_plugin_auto_annotation.segmentation import align_segments, is_segmenting, stream_fields, unit_scores
+from pte_plugin_auto_annotation.segmentation import align_segments, stream_fields, unit_scores
 from pte_plugin_auto_annotation.units import document_units
 
 from .fixtures import OracleClient, tei
@@ -41,7 +41,7 @@ ANSWERS = {
 def source(gold_units: list[str] = GOLD_UNITS) -> EvalSource:
     return EvalSource(
         reference_stable_id="gold1", input_stable_id="in1", variant=SEGMENTER, unit_path=PATH,
-        gold_xml=tei(gold_units, pretty=True), input_xml=tei(INPUT_UNITS), rules=[("segmentation", "rules")],
+        gold_xml=tei(gold_units, pretty=True), input_xml=tei(INPUT_UNITS), rules=[("segmentation", "rules")], segmenting=True,
     )
 
 
@@ -108,7 +108,6 @@ class TestAlignAndScore(unittest.TestCase):
 
 class TestEvaluateSegmenting(unittest.TestCase):
     def test_oracle_scores_perfectly_at_every_batch_size(self):
-        self.assertTrue(is_segmenting(SEGMENTER) and not is_segmenting("grobid.training.references"))
         configs = sweep([BatchSpec(max_units=1), BatchSpec(max_units=2)], ["all", "changed"], 1)
         result = asyncio.run(evaluate(OracleClient(ANSWERS), "mock/oracle", source(), configs))
         for summary in result.summaries:

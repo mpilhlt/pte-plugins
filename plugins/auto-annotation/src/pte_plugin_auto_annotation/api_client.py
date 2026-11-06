@@ -92,6 +92,7 @@ class ApiSession:
             gold_xml=str(data["gold_xml"]), input_xml=str(data["input_xml"]),
             rules=[(str(r["category"]), str(r["text"])) for r in rules],
             doc_id=str(data["doc_id"]), reference_is_gold=bool(data["reference_is_gold"]), input_choice=str(data["input_choice"]), input_is_extraction=bool(data["input_is_extraction"]),
+            segmenting=bool(data.get("segmenting", False)),
         )
 
     def resolve_model(self, spec: str) -> tuple[str, str]:

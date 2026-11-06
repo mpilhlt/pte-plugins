@@ -1,7 +1,9 @@
 """
 Writing a pipeline result into the TEI document (server side, uses the editor's TEI utilities):
 
-- the units are replaced by their results; the rest of the document keeps its formatting
+- the units are replaced by their results; the rest of the document keeps its formatting. For a
+  segmenting variant a result may consist of several elements or none (a group's result replaces
+  its first unit, the group's other units are removed)
 - a `revisionDesc/change` by `#auto-annotation` records the models and the counts
 - the decisions become unit review marks of the reviewer `llm-auto-annotation`, in
   `standOff/listAnnotation[@type="unit-review"]` as the editor's unit review mode writes them:
@@ -16,6 +18,7 @@ from lxml import etree
 
 from fastapi_app.lib.utils.tei_utils import add_revision_change, serialize_tei_like_source
 
+from .arbitration import segments_key
 from .pipeline import Decision, PipelineResult, UnitDecision
 from .units import TEI_NS, document_units, find_unit_elements, parse_document, parse_unit
 
@@ -35,25 +38,54 @@ def _escape(text: str) -> str:
     return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
 
 
-def replace_units(root: etree._Element, unit_path: str | None, replacements: Mapping[int, str]) -> None:
+def _remove_keeping_tail(element: etree._Element) -> None:
+    """Remove an element; text in its tail (not whitespace) moves to the preceding node."""
+    parent = element.getparent()
+    assert parent is not None
+    tail = element.tail or ""
+    if tail.strip():
+        previous = element.getprevious()
+        if previous is not None:
+            previous.tail = (previous.tail or "") + tail
+        else:
+            parent.text = (parent.text or "") + tail
+    parent.remove(element)
+
+
+def replace_units(root: etree._Element, unit_path: str | None, replacements: Mapping[int, str], segmenting: bool = False) -> None:
     """
     Replace the units with the given indices (positions in find_unit_elements() order) by new XML.
+    With segmenting, a replacement may be several elements (separated by the unit's tail
+    whitespace) or empty (the unit is removed).
 
     Raises:
-        ValueError: an index is out of range, or a replacement is not exactly one element.
+        ValueError: an index is out of range, or a replacement is not exactly one element (with
+            segmenting: has text outside its elements).
     """
     elements = find_unit_elements(root, unit_path)
     for index, xml in replacements.items():
         if not 0 <= index < len(elements):
             raise ValueError(f"No unit with index {index}")
-        content = parse_unit(xml)
-        if len(content) != 1 or isinstance(content[0], str):
+        content = parse_unit(xml) if xml.strip() else []
+        if any(isinstance(c, str) for c in content):
+            raise ValueError(f"Replacement for unit {index} has text outside its elements")
+        new = [c for c in content if not isinstance(c, str)]
+        if not segmenting and len(new) != 1:
             raise ValueError(f"Replacement for unit {index} is not exactly one element")
-        old, new = elements[index], content[0]
-        new.tail = old.tail
+        old = elements[index]
         parent = old.getparent()
         assert parent is not None
-        parent.replace(old, new)
+        if not new:
+            _remove_keeping_tail(old)
+            continue
+        separator = old.tail if old.tail and not old.tail.strip() else "\n"
+        position = parent.index(old)
+        for offset, element in enumerate(new):
+            element.tail = separator
+            parent.insert(position + offset, element)
+        new[-1].tail = old.tail
+        old.tail = None
+        parent.remove(old)
     etree.cleanup_namespaces(root)
 
 
@@ -169,7 +201,13 @@ def write_result(
         ValueError: the document is not well-formed, or a result cannot be inserted.
     """
     root = parse_document(xml)
-    replace_units(root, unit_path, {d.unit.index: d.result_xml for d in result.decisions if d.changed})
+    replacements: dict[int, str] = {}
+    for d in result.decisions:
+        if d.changed:
+            first, *rest = d.covered
+            replacements[first] = d.result_xml
+            replacements.update({i: "" for i in rest})
+    replace_units(root, unit_path, replacements, segmenting=result.segmenting)
     counts = result.counts()
     desc = (
         f"Automated first annotation ({models_description(models)}): {len(result.decisions)} units, "
@@ -188,7 +226,15 @@ def write_result(
     if revision_desc is not None and len(revision_desc):
         _indent_appended(revision_desc[-1] if had_revision_desc else revision_desc)
     if with_marks:
-        fingerprints = {u.index: u.fingerprint for u in document_units(etree.tostring(root, encoding="unicode"), unit_path)}
-        marks = [(fingerprints[d.unit.index], d) for d in result.decisions]
+        fingerprints = [u.fingerprint for u in document_units(etree.tostring(root, encoding="unicode"), unit_path)]
+        marks: list[tuple[str, UnitDecision]] = []
+        position = 0
+        for d in result.decisions:
+            # the units a decision produced: its result's elements, or its original units if unchanged
+            count = len(segments_key(d.result_xml) or ()) if d.changed else len(d.covered)
+            marks.extend((fp, d) for fp in fingerprints[position:position + count])
+            position += count
+        if position != len(fingerprints):
+            raise ValueError(f"The annotated document has {len(fingerprints)} units, the results account for {position}")
         add_review_marks(root, unit_path, marks, f"{CHANGE_NAME} ({models_description(models)})", when)
     return serialize_tei_like_source(root, xml)

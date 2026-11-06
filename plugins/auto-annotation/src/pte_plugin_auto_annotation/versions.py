@@ -42,7 +42,7 @@ def is_extraction(xml: str) -> bool:
         return False
     for change in changes[1:]:
         desc = change.find(f"{{{TEI_NS}}}desc")
-        text = " ".join("".join(desc.itertext()).split()) if desc is not None else ""
+        text = " ".join("".join(str(t) for t in desc.itertext()).split()) if desc is not None else ""
         if not text.startswith(METADATA_CHANGE_PREFIXES):
             return False
     return True

@@ -52,6 +52,7 @@ class ResolvedSource:
     gold_xml: str
     input_xml: str
     rules: list[tuple[str, str, str]]  # (category, text, url)
+    segmenting: bool = False
 
 
 def is_safe_fetch_url(url: str) -> bool:
@@ -82,6 +83,19 @@ def review_unit_path(variant: str | None, registry: ExtractorRegistry | None = N
         if path:
             return str(path)
     return None
+
+
+def is_segmenting_variant(variant: str | None, registry: ExtractorRegistry | None = None) -> bool:
+    """
+    Whether an extractor declares the variant as segmenting (`segmentingVariants` in its info): its
+    review units may be split and merged by a correction.
+    """
+    if not variant:
+        return False
+    return any(
+        variant in (info.get("segmentingVariants") or [])
+        for info in (registry or ExtractorRegistry.get_instance()).list_extractors(available_only=False)
+    )
 
 
 def gather_rules(
@@ -265,4 +279,5 @@ def resolve_source(
         gold_xml=gold_xml,
         input_xml=input_xml,
         rules=gather_rules(gold_xml, cache) if with_rules else [],
+        segmenting=is_segmenting_variant(reference.variant),
     )
