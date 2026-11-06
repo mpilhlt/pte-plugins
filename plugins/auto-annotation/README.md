@@ -35,6 +35,15 @@ It runs against a running editor and logs in like `bin/batch-extract.js`: `--bas
 
 Output in `--out` (default `probe-results/<timestamp>/`): `report.md`, `summary.json`, `units.csv` (one row per unit and run) and `batches.jsonl` (one row per request, with the raw answer). The files are rewritten after every run (batch spec, mode and repetition), so a probe that is interrupted or fails keeps the finished runs; the report marks documents whose runs are incomplete.
 
+
+#### Segmenting variants
+
+For `grobid.training.references.referenceSegmenter`, correcting a unit means splitting or merging it, so the steps above change (`segmentation.py`):
+
+- The prompt allows a unit to be returned as several `<bibl>` elements, or empty when its text moves into a neighbouring unit.
+- A returned unit must consist of `<bibl>` elements with only whitespace between them. Its text is checked first per unit; a unit whose own text changed is accepted when the batch as a whole keeps its text and no unit of the batch failed otherwise.
+- Units are not matched one-to-one. Input and reference version are read as one text stream (whitespace removed), each element becomes a field with its start and end position in that stream, and the reference's fields are mapped onto the input's text where the two agree. A field is credited to the input unit in which it starts; input units whose text the reference does not share entirely are left out and counted as unmatched. Edits are then counted as above.
+
 ## Modules
 
 The modules other than `plugin.py`, `routes.py` and `sources.py` do not import the editor's code and are meant to be reused by the pipeline:
@@ -49,6 +58,7 @@ The modules other than `plugin.py`, `routes.py` and `sources.py` do not import t
 | `scoring.py` | Fields, edit and field scores, alignment of input and gold units |
 | `evaluation.py` | Sweeps of batch specs and modes on one gold document, summaries |
 | `report.py` | CSV, JSONL, JSON and Markdown output |
+| `segmentation.py` | Scoring of segmenting variants on text positions; which variants are segmenting |
 | `versions.py` | Telling extractions from annotated versions by their revision history |
 | `model_spec.py` | Resolving model names |
 | `api_client.py` | HTTP client and `ServerChatClient` for the CLI |

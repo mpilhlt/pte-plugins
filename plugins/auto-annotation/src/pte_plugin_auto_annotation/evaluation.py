@@ -20,6 +20,8 @@ from .checks import ProposalStatus
 from .correction import BatchRecord, ChatClient, CorrectionRun, RetryPolicy, correct_units
 from .prompts import PROMPT_VERSION, OutputMode
 from .scoring import Alignment, UnitScore, align_documents, f1, ratio, score_unit
+from .segmentation import SegmentAlignment, align_segments, is_segmenting, proposal_fields, unit_scores
+from .units import Unit
 
 
 @dataclass(frozen=True)
@@ -39,6 +41,11 @@ class EvalSource:
     # How the input was chosen: "given", "lineage" (the extraction the reference was derived from) or "earliest" (extraction)
     input_choice: str = "given"
     input_is_extraction: bool = True
+
+    @property
+    def segmenting(self) -> bool:
+        """Whether units may be split and merged (scored on text positions, see segmentation.py)."""
+        return is_segmenting(self.variant)
 
     @property
     def rules_hash(self) -> str:
@@ -125,7 +132,7 @@ class EvaluationResult:
 
     model: str
     source: EvalSource
-    alignment: Alignment
+    alignment: Alignment | SegmentAlignment
     units: list[UnitRecord] = field(default_factory=list)
     batches: list[dict[str, object]] = field(default_factory=list)
     summaries: list[Summary] = field(default_factory=list)
@@ -156,7 +163,8 @@ class EvaluationResult:
             "prompt_version": PROMPT_VERSION,
             "planned_runs": self.planned_runs,
             "finished_runs": self.finished_runs,
-            "aligned_units": len(self.alignment.pairs),
+            "segmenting": self.source.segmenting,
+            "aligned_units": len(aligned_units(self.alignment)),
             "unmatched_input_units": self.alignment.unmatched_input,
             "unmatched_gold_units": self.alignment.unmatched_gold,
         }
@@ -203,17 +211,30 @@ def summarize(
     )
 
 
-def _records(model: str, source: EvalSource, config: RunConfig, alignment: Alignment, run: CorrectionRun) -> list[UnitRecord]:
+def aligned_units(alignment: Alignment | SegmentAlignment) -> list[Unit]:
+    """The input units that are evaluated."""
+    return alignment.units if isinstance(alignment, SegmentAlignment) else [pair.input for pair in alignment.pairs]
+
+
+def _scores(alignment: Alignment | SegmentAlignment, run: CorrectionRun | None) -> dict[int, UnitScore]:
+    """Scores of the evaluated units by unit index; without a run, of the input itself (baseline)."""
+    if isinstance(alignment, SegmentAlignment):
+        return unit_scores(alignment, proposal_fields(alignment, run) if run is not None else None)
+    if run is None:
+        return {p.input.index: score_unit(p.input.xml, p.gold.xml, None) for p in alignment.pairs}
     gold_by_input = {pair.input.index: pair.gold for pair in alignment.pairs}
+    return {o.unit.index: score_unit(o.unit.xml, gold_by_input[o.unit.index].xml, o.proposal) for o in run.outcomes}
+
+
+def _records(model: str, source: EvalSource, config: RunConfig, alignment: Alignment | SegmentAlignment, run: CorrectionRun) -> list[UnitRecord]:
+    scores = _scores(alignment, run)
     records: list[UnitRecord] = []
     for outcome in run.outcomes:
-        gold = gold_by_input[outcome.unit.index]
-        score: UnitScore = score_unit(outcome.unit.xml, gold.xml, outcome.proposal)
         records.append(UnitRecord(
             model=model, reference_stable_id=source.reference_stable_id, batching=config.spec.label, mode=config.mode,
             repeat=config.repeat, unit_index=outcome.unit.index, fingerprint=outcome.unit.fingerprint,
             batch_index=outcome.batch_index, position=outcome.position, batch_size=outcome.batch_size,
-            status=outcome.status.value, **asdict(score),
+            status=outcome.status.value, **asdict(scores[outcome.unit.index]),
         ))
     return records
 
@@ -242,21 +263,28 @@ async def evaluate(
     Raises:
         ValueError: a document is not well-formed, the unit path is invalid, or no unit could be aligned.
     """
-    alignment = align_documents(source.input_xml, source.gold_xml, source.unit_path)
-    if not alignment.pairs:
-        raise ValueError("No unit of the input version matches a unit of the reference version by its text")
-    if max_units is not None:
-        alignment = Alignment(alignment.pairs[:max_units], alignment.unmatched_input, alignment.unmatched_gold)
-    units = [pair.input for pair in alignment.pairs]
+    alignment: Alignment | SegmentAlignment
+    if source.segmenting:
+        alignment = align_segments(source.input_xml, source.gold_xml, source.unit_path)
+        if max_units is not None:
+            alignment = alignment.truncated(max_units)
+    else:
+        alignment = align_documents(source.input_xml, source.gold_xml, source.unit_path)
+        if max_units is not None:
+            alignment = Alignment(alignment.pairs[:max_units], alignment.unmatched_input, alignment.unmatched_gold)
+    units = aligned_units(alignment)
+    if not units:
+        raise ValueError("No unit of the input version matches the reference version by its text")
     result = EvaluationResult(model=model, source=source, alignment=alignment, planned_runs=len(configs))
 
+    baseline = _scores(alignment, None)
     baseline_records = [
         UnitRecord(
             model="baseline (input)", reference_stable_id=source.reference_stable_id, batching="-", mode="-", repeat=1,
-            unit_index=p.input.index, fingerprint=p.input.fingerprint, batch_index=0, position=0, batch_size=1,
-            status=ProposalStatus.OK.value, **asdict(score_unit(p.input.xml, p.gold.xml, None)),
+            unit_index=u.index, fingerprint=u.fingerprint, batch_index=0, position=0, batch_size=1,
+            status=ProposalStatus.OK.value, **asdict(baseline[u.index]),
         )
-        for p in alignment.pairs
+        for u in units
     ]
     result.baseline = summarize("baseline (input)", source.reference_stable_id, "-", "-", baseline_records, [], 1)
 
@@ -264,7 +292,9 @@ async def evaluate(
     for number, config in enumerate(configs, start=1):
         if progress:
             progress(number, len(configs), config)
-        run = await correct_units(client, source.rules, units, config.spec, config.mode, concurrency=concurrency, retry=retry)
+        run = await correct_units(
+            client, source.rules, units, config.spec, config.mode, concurrency=concurrency, retry=retry, segmenting=source.segmenting,
+        )
         records = _records(model, source, config, alignment, run)
         result.units.extend(records)
         for batch in run.batches:

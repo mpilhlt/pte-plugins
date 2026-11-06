@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from typing import Protocol, Sequence
 
 from .batching import BatchSpec, make_batches
-from .checks import ProposalStatus, check_proposal
+from .checks import ProposalStatus, check_proposal, check_segments, unit_text
 from .prompts import OutputMode, build_system_prompt, build_user_prompt, parse_unit_answer
 from .units import Unit
 
@@ -127,6 +127,25 @@ def _failure_share(outcomes: Sequence[UnitOutcome]) -> float:
     return sum(o.status.is_failure for o in outcomes) / len(outcomes) if outcomes else 0.0
 
 
+def _accept_moved_text(outcomes: list[UnitOutcome]) -> list[UnitOutcome]:
+    """
+    Accept the units of a batch whose text changed if the batch as a whole keeps its text, i.e. the
+    model only moved text between neighbouring units (segmenting variants).
+    """
+    if not any(o.status == ProposalStatus.TEXT_CHANGED for o in outcomes):
+        return outcomes
+    if any(o.status not in (ProposalStatus.OK, ProposalStatus.UNCHANGED, ProposalStatus.TEXT_CHANGED) for o in outcomes):
+        return outcomes
+    proposed = "".join(unit_text(o.proposal or "") for o in outcomes)
+    original = "".join(unit_text(o.unit.xml) for o in outcomes)
+    if proposed != original:
+        return outcomes
+    for o in outcomes:
+        if o.status == ProposalStatus.TEXT_CHANGED:
+            o.status = ProposalStatus.OK
+    return outcomes
+
+
 async def correct_units(
     client: ChatClient,
     rules: Sequence[tuple[str, str]],
@@ -137,20 +156,25 @@ async def correct_units(
     split_on_failure: float | None = None,
     retry: RetryPolicy | None = None,
     sleep: Sleep = asyncio.sleep,
+    segmenting: bool = False,
 ) -> CorrectionRun:
     """
     Send the units to the model in batches and check every proposed unit.
 
     Units are numbered 1..n within each batch. A request failing with TransientError is retried
     as `retry` allows (the wait does not count towards the request's seconds). A failed request
-    marks all of its units ERROR and is recorded with its error. With split_on_failure set (a share
+    marks all of its units ERROR and is recorded with its error.
+
+    With segmenting (variants whose model splits text into units), a unit may come back as several
+    elements or empty; units whose own text changed are accepted when the batch keeps its text as
+    a whole (text moved between neighbouring units) and no unit of the batch is malformed or missing. With split_on_failure set (a share
     between 0 and 1), a batch of more than one unit whose share of failed units exceeds it is split
     in half and each half is retried, recursively; the experiment leaves it off to measure the raw
     behaviour, the pipeline turns it on.
     """
     run = CorrectionRun()
     semaphore = asyncio.Semaphore(max(1, concurrency))
-    system_prompt = build_system_prompt(mode)
+    system_prompt = build_system_prompt(mode, segmenting)
     by_index: dict[int, UnitOutcome] = {}
     lock = asyncio.Lock()
 
@@ -185,6 +209,7 @@ async def correct_units(
             ))
         answer = parse_unit_answer(raw) if error is None else {}
         outcomes: list[UnitOutcome] = []
+        check = check_segments if segmenting else check_proposal
         for position, (uid, unit) in enumerate(zip(ids, batch)):
             proposal = answer.get(uid)
             if error is not None:
@@ -193,10 +218,13 @@ async def correct_units(
                 status = ProposalStatus.UNCHANGED if mode == "changed" else ProposalStatus.MISSING
                 proposal = unit.xml if status == ProposalStatus.UNCHANGED else None
             else:
-                status = check_proposal(unit.xml, proposal)
-                if status.is_failure:
-                    proposal = None
+                status = check(unit.xml, proposal)
             outcomes.append(UnitOutcome(unit, status, proposal, batch_index, position, len(batch)))
+        if segmenting:
+            outcomes = _accept_moved_text(outcomes)
+        for outcome in outcomes:
+            if outcome.status.is_failure:
+                outcome.proposal = None
         if split_on_failure is not None and len(batch) > 1 and _failure_share(outcomes) > split_on_failure:
             half = len(batch) // 2
             await asyncio.gather(process(batch[:half], batch_index), process(batch[half:], batch_index))
