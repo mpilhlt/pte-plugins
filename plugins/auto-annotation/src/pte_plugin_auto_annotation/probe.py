@@ -6,8 +6,8 @@ gold version, and how does that change with the number of units sent per request
 
 Runs against a running editor (credentials as for bin/batch-extract.js: --user/--password or
 API_USER/API_PASSWORD/API_BASE_URL from .env). Each --model is evaluated on its own, on each
---doc, for every batch spec and output mode. Writes units.csv, batches.jsonl,
-summary.json and report.md into --out.
+--doc, for every batch spec and output mode. Writes units.csv, batches.jsonl, summary.json and
+report.md into --out, after every run, so that an interrupted probe keeps what it finished.
 
 No imports from fastapi_app.
 """
@@ -19,7 +19,7 @@ import asyncio
 import dataclasses
 import os
 import sys
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -94,8 +94,12 @@ async def run_probe(
     session: ApiSession, models: Sequence[str], docs: Sequence[str | None], variant: str | None, reference: str | None,
     input_id: str | None, configs: Sequence[RunConfig], concurrency: int, temperature: float, rules_text: str | None,
     max_units: int | None, retry: RetryPolicy | None = None,
+    on_update: Callable[[list[EvaluationResult]], None] | None = None,
 ) -> list[EvaluationResult]:
-    """Evaluate every model on every document (a single None document with --reference)."""
+    """
+    Evaluate every model on every document (a single None document with --reference). After each
+    run, on_update gets all results so far, the current one partial.
+    """
     results: list[EvaluationResult] = []
     sources = [
         _pin_rules(session.eval_source(doc, variant, reference, input_id, with_rules=rules_text is None), rules_text)
@@ -108,7 +112,12 @@ async def run_probe(
         for source in sources:
             def progress(number: int, total: int, config: RunConfig, source: EvalSource = source) -> None:
                 print(f"[{label} | {source.doc_id or source.reference_stable_id}] run {number}/{total}: {config.spec.label}, {config.mode}, #{config.repeat}", file=sys.stderr)
-            results.append(await evaluate(client, label, source, configs, concurrency, progress, max_units=max_units, retry=retry))
+            def update(partial: EvaluationResult) -> None:
+                if on_update:
+                    on_update([*results, partial])
+            results.append(await evaluate(
+                client, label, source, configs, concurrency, progress, max_units=max_units, retry=retry, on_update=update,
+            ))
     return results
 
 
@@ -133,15 +142,24 @@ def main(argv: Sequence[str] | None = None) -> int:
     rules_text = args.rules_file.read_text(encoding="utf-8") if args.rules_file else None
     out = args.out or Path("probe-results") / datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 
+    written = False
+
+    def save(results: list[EvaluationResult]) -> None:
+        nonlocal written
+        write_results(results, out)
+        written = True
+
     try:
         session = ApiSession.login(base_url, user, password)
         results = asyncio.run(run_probe(
             session, args.model, args.doc or [None], args.variant, args.reference, args.input, sweep(specs, modes, args.repeats),
-            args.concurrency, args.temperature, rules_text, args.max_units, RetryPolicy(retries=max(0, args.retries)),
+            args.concurrency, args.temperature, rules_text, args.max_units, RetryPolicy(retries=max(0, args.retries)), on_update=save,
         ))
-    except (ApiError, ValueError, requests.RequestException) as e:
-        print(f"Error: {e}", file=sys.stderr)
-        return 1
+    except (ApiError, ValueError, requests.RequestException, KeyboardInterrupt) as e:
+        print("Interrupted" if isinstance(e, KeyboardInterrupt) else f"Error: {e}", file=sys.stderr)
+        if written:
+            print(f"Results of the finished runs are in {out}", file=sys.stderr)
+        return 130 if isinstance(e, KeyboardInterrupt) else 1
     paths = write_results(results, out)
     print(markdown_report(results))
     print("Written: " + ", ".join(str(p) for p in paths), file=sys.stderr)
