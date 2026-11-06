@@ -1,7 +1,7 @@
 """
-HTTP client for a running PDF-TEI-Editor: login, the evaluation inputs, and a ChatClient that
-sends completions through the server, so the CLI uses the providers, keys and access rules
-configured in the app.
+HTTP client for a running PDF-TEI-Editor: login, the evaluation inputs, a ChatClient that
+sends completions through the server (so the CLIs use the providers, keys and access rules
+configured in the app), and the annotation, target and save calls of the annotation CLI.
 
 No imports from fastapi_app.
 """
@@ -15,6 +15,9 @@ from dataclasses import dataclass
 import requests
 
 from .correction import TransientError
+
+# Values of a flat JSON request body
+JsonScalar = str | int | float | bool | None
 from .evaluation import EvalSource
 
 # Completions of large batches on slow models take minutes
@@ -33,6 +36,13 @@ TRANSIENT_STATUSES = frozenset({429, 503})
 
 
 def _check(response: requests.Response) -> dict[str, object]:
+    data = _check_any(response)
+    if not isinstance(data, dict):
+        raise ApiError(f"{response.request.method} {response.url}: expected a JSON object")
+    return data
+
+
+def _check_any(response: requests.Response) -> object:
     if not response.ok:
         try:
             detail = response.json().get("detail", response.text)
@@ -82,6 +92,7 @@ class ApiSession:
             gold_xml=str(data["gold_xml"]), input_xml=str(data["input_xml"]),
             rules=[(str(r["category"]), str(r["text"])) for r in rules],
             doc_id=str(data["doc_id"]), reference_is_gold=bool(data["reference_is_gold"]), input_choice=str(data["input_choice"]), input_is_extraction=bool(data["input_is_extraction"]),
+            segmenting=bool(data.get("segmenting", False)),
         )
 
     def resolve_model(self, spec: str) -> tuple[str, str]:
@@ -100,6 +111,33 @@ class ApiSession:
         except (requests.ConnectionError, requests.Timeout) as e:
             raise TransientError(f"{type(e).__name__}: {e}") from e
         return str(_check(response)["text"])
+
+    def targets(self, variant: str, collection: str | None = None, doc_ids: list[str] | None = None) -> list[dict[str, object]]:
+        """The version of each document the pipeline would annotate (see annotation.find_targets)."""
+        params: list[tuple[str, str]] = [("variant", variant)]
+        if collection:
+            params.append(("collection", collection))
+        params.extend(("doc", d) for d in doc_ids or [])
+        data = _check_any(requests.get(f"{self.base_url}/api/plugins/auto-annotation/targets", params=params, headers=self.headers, timeout=300))
+        if not isinstance(data, list):
+            raise ApiError("targets: expected a JSON list")
+        return [t for t in data if isinstance(t, dict)]
+
+    def annotate(self, payload: dict[str, JsonScalar]) -> dict[str, object]:
+        """Annotate a version on the server (see routes.AnnotateRequest); the result is not saved."""
+        return _check(requests.post(f"{self.base_url}/api/plugins/auto-annotation/annotate", json=payload, headers=self.headers, timeout=self.timeout))
+
+    def save_version(self, xml: str, source_stable_id: str) -> str:
+        """Save xml as a new version of the source version; returns the new stable id."""
+        data = _check(requests.post(
+            f"{self.base_url}/api/v1/files/save", json={"xml_string": xml, "file_id": source_stable_id, "new_version": True},
+            headers=self.headers, timeout=120,
+        ))
+        return str(data["file_id"])
+
+    def release_lock(self, stable_id: str) -> None:
+        """Release the lock that saving acquired."""
+        _check(requests.post(f"{self.base_url}/api/v1/files/release_lock", json={"file_id": stable_id}, headers=self.headers, timeout=60))
 
 
 @dataclass

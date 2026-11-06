@@ -13,6 +13,7 @@ Pure module.
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from typing import Literal, Sequence
 
 from .units import Unit
@@ -65,15 +66,25 @@ def build_system_prompt(mode: OutputMode, segmenting: bool = False) -> str:
     )
 
 
-def format_units(units: Sequence[Unit], ids: Sequence[int]) -> str:
+# Text shown under a unit's header in the prompt; the default is the unit's XML
+UnitRenderer = Callable[[Unit], str]
+
+
+def _unit_xml(unit: Unit) -> str:
+    return unit.xml
+
+
+def format_units(units: Sequence[Unit], ids: Sequence[int], render: UnitRenderer = _unit_xml) -> str:
     """The delimited unit list, with the given ids."""
-    return "\n\n".join(f"### Unit {uid}\n{unit.xml}" for uid, unit in zip(ids, units, strict=True))
+    return "\n\n".join(f"### Unit {uid}\n{render(unit)}" for uid, unit in zip(ids, units, strict=True))
 
 
-def build_user_prompt(rules: Sequence[tuple[str, str]], units: Sequence[Unit], ids: Sequence[int]) -> str:
+def build_user_prompt(
+    rules: Sequence[tuple[str, str]], units: Sequence[Unit], ids: Sequence[int], render: UnitRenderer = _unit_xml
+) -> str:
     """Rules first (so providers with prefix caching can reuse them across batches), then the units."""
     rules_block = "\n\n".join(f"## Rule category: {category}\n\n{text}" for category, text in rules)
-    return f"{rules_block}\n\n## Units\n\n{format_units(units, ids)}"
+    return f"{rules_block}\n\n## Units\n\n{format_units(units, ids, render)}"
 
 
 def parse_unit_answer(raw: str) -> dict[int, str]:

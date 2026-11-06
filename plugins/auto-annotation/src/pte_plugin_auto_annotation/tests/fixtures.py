@@ -8,6 +8,11 @@ from pte_plugin_auto_annotation.prompts import parse_unit_answer
 HEADER = """<?xml version="1.0" encoding="UTF-8"?>
 <TEI xmlns="http://www.tei-c.org/ns/1.0">
   <teiHeader>
+    <fileDesc>
+      <titleStmt>
+        <title>Sample</title>
+      </titleStmt>
+    </fileDesc>
     <encodingDesc>
       <editorialDecl>
         <interpretation type="references">
@@ -100,3 +105,38 @@ class FlakyClient:
         if self.calls <= self.failures:
             raise TransientError("503 This model is currently experiencing high demand")
         return await self.client.complete(system_prompt, user_prompt)  # type: ignore[attr-defined]
+
+
+class ArbiterOracle:
+    """Arbiter that answers every unit with its gold version (looked up by the original shown to it)."""
+
+    def __init__(self, mapping: dict[str, str]):
+        self.mapping = mapping
+        self.calls: list[tuple[str, str]] = []
+
+    async def complete(self, system_prompt: str, user_prompt: str) -> str:
+        self.calls.append((system_prompt, user_prompt))
+        parts = []
+        for uid, shown in prompt_units(user_prompt).items():
+            original = shown.split("Original:\n", 1)[1].split("\n", 1)[0]
+            parts.append(f"### Unit {uid}\n{self.mapping.get(original, original)}")
+        return "\n\n".join(parts)
+
+
+def gold_mapping() -> dict[str, str]:
+    """Input unit XML -> gold unit XML, for the fixture document."""
+    from pte_plugin_auto_annotation.units import document_units
+
+    return {u.xml: g for u, g in zip(document_units(INPUT_XML, ".//listBibl/bibl"), GOLD_UNITS)}
+
+
+class FixedAnswerClient:
+    """Answers every unit of a request with a fixed XML (e.g. to produce a text change)."""
+
+    def __init__(self, answer: str):
+        self.answer = answer
+        self.calls = 0
+
+    async def complete(self, system_prompt: str, user_prompt: str) -> str:
+        self.calls += 1
+        return "\n\n".join(f"### Unit {uid}\n{self.answer}" for uid in prompt_units(user_prompt))

@@ -20,7 +20,7 @@ from typing import Protocol, Sequence
 
 from .batching import BatchSpec, make_batches
 from .checks import ProposalStatus, check_proposal, check_segments, unit_text
-from .prompts import OutputMode, build_system_prompt, build_user_prompt, parse_unit_answer
+from .prompts import OutputMode, UnitRenderer, build_system_prompt, build_user_prompt, parse_unit_answer
 from .units import Unit
 
 
@@ -157,6 +157,9 @@ async def correct_units(
     retry: RetryPolicy | None = None,
     sleep: Sleep = asyncio.sleep,
     segmenting: bool = False,
+    system_prompt: str | None = None,
+    render: UnitRenderer | None = None,
+    move_text: bool = True,
 ) -> CorrectionRun:
     """
     Send the units to the model in batches and check every proposed unit.
@@ -171,16 +174,21 @@ async def correct_units(
     between 0 and 1), a batch of more than one unit whose share of failed units exceeds it is split
     in half and each half is retried, recursively; the experiment leaves it off to measure the raw
     behaviour, the pipeline turns it on.
+
+    system_prompt and render replace the correction prompt and the text shown for each unit; the
+    arbiter uses them to show the candidates. Answers are always checked against the unit's XML.
+    move_text=False keeps segmenting units from passing on their batch's text (the arbiter's units
+    are not neighbours).
     """
     run = CorrectionRun()
     semaphore = asyncio.Semaphore(max(1, concurrency))
-    system_prompt = build_system_prompt(mode, segmenting)
+    system_prompt = system_prompt if system_prompt is not None else build_system_prompt(mode, segmenting)
     by_index: dict[int, UnitOutcome] = {}
     lock = asyncio.Lock()
 
     async def process(batch: list[Unit], split_from: int | None) -> None:
         ids = list(range(1, len(batch) + 1))
-        user_prompt = build_user_prompt(rules, batch, ids)
+        user_prompt = build_user_prompt(rules, batch, ids, render) if render else build_user_prompt(rules, batch, ids)
         error: str | None = None
         raw = ""
         retries = 0
@@ -220,7 +228,7 @@ async def correct_units(
             else:
                 status = check(unit.xml, proposal)
             outcomes.append(UnitOutcome(unit, status, proposal, batch_index, position, len(batch)))
-        if segmenting:
+        if segmenting and move_text:
             outcomes = _accept_moved_text(outcomes)
         for outcome in outcomes:
             if outcome.status.is_failure:

@@ -11,6 +11,7 @@ from pathlib import Path
 from unittest import mock
 
 from pte_plugin_auto_annotation import probe
+from pte_plugin_auto_annotation.cli_common import load_env
 from pte_plugin_auto_annotation.evaluation import EvalSource
 from pte_plugin_auto_annotation.units import document_units
 
@@ -50,7 +51,7 @@ class TestProbeCli(unittest.TestCase):
     def test_runs_and_writes_report(self):
         with tempfile.TemporaryDirectory() as tmp:
             code, out, session = self.run_main(
-                "--model", "local/qwen", "--model", "local/llama", "--doc", "doc1",
+                "--model", "local/qwen", "--model", "local/llama", "--doc", "doc1", "--variant", "grobid.training.references",
                 "--batches", "units:1,units:4", "--modes", "all,changed", "--out", tmp,
             )
             self.assertEqual(code, 0)
@@ -65,9 +66,9 @@ class TestProbeCli(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             rules = Path(tmp) / "rules.md"
             rules.write_text("PINNED RULES")
-            code, out, session = self.run_main("--model", "m", "--doc", "doc1", "--batches", "units:4", "--rules-file", str(rules), "--out", tmp)
+            code, out, session = self.run_main("--model", "m", "--doc", "doc1", "--variant", "v", "--batches", "units:4", "--rules-file", str(rules), "--out", tmp)
         self.assertEqual(code, 0)
-        self.assertEqual(session.sources, [("doc1", None, None, None, False)])
+        self.assertEqual(session.sources, [("doc1", "v", None, None, False)])
         self.assertIn("PINNED RULES", session.completions[0][1])
         self.assertIn("## endpoint-local/m on doc1", out)  # the pinned source keeps the document id
 
@@ -93,7 +94,7 @@ class TestProbeCli(unittest.TestCase):
         out, err = io.StringIO(), io.StringIO()
         with tempfile.TemporaryDirectory() as tmp, \
                 mock.patch.object(probe.ApiSession, "login", return_value=session), redirect_stdout(out), redirect_stderr(err):
-            code = probe.main(["--user", "u", "--password", "p", "--env", "/nonexistent", "--model", "m", "--doc", "doc1", "--doc", "doc2",
+            code = probe.main(["--user", "u", "--password", "p", "--env", "/nonexistent", "--model", "m", "--doc", "doc1", "--doc", "doc2", "--variant", "grobid.training.references",
                                "--batches", "units:4", "--repeats", "2", "--out", tmp])
             report = (Path(tmp) / "report.md").read_text()
             self.assertFalse(any(p.name.endswith(".tmp") for p in Path(tmp).iterdir()))
@@ -106,7 +107,7 @@ class TestProbeCli(unittest.TestCase):
     def test_argument_errors(self):
         for args in (["--model", "m"], ["--model", "m", "--doc", "a", "--doc", "b", "--input", "x"],
                      ["--model", "m", "--doc", "a", "--doc", "b", "--reference", "x"],
-                     ["--model", "m", "--doc", "a", "--modes", "diff"], ["--model", "m", "--doc", "a", "--batches", "8"]):
+                     ["--model", "m", "--doc", "a"], ["--model", "m", "--doc", "a", "--variant", "v", "--modes", "diff"], ["--model", "m", "--doc", "a", "--variant", "v", "--batches", "8"]):
             with self.subTest(args=args), self.assertRaises(SystemExit):
                 self.run_main(*args)
 
@@ -114,7 +115,7 @@ class TestProbeCli(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             env = Path(tmp) / ".env"
             env.write_text("# comment\nexport API_USER=alice\nAPI_PASSWORD='s3cret'\n")
-            self.assertEqual(probe._load_env(env), {"API_USER": "alice", "API_PASSWORD": "s3cret"})
+            self.assertEqual(load_env(env), {"API_USER": "alice", "API_PASSWORD": "s3cret"})
 
 
 if __name__ == "__main__":

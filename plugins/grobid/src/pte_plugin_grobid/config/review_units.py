@@ -14,3 +14,9 @@ REVIEW_UNITS: ReviewUnits = {
     "grobid.training.references.referenceSegmenter": ".//listBibl/bibl",
     "grobid.training.references": ".//listBibl/bibl",
 }
+
+
+# Variants whose review units a correction may split and merge, because the model decides where one
+# unit ends and the next begins (the reference segmenter cuts the reference list into references).
+# Tools such as the auto-annotation plugin then compare the units by their text positions.
+SEGMENTING_VARIANTS: tuple[str, ...] = ("grobid.training.references.referenceSegmenter",)

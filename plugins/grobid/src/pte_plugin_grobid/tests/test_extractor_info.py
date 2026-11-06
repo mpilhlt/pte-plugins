@@ -24,6 +24,12 @@ class TestExtractorInfoValidation(unittest.TestCase):
         self.assertEqual(info["reviewUnits"]["grobid.training.references"], ".//listBibl/bibl")
         self.assertTrue(set(info["reviewUnits"]) <= set(info["variants"]))
 
+    def test_segmenting_variants_are_variants(self):
+        from pte_plugin_grobid.extractor import GrobidTrainingExtractor
+        info = GrobidTrainingExtractor.get_info()
+        self.assertEqual(info["segmentingVariants"], ["grobid.training.references.referenceSegmenter"])
+        self.assertTrue(set(info["segmentingVariants"]) <= set(info["variants"]))
+
 
 if __name__ == "__main__":
     unittest.main()

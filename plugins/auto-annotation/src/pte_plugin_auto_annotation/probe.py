@@ -17,7 +17,6 @@ from __future__ import annotations
 import argparse
 import asyncio
 import dataclasses
-import os
 import sys
 from collections.abc import Callable, Sequence
 from datetime import datetime, timezone
@@ -27,26 +26,13 @@ import requests
 
 from .api_client import ApiError, ApiSession, ServerChatClient
 from .batching import BatchSpec
+from .cli_common import add_connection_args, connection_from_args
 from .correction import RetryPolicy
 from .evaluation import EvalSource, EvaluationResult, RunConfig, evaluate, sweep
 from .prompts import OUTPUT_MODES, OutputMode
 from .report import markdown_report, write_results
 
 DEFAULT_BATCHES = "units:1,units:4,units:8,units:16,units:32"
-
-
-def _load_env(path: Path) -> dict[str, str]:
-    """KEY=VALUE lines of a .env file (no interpolation); {} if it does not exist."""
-    values: dict[str, str] = {}
-    if not path.is_file():
-        return values
-    for line in path.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, value = line.split("=", 1)
-        values[key.strip().removeprefix("export ").strip()] = value.strip().strip("'\"")
-    return values
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -56,7 +42,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--model", action="append", required=True, help="Model name as configured in the app: default, <provider>, or <provider>/<model> (repeatable)")
     parser.add_argument("--doc", action="append", default=[], help="Document id; its gold version of --variant is the reference (repeatable)")
-    parser.add_argument("--variant", help="Variant of the reference and input versions (default: grobid.training.references, or the variant of --reference)")
+    parser.add_argument("--variant", help="Variant of the reference and input versions (required with --doc; default with --reference: its variant)")
     parser.add_argument("--reference", help="Stable id of the version to score against instead of the document's gold version (only with at most one --doc)")
     parser.add_argument("--input", help="Stable id of the version to correct (only with a single document); default: the earliest version of the same variant")
     parser.add_argument("--batches", default=DEFAULT_BATCHES, help=f"Comma-separated batch specs units:N or chars:N (default: {DEFAULT_BATCHES})")
@@ -68,10 +54,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--rules-file", type=Path, help="Use this file as the only rule text instead of the gold version's rule refs")
     parser.add_argument("--max-units", type=int, help="Evaluate only the first N aligned units")
     parser.add_argument("--out", type=Path, help="Output directory (default: ./probe-results/<timestamp>)")
-    parser.add_argument("--env", type=Path, default=Path(".env"), help="Path to .env file (default: ./.env)")
-    parser.add_argument("--base-url", help="API base URL (default: API_BASE_URL or http://localhost:8000)")
-    parser.add_argument("--user", help="Username (default: API_USER)")
-    parser.add_argument("--password", help="Password (default: API_PASSWORD)")
+    add_connection_args(parser)
     return parser
 
 
@@ -126,6 +109,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if not args.doc and not args.reference:
         parser.error("Pass --doc, or --reference")
+    if args.doc and not args.reference and not args.variant:
+        parser.error("Pass --variant with --doc")
     if (args.input or args.reference) and len(args.doc) > 1:
         parser.error("--input and --reference can only be used with a single document")
     try:
@@ -133,12 +118,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         modes = parse_modes(args.modes)
     except ValueError as e:
         parser.error(str(e))
-    env = _load_env(args.env)
-    base_url = args.base_url or os.environ.get("API_BASE_URL") or env.get("API_BASE_URL") or "http://localhost:8000"
-    user = args.user or os.environ.get("API_USER") or env.get("API_USER")
-    password = args.password or os.environ.get("API_PASSWORD") or env.get("API_PASSWORD")
-    if not user or not password:
-        parser.error("No credentials: pass --user and --password, or set API_USER and API_PASSWORD")
+    connection = connection_from_args(args, parser)
     rules_text = args.rules_file.read_text(encoding="utf-8") if args.rules_file else None
     out = args.out or Path("probe-results") / datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 
@@ -150,7 +130,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         written = True
 
     try:
-        session = ApiSession.login(base_url, user, password)
+        session = ApiSession.login(connection.base_url, connection.user, connection.password)
         results = asyncio.run(run_probe(
             session, args.model, args.doc or [None], args.variant, args.reference, args.input, sweep(specs, modes, args.repeats),
             args.concurrency, args.temperature, rules_text, args.max_units, RetryPolicy(retries=max(0, args.retries)), on_update=save,
