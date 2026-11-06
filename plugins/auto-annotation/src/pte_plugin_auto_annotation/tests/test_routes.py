@@ -15,7 +15,7 @@ from fastapi_app.lib.core.dependencies import get_file_repository, get_file_stor
 from fastapi_app.lib.llm import LLMModel, LLMProvider, LLMProviderError, LLMProviderRegistry
 from fastapi_app.lib.llm.model_access import ModelAccessDenied
 from pte_plugin_auto_annotation import api_client
-from pte_plugin_auto_annotation import routes as routes_module
+from pte_plugin_auto_annotation import models as models_module
 from pte_plugin_auto_annotation import sources as sources_module
 from pte_plugin_auto_annotation.routes import router
 
@@ -90,8 +90,8 @@ class TestRoutes(unittest.TestCase):
             self.addCleanup(patcher.stop)
             return patcher.start()
 
-        self.mock_check_model_access = patch(routes_module, "check_model_access")
-        patch(routes_module, "get_default_model")
+        self.mock_check_model_access = patch(models_module, "check_model_access")
+        patch(models_module, "get_default_model")
         self.mock_check_file_access = patch(sources_module, "check_file_access", return_value=True)
         patch(sources_module, "is_safe_fetch_url", return_value=True)
         self.mock_fetch_rule_excerpt = patch(sources_module, "fetch_rule_excerpt", return_value="RULES")

@@ -15,6 +15,7 @@ auto-annotation = "pte_plugin_auto_annotation"
 
 [project.scripts]
 pte-model-probe = "pte_plugin_auto_annotation.probe:main"
+pte-auto-annotate = "pte_plugin_auto_annotation.annotate:main"
 
 [build-system]
 requires = ["hatchling"]

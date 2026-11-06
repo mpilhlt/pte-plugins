@@ -115,14 +115,24 @@ def gather_rules(
     return rules
 
 
-def _read(storage: FileStorage, file: FileMetadata) -> str:
+def read_tei(storage: FileStorage, file: FileMetadata) -> str:
+    """The content of a TEI file.
+
+    Raises:
+        SourceError: the content is missing.
+    """
     content = storage.read_file(file.id, "tei")
     if content is None:
         raise SourceError(f"File content of {file.stable_id} not found", 404)
     return content.decode("utf-8")
 
 
-def _tei_file(repo: FileRepository, stable_id: str) -> FileMetadata:
+def tei_file(repo: FileRepository, stable_id: str) -> FileMetadata:
+    """The TEI file with the stable id.
+
+    Raises:
+        SourceError: there is none.
+    """
     file = repo.get_file_by_stable_id(stable_id)
     if file is None or file.file_type != "tei":
         raise SourceError(f"No TEI file with stable id {stable_id}", 404)
@@ -141,7 +151,7 @@ def find_reference(
             document or variant, or the document has no or several gold versions of the variant.
     """
     if reference_stable_id:
-        reference = _tei_file(repo, reference_stable_id)
+        reference = tei_file(repo, reference_stable_id)
         if doc_id and reference.doc_id != doc_id:
             raise SourceError(f"{reference_stable_id} belongs to document {reference.doc_id}, not {doc_id}")
         if variant and reference.variant != variant:
@@ -190,7 +200,7 @@ def find_input(repo: FileRepository, storage: FileStorage, reference: FileMetada
         SourceError: the document has no extraction of the variant.
     """
     for version in lineage(repo, reference):
-        xml = _read(storage, version)
+        xml = read_tei(storage, version)
         if is_extraction(xml):
             return version, "lineage", xml
     # get_all_versions() leaves out gold versions; a non-gold reference is left out here
@@ -199,7 +209,7 @@ def find_input(repo: FileRepository, storage: FileStorage, reference: FileMetada
         key=lambda v: (v.version or 0, str(v.created_at)),
     )
     for version in versions:
-        xml = _read(storage, version)
+        xml = read_tei(storage, version)
         if is_extraction(xml):
             return version, "earliest", xml
     raise SourceError(
@@ -232,19 +242,19 @@ def resolve_source(
         raise SourceError(f"No read access to {reference.stable_id}", 403)
 
     if input_stable_id:
-        source = _tei_file(repo, input_stable_id)
+        source = tei_file(repo, input_stable_id)
         if source.doc_id != reference.doc_id:
             raise SourceError(f"{input_stable_id} belongs to another document than {reference.stable_id}")
         if not check_file_access(source, user, "read"):
             raise SourceError(f"No read access to {source.stable_id}", 403)
-        input_xml = _read(storage, source)
+        input_xml = read_tei(storage, source)
         input_choice = "given"
     else:
         source, input_choice, input_xml = find_input(repo, storage, reference)
         if not check_file_access(source, user, "read"):
             raise SourceError(f"No read access to {source.stable_id}", 403)
 
-    gold_xml = _read(storage, reference)
+    gold_xml = read_tei(storage, reference)
     return ResolvedSource(
         doc_id=reference.doc_id,
         reference_stable_id=reference.stable_id,

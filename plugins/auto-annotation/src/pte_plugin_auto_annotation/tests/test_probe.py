@@ -11,6 +11,7 @@ from pathlib import Path
 from unittest import mock
 
 from pte_plugin_auto_annotation import probe
+from pte_plugin_auto_annotation.cli_common import load_env
 from pte_plugin_auto_annotation.evaluation import EvalSource
 from pte_plugin_auto_annotation.units import document_units
 
@@ -114,7 +115,7 @@ class TestProbeCli(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             env = Path(tmp) / ".env"
             env.write_text("# comment\nexport API_USER=alice\nAPI_PASSWORD='s3cret'\n")
-            self.assertEqual(probe._load_env(env), {"API_USER": "alice", "API_PASSWORD": "s3cret"})
+            self.assertEqual(load_env(env), {"API_USER": "alice", "API_PASSWORD": "s3cret"})
 
 
 if __name__ == "__main__":
