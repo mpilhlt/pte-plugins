@@ -40,7 +40,8 @@ def markdown_report(results: Sequence[EvaluationResult]) -> str:
             *([] if result.complete else [f"**Incomplete:** {result.finished_runs} of {result.planned_runs} runs finished.", ""]),
             f"Reference version `{meta['reference_stable_id']}` ({'gold' if meta['reference_is_gold'] else 'not the gold version'}), input version `{meta['input_stable_id']}` ({INPUT_CHOICES.get(str(meta['input_choice']), meta['input_choice'])}{'' if meta['input_is_extraction'] else '; NOT an extraction'}), variant `{meta['variant']}`, unit path `{meta['unit_path']}`, "
             f"rules `{meta['rules_hash']}` ({', '.join(c for c, _ in result.source.rules)}), prompt v{meta['prompt_version']}. "
-            f"{meta['aligned_units']} units aligned, {meta['unmatched_input_units']} input and {meta['unmatched_gold_units']} reference units unmatched.",
+            f"{meta['aligned_units']} units aligned, {meta['unmatched_input_units']} input and {meta['unmatched_gold_units']} reference units unmatched."
+            + (" Segmenting variant: units may be split and merged; fields are scored by their position in the shared text, input units are those whose text the reference version shares." if meta.get("segmenting") else ""),
             "",
             "| Batching | Mode | Runs | Calls | Retries | Errors % | Failures % | Exact % | Edit P | Edit R | Edit F1 | Field F1 | Edit R by quarter | Seconds | Prompt chars | Answer chars |",
             "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",

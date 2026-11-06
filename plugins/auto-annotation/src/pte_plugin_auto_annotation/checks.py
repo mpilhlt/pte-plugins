@@ -44,3 +44,35 @@ def check_proposal(original_xml: str, proposal_xml: str) -> ProposalStatus:
     if text_key(proposal) != text_key(original):
         return ProposalStatus.TEXT_CHANGED
     return ProposalStatus.OK
+
+
+def unit_text(xml: str) -> str:
+    """
+    The text of a unit or of several elements, whitespace removed (text outside elements included).
+
+    Raises:
+        ValueError: not well-formed.
+    """
+    return "".join(text_key(item) if not isinstance(item, str) else "".join(item.split()) for item in parse_unit(xml))
+
+
+def check_segments(original_xml: str, proposal_xml: str) -> ProposalStatus:
+    """
+    Check one proposed unit of a segmenting variant: zero or more elements with the original's
+    outermost element, only whitespace between them, and the original's text. A unit that is
+    returned empty or with changed text may still be accepted when its batch keeps its text as a
+    whole (see correction.correct_units): text may move between neighbouring units.
+    """
+    try:
+        content = parse_unit(proposal_xml) if proposal_xml.strip() else []
+    except ValueError:
+        return ProposalStatus.MALFORMED
+    original = parse_unit(original_xml)[0]
+    if isinstance(original, str):
+        return ProposalStatus.WRONG_ROOT
+    for item in content:
+        if isinstance(item, str) or local_name(item.tag) != local_name(original.tag):
+            return ProposalStatus.WRONG_ROOT
+    if "".join(text_key(e) for e in content if not isinstance(e, str)) != text_key(original):
+        return ProposalStatus.TEXT_CHANGED
+    return ProposalStatus.OK

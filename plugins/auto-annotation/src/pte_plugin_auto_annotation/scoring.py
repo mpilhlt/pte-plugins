@@ -17,7 +17,7 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass
 from difflib import SequenceMatcher
-from typing import Sequence
+from typing import Hashable, Sequence, TypeVar
 
 from lxml import etree
 
@@ -27,6 +27,7 @@ from .units import Unit, attributes, collapse, document_units, element_text, loc
 IGNORED_ATTRIBUTES = frozenset({"xml:id"})
 
 Field = tuple[str, tuple[tuple[str, str], ...], str]
+FieldT = TypeVar("FieldT", bound=Hashable)
 
 
 def unit_fields(xml: str) -> Counter[Field]:
@@ -71,8 +72,11 @@ class UnitScore:
 def score_unit(input_xml: str, gold_xml: str, proposal_xml: str | None) -> UnitScore:
     """Score one proposal. A missing proposal (None) is scored as if the input were kept."""
     input_f = unit_fields(input_xml)
-    gold_f = unit_fields(gold_xml)
-    proposal_f = unit_fields(proposal_xml) if proposal_xml is not None else input_f
+    return score_fields(input_f, unit_fields(gold_xml), unit_fields(proposal_xml) if proposal_xml is not None else input_f)
+
+
+def score_fields(input_f: Counter[FieldT], gold_f: Counter[FieldT], proposal_f: Counter[FieldT]) -> UnitScore:
+    """Edit and field counts from the fields of the input, the gold version and the proposal."""
     needed_add, needed_del = gold_f - input_f, input_f - gold_f
     made_add, made_del = proposal_f - input_f, input_f - proposal_f
     correct = (made_add & needed_add).total() + (made_del & needed_del).total()

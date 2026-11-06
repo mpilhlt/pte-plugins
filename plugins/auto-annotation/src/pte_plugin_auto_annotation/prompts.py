@@ -28,8 +28,12 @@ _FENCE_RE = re.compile(r"^```[\w-]*\s*$", re.MULTILINE)
 NO_CHANGES = "NO CHANGES"
 
 
-def build_system_prompt(mode: OutputMode) -> str:
-    """Instructions for correcting the annotation of a batch of units."""
+def build_system_prompt(mode: OutputMode, segmenting: bool = False) -> str:
+    """
+    Instructions for correcting the annotation of a batch of units. With segmenting (models that
+    split text into units, such as the reference segmenter), a unit may be split into several
+    elements, and text may move between neighbouring units.
+    """
     if mode == "all":
         answer = (
             "Return every unit you were given, in the same order, each under its own header line "
@@ -40,14 +44,23 @@ def build_system_prompt(mode: OutputMode) -> str:
             "Return only the units you changed, each under its own header line \"### Unit <number>\" followed by "
             f'the corrected XML of the unit. If no unit needs a change, answer with the single line "{NO_CHANGES}".'
         )
+    if segmenting:
+        structure = (
+            "A unit may be wrongly segmented: split it by returning several elements of the same kind one after "
+            "the other under its header, or, if a segment was wrongly split across consecutive units, move the text "
+            "into the neighbouring unit and return the emptied unit as its header line alone. The text of all units "
+            "together must stay exactly the same, in the same order."
+        )
+    else:
+        structure = "Keep the unit's outermost element."
     return (
         "You correct the TEI annotation of a document that was produced by a machine-learning tool. You are given "
         "annotation rules, each labeled with its category, followed by numbered units of the document (one XML "
         "element each).\n\n"
         "For every unit, fix the markup so that it follows the rules: add missing elements and attributes, remove "
         "wrong ones, and move element boundaries where they are wrong.\n\n"
-        "CRITICAL: never change, add, remove or reorder the text itself, only the markup around it. Keep the unit's "
-        "outermost element. Do not add comments or explanations.\n\n"
+        "CRITICAL: never change, add, remove or reorder the text itself, only the markup around it. "
+        f"{structure} Do not add comments or explanations.\n\n"
         f"{answer} Do not wrap the answer in a code fence and write nothing else."
     )
 
