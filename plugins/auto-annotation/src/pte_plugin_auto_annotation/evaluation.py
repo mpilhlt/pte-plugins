@@ -36,8 +36,9 @@ class EvalSource:
     doc_id: str = ""
     # False when the reference is not the document's gold version (probe --reference)
     reference_is_gold: bool = True
-    # How the input was chosen: "given", "lineage" (root of the reference's lineage) or "earliest"
+    # How the input was chosen: "given", "lineage" (the extraction the reference was derived from) or "earliest" (extraction)
     input_choice: str = "given"
+    input_is_extraction: bool = True
 
     @property
     def rules_hash(self) -> str:
@@ -137,6 +138,7 @@ class EvaluationResult:
             "reference_is_gold": self.source.reference_is_gold,
             "input_stable_id": self.source.input_stable_id,
             "input_choice": self.source.input_choice,
+            "input_is_extraction": self.source.input_is_extraction,
             "variant": self.source.variant,
             "unit_path": self.source.unit_path,
             "rules_hash": self.source.rules_hash,

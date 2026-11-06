@@ -18,8 +18,8 @@ from .evaluation import EvaluationResult, Summary, UnitRecord
 
 INPUT_CHOICES = {
     "given": "given",
-    "lineage": "the version the reference was derived from",
-    "earliest": "earliest version; the reference has no recorded lineage",
+    "lineage": "the extraction the reference was derived from",
+    "earliest": "the earliest extraction; none in the reference's lineage",
 }
 
 
@@ -35,7 +35,7 @@ def markdown_report(results: Sequence[EvaluationResult]) -> str:
         lines += [
             f"## {result.model} on {meta['doc_id'] or meta['reference_stable_id']}",
             "",
-            f"Reference version `{meta['reference_stable_id']}` ({'gold' if meta['reference_is_gold'] else 'not the gold version'}), input version `{meta['input_stable_id']}` ({INPUT_CHOICES.get(str(meta['input_choice']), meta['input_choice'])}), variant `{meta['variant']}`, unit path `{meta['unit_path']}`, "
+            f"Reference version `{meta['reference_stable_id']}` ({'gold' if meta['reference_is_gold'] else 'not the gold version'}), input version `{meta['input_stable_id']}` ({INPUT_CHOICES.get(str(meta['input_choice']), meta['input_choice'])}{'' if meta['input_is_extraction'] else '; NOT an extraction'}), variant `{meta['variant']}`, unit path `{meta['unit_path']}`, "
             f"rules `{meta['rules_hash']}` ({', '.join(c for c, _ in result.source.rules)}), prompt v{meta['prompt_version']}. "
             f"{meta['aligned_units']} units aligned, {meta['unmatched_input_units']} input and {meta['unmatched_gold_units']} reference units unmatched.",
             "",

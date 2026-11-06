@@ -15,8 +15,14 @@ HEADER = """<?xml version="1.0" encoding="UTF-8"?>
         </interpretation>
       </editorialDecl>
     </encodingDesc>
+    <revisionDesc>{changes}</revisionDesc>
   </teiHeader>
 """
+
+# Revision histories as the editor records them
+EXTRACTION = '<change when="2026-01-01" status="extraction"><note type="label">Extraction</note><desc>Extraction</desc></change>'
+RENAMED = '<change when="2026-01-02" status="draft" who="#admin"><desc>Renamed to Extraction (checked)</desc></change>'
+CORRECTED = '<change when="2026-01-03" status="draft" who="#annotator"><desc>Corrections</desc></change>'
 
 INPUT_UNITS = [
     "<bibl><author>Smith, J.</author> Contracts, 2001, p. 5.</bibl>",
@@ -33,14 +39,14 @@ GOLD_UNITS = [
 ]
 
 
-def tei(units: list[str], pretty: bool = False) -> str:
+def tei(units: list[str], pretty: bool = False, changes: str = EXTRACTION) -> str:
     sep = "\n        " if pretty else ""
     body = sep.join(units)
-    return f"{HEADER}  <text><back><listBibl>{sep}{body}{sep}</listBibl></back></text>\n</TEI>\n"
+    return f"{HEADER.format(changes=changes)}  <text><back><listBibl>{sep}{body}{sep}</listBibl></back></text>\n</TEI>\n"
 
 
 INPUT_XML = tei(INPUT_UNITS)
-GOLD_XML = tei(GOLD_UNITS, pretty=True)
+GOLD_XML = tei(GOLD_UNITS, pretty=True, changes=EXTRACTION + CORRECTED)
 
 def prompt_units(user_prompt: str) -> dict[int, str]:
     """The units of a user prompt by id."""
