@@ -9,6 +9,7 @@ Plugins for the [PDF-TEI-Editor](https://github.com/mpilhlt/pdf-tei-editor). Eac
 | [annotation-history](plugins/annotation-history) | `pte-plugin-annotation-history` | 1.0.0 | Shows detailed annotation history for PDF documents |
 | [annotation-progress](plugins/annotation-progress) | `pte-plugin-annotation-progress` | 1.0.0 | View annotation progress in the current collection |
 | [annotation-review](plugins/annotation-review) | `pte-plugin-annotation-review` | 1.0.0 | Reviews a document's annotations against its own editorialDecl-linked rules using an LLM |
+| [auto-annotation](plugins/auto-annotation) | `pte-plugin-auto-annotation` | 0.1.0 | Evaluates LLMs at correcting GROBID training annotations against gold versions (model probe) |
 | [anthropic-llm](plugins/anthropic-llm) | `pte-plugin-anthropic-llm` | 1.0.0 | Registers Anthropic's Claude API as an LLM inference provider |
 | [archival-edition](plugins/archival-edition) | `pte-plugin-archival-edition` | 0.1.0 | Extractor for photographed archival documents with a description form, schema and annotation guidelines |
 | [collection-overview](plugins/collection-overview) | `pte-plugin-collection-overview` | 1.0.0 | Overview of gold-standard coverage and annotation progress across all accessible collections |
