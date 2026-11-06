@@ -8,7 +8,9 @@ Pure module.
 from __future__ import annotations
 
 import csv
+import io
 import json
+import os
 from dataclasses import asdict, fields
 from pathlib import Path
 from typing import Sequence
@@ -18,8 +20,8 @@ from .evaluation import EvaluationResult, Summary, UnitRecord
 
 INPUT_CHOICES = {
     "given": "given",
-    "lineage": "the version the reference was derived from",
-    "earliest": "earliest version; the reference has no recorded lineage",
+    "lineage": "the extraction the reference was derived from",
+    "earliest": "the earliest extraction; none in the reference's lineage",
 }
 
 
@@ -35,7 +37,8 @@ def markdown_report(results: Sequence[EvaluationResult]) -> str:
         lines += [
             f"## {result.model} on {meta['doc_id'] or meta['reference_stable_id']}",
             "",
-            f"Reference version `{meta['reference_stable_id']}` ({'gold' if meta['reference_is_gold'] else 'not the gold version'}), input version `{meta['input_stable_id']}` ({INPUT_CHOICES.get(str(meta['input_choice']), meta['input_choice'])}), variant `{meta['variant']}`, unit path `{meta['unit_path']}`, "
+            *([] if result.complete else [f"**Incomplete:** {result.finished_runs} of {result.planned_runs} runs finished.", ""]),
+            f"Reference version `{meta['reference_stable_id']}` ({'gold' if meta['reference_is_gold'] else 'not the gold version'}), input version `{meta['input_stable_id']}` ({INPUT_CHOICES.get(str(meta['input_choice']), meta['input_choice'])}{'' if meta['input_is_extraction'] else '; NOT an extraction'}), variant `{meta['variant']}`, unit path `{meta['unit_path']}`, "
             f"rules `{meta['rules_hash']}` ({', '.join(c for c, _ in result.source.rules)}), prompt v{meta['prompt_version']}. "
             f"{meta['aligned_units']} units aligned, {meta['unmatched_input_units']} input and {meta['unmatched_gold_units']} reference units unmatched.",
             "",
@@ -62,30 +65,41 @@ def markdown_report(results: Sequence[EvaluationResult]) -> str:
     return "\n".join(lines)
 
 
+def _write_atomic(path: Path, text: str) -> None:
+    """Replace path with text without ever leaving a half-written file (results are rewritten while running)."""
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(text, encoding="utf-8")
+    os.replace(tmp, path)
+
+
 def write_results(results: Sequence[EvaluationResult], out_dir: Path) -> list[Path]:
-    """Write all output files into out_dir (created if needed) and return their paths."""
+    """
+    Write all output files into out_dir (created if needed) and return their paths. Each file is
+    replaced atomically, so the function can be called after every run to keep partial results.
+    """
     out_dir.mkdir(parents=True, exist_ok=True)
+    units = io.StringIO(newline="")
+    writer = csv.DictWriter(units, fieldnames=[fld.name for fld in fields(UnitRecord)])
+    writer.writeheader()
+    for result in results:
+        for record in result.units:
+            writer.writerow(asdict(record))
     units_path = out_dir / "units.csv"
-    with units_path.open("w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=[fld.name for fld in fields(UnitRecord)])
-        writer.writeheader()
-        for result in results:
-            for record in result.units:
-                writer.writerow(asdict(record))
+    _write_atomic(units_path, units.getvalue())
     batches_path = out_dir / "batches.jsonl"
-    with batches_path.open("w", encoding="utf-8") as f:
-        for result in results:
-            for batch in result.batches:
-                f.write(json.dumps({"reference_stable_id": result.source.reference_stable_id, **batch}, ensure_ascii=False) + "\n")
+    _write_atomic(batches_path, "".join(
+        json.dumps({"reference_stable_id": result.source.reference_stable_id, **batch}, ensure_ascii=False) + "\n"
+        for result in results for batch in result.batches
+    ))
     summary_path = out_dir / "summary.json"
-    summary_path.write_text(json.dumps([
+    _write_atomic(summary_path, json.dumps([
         {
             "meta": result.meta,
             "baseline": asdict(result.baseline) if result.baseline else None,
             "summaries": [asdict(s) for s in result.summaries],
         }
         for result in results
-    ], indent=2, ensure_ascii=False), encoding="utf-8")
+    ], indent=2, ensure_ascii=False))
     report_path = out_dir / "report.md"
-    report_path.write_text(markdown_report(results), encoding="utf-8")
+    _write_atomic(report_path, markdown_report(results))
     return [units_path, batches_path, summary_path, report_path]

@@ -36,8 +36,9 @@ class EvalSource:
     doc_id: str = ""
     # False when the reference is not the document's gold version (probe --reference)
     reference_is_gold: bool = True
-    # How the input was chosen: "given", "lineage" (root of the reference's lineage) or "earliest"
+    # How the input was chosen: "given", "lineage" (the extraction the reference was derived from) or "earliest" (extraction)
     input_choice: str = "given"
+    input_is_extraction: bool = True
 
     @property
     def rules_hash(self) -> str:
@@ -57,6 +58,9 @@ class RunConfig:
 
 # Called before each run with (number of the run, total runs, its config)
 ProgressCallback = Callable[[int, int, RunConfig], None]
+
+# Called after each run with the result so far (summaries of the finished runs)
+UpdateCallback = Callable[["EvaluationResult"], None]
 
 
 @dataclass
@@ -126,6 +130,13 @@ class EvaluationResult:
     batches: list[dict[str, object]] = field(default_factory=list)
     summaries: list[Summary] = field(default_factory=list)
     baseline: Summary | None = None
+    # Runs (configs) planned and finished; fewer finished than planned while running or after an interruption
+    planned_runs: int = 0
+    finished_runs: int = 0
+
+    @property
+    def complete(self) -> bool:
+        return self.finished_runs >= self.planned_runs
 
     @property
     def meta(self) -> dict[str, object]:
@@ -137,11 +148,14 @@ class EvaluationResult:
             "reference_is_gold": self.source.reference_is_gold,
             "input_stable_id": self.source.input_stable_id,
             "input_choice": self.source.input_choice,
+            "input_is_extraction": self.source.input_is_extraction,
             "variant": self.source.variant,
             "unit_path": self.source.unit_path,
             "rules_hash": self.source.rules_hash,
             "rule_categories": [c for c, _ in self.source.rules],
             "prompt_version": PROMPT_VERSION,
+            "planned_runs": self.planned_runs,
+            "finished_runs": self.finished_runs,
             "aligned_units": len(self.alignment.pairs),
             "unmatched_input_units": self.alignment.unmatched_input,
             "unmatched_gold_units": self.alignment.unmatched_gold,
@@ -218,10 +232,12 @@ async def evaluate(
     progress: ProgressCallback | None = None,
     max_units: int | None = None,
     retry: RetryPolicy | None = None,
+    on_update: UpdateCallback | None = None,
 ) -> EvaluationResult:
     """
     Run every config and score it; with max_units, only the first aligned units are evaluated.
-    Requests failing with a transient error are retried as `retry` allows.
+    Requests failing with a transient error are retried as `retry` allows. After each run,
+    on_update gets the result so far, so that callers can save partial results.
 
     Raises:
         ValueError: a document is not well-formed, the unit path is invalid, or no unit could be aligned.
@@ -232,7 +248,7 @@ async def evaluate(
     if max_units is not None:
         alignment = Alignment(alignment.pairs[:max_units], alignment.unmatched_input, alignment.unmatched_gold)
     units = [pair.input for pair in alignment.pairs]
-    result = EvaluationResult(model=model, source=source, alignment=alignment)
+    result = EvaluationResult(model=model, source=source, alignment=alignment, planned_runs=len(configs))
 
     baseline_records = [
         UnitRecord(
@@ -259,7 +275,11 @@ async def evaluate(
         key = (config.spec.label, config.mode)
         cell_records, cell_batches, cell_repeats = cells.get(key, ([], [], 0))
         cells[key] = (cell_records + records, cell_batches + run.batches, cell_repeats + 1)
-
-    for (batching, mode), (records, batches, repeats) in cells.items():
-        result.summaries.append(summarize(model, source.reference_stable_id, batching, mode, records, batches, repeats))
+        result.finished_runs = number
+        result.summaries = [
+            summarize(model, source.reference_stable_id, batching, mode, cell_records, cell_batches, repeats)
+            for (batching, mode), (cell_records, cell_batches, repeats) in cells.items()
+        ]
+        if on_update:
+            on_update(result)
     return result

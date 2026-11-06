@@ -48,6 +48,7 @@ class EvalSourceResponse(BaseModel):
     reference_is_gold: bool
     input_stable_id: str
     input_choice: str
+    input_is_extraction: bool
     variant: str | None
     unit_path: str | None
     gold_xml: str
@@ -82,7 +83,7 @@ def eval_source(
     doc: str | None = Query(None, description="Document id; its gold version of the variant is the reference"),
     variant: str | None = Query(None, description=f"Variant (default: {DEFAULT_VARIANT}, or the reference's variant)"),
     reference: str | None = Query(None, description="Stable id of the reference version, instead of the document's gold version"),
-    input: str | None = Query(None, description="Stable id of the version to correct; default: the first version the reference was derived from, else the document's earliest version of the variant"),
+    input: str | None = Query(None, description="Stable id of the version to correct; default: the extraction the reference was derived from, else the document's earliest extraction of the variant"),
     rules: bool = Query(True, description="Resolve the rules from the reference version's editorialDecl"),
     current_user: dict = Depends(require_reviewer_or_admin),
     repo: FileRepository = Depends(get_file_repository),
@@ -96,7 +97,7 @@ def eval_source(
         raise HTTPException(status_code=e.status, detail=str(e)) from e
     return EvalSourceResponse(
         doc_id=source.doc_id, reference_stable_id=source.reference_stable_id, reference_is_gold=source.reference_is_gold,
-        input_stable_id=source.input_stable_id, input_choice=source.input_choice, variant=source.variant, unit_path=source.unit_path,
+        input_stable_id=source.input_stable_id, input_choice=source.input_choice, input_is_extraction=source.input_is_extraction, variant=source.variant, unit_path=source.unit_path,
         gold_xml=source.gold_xml, input_xml=source.input_xml,
         rules=[RuleResponse(category=c, text=t, url=u) for c, t, u in source.rules],
     )

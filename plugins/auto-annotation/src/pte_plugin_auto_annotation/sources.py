@@ -3,9 +3,8 @@ Server side: resolving the inputs of an evaluation from the editor's data.
 
 Given a document id and a variant, finds the reference version (the document's gold version of the
 variant, or any version given by its stable id), the version the model corrects (by default the
-first version of the reference's lineage, i.e. the extraction it was derived from, else the
-earliest version of the same document and variant), the
-variant's unit path (from the extractors' `reviewUnits`) and the rules (the machine refs of the
+extraction the reference was derived from, else the earliest extraction of the same document and
+variant; see versions.is_extraction), the variant's unit path (from the extractors' `reviewUnits`) and the rules (the machine refs of the
 reference version's editorialDecl, without user overrides, so that every model sees the same text).
 """
 
@@ -25,6 +24,8 @@ from fastapi_app.lib.permissions.access_control import check_file_access
 from fastapi_app.lib.repository.file_repository import FileRepository
 from fastapi_app.lib.storage.file_storage import FileStorage
 from fastapi_app.lib.utils.annotation_rules_utils import extract_annotation_rule_refs, fetch_rule_excerpt
+
+from .versions import is_extraction
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +49,7 @@ class ResolvedSource:
     reference_is_gold: bool
     input_stable_id: str
     input_choice: str  # how the input was chosen: "given", "lineage" or "earliest"
+    input_is_extraction: bool
     variant: str | None
     unit_path: str | None
     gold_xml: str
@@ -158,12 +160,12 @@ def find_reference(
     return golds[0]
 
 
-def lineage_root(repo: FileRepository, reference: FileMetadata) -> FileMetadata | None:
+def lineage(repo: FileRepository, reference: FileMetadata) -> list[FileMetadata]:
     """
-    The first version the reference was derived from (following parent_stable_id) that has the
-    same document and variant, or None if the reference has no such ancestor.
+    The versions the reference was derived from (following parent_stable_id) with the same
+    document and variant, oldest first.
     """
-    root: FileMetadata | None = None
+    ancestors: list[FileMetadata] = []
     seen = {reference.stable_id}
     parent_id = reference.parent_stable_id
     while parent_id and parent_id not in seen:
@@ -171,9 +173,39 @@ def lineage_root(repo: FileRepository, reference: FileMetadata) -> FileMetadata 
         parent = repo.get_file_by_stable_id(parent_id)
         if parent is None or parent.file_type != "tei" or parent.doc_id != reference.doc_id or parent.variant != reference.variant:
             break
-        root = parent
+        ancestors.append(parent)
         parent_id = parent.parent_stable_id
-    return root
+    return ancestors[::-1]
+
+
+def find_input(repo: FileRepository, storage: FileStorage, reference: FileMetadata) -> tuple[FileMetadata, str, str]:
+    """
+    The extraction the reference was derived from (the oldest extraction in its lineage), else the
+    earliest extraction of the document and variant.
+
+    Returns:
+        (version, how it was chosen: "lineage" or "earliest", its XML)
+
+    Raises:
+        SourceError: the document has no extraction of the variant.
+    """
+    for version in lineage(repo, reference):
+        xml = _read(storage, version)
+        if is_extraction(xml):
+            return version, "lineage", xml
+    # get_all_versions() leaves out gold versions; a non-gold reference is left out here
+    versions = sorted(
+        (v for v in repo.get_all_versions(reference.doc_id, reference.variant) if v.stable_id != reference.stable_id),
+        key=lambda v: (v.version or 0, str(v.created_at)),
+    )
+    for version in versions:
+        xml = _read(storage, version)
+        if is_extraction(xml):
+            return version, "earliest", xml
+    raise SourceError(
+        f"Document {reference.doc_id} has no extraction of variant {reference.variant!r} (a version whose revision history starts with the extraction and has no annotation changes); pass the input version explicitly",
+        404,
+    )
 
 
 def resolve_source(
@@ -189,8 +221,7 @@ def resolve_source(
 ) -> ResolvedSource:
     """
     Resolve the reference version (see find_reference), the input version, the unit path and the rules.
-    The input version is the given one, else the root of the reference's lineage (see lineage_root),
-    else the earliest version of the document and variant.
+    The input version is the given one, else the extraction found by find_input.
 
     Raises:
         SourceError: a file is missing or not readable by the user, or no reference, input version
@@ -204,25 +235,14 @@ def resolve_source(
         source = _tei_file(repo, input_stable_id)
         if source.doc_id != reference.doc_id:
             raise SourceError(f"{input_stable_id} belongs to another document than {reference.stable_id}")
+        if not check_file_access(source, user, "read"):
+            raise SourceError(f"No read access to {source.stable_id}", 403)
+        input_xml = _read(storage, source)
         input_choice = "given"
-    elif (root := lineage_root(repo, reference)) is not None:
-        source = root
-        input_choice = "lineage"
     else:
-        # get_all_versions() leaves out gold versions; a non-gold reference is left out here
-        versions = sorted(
-            (v for v in repo.get_all_versions(reference.doc_id, reference.variant) if v.stable_id != reference.stable_id),
-            key=lambda v: (v.version or 0, str(v.created_at)),
-        )
-        if not versions:
-            raise SourceError(
-                f"Document {reference.doc_id} has no version of variant {reference.variant!r} besides the reference; pass the input version explicitly",
-                404,
-            )
-        source = versions[0]
-        input_choice = "earliest"
-    if not check_file_access(source, user, "read"):
-        raise SourceError(f"No read access to {source.stable_id}", 403)
+        source, input_choice, input_xml = find_input(repo, storage, reference)
+        if not check_file_access(source, user, "read"):
+            raise SourceError(f"No read access to {source.stable_id}", 403)
 
     gold_xml = _read(storage, reference)
     return ResolvedSource(
@@ -231,9 +251,10 @@ def resolve_source(
         reference_is_gold=bool(reference.is_gold_standard),
         input_stable_id=source.stable_id,
         input_choice=input_choice,
+        input_is_extraction=is_extraction(input_xml),
         variant=reference.variant,
         unit_path=review_unit_path(reference.variant),
         gold_xml=gold_xml,
-        input_xml=_read(storage, source),
+        input_xml=input_xml,
         rules=gather_rules(gold_xml, cache) if with_rules else [],
     )

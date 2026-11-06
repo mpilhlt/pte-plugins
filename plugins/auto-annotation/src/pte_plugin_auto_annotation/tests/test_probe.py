@@ -78,6 +78,31 @@ class TestProbeCli(unittest.TestCase):
         self.assertEqual(session.sources, [(None, "x", "v7", "v1", True)])
         self.assertIn("Reference version `v7` (not the gold version)", out)
 
+    def test_results_are_written_after_every_run_and_kept_on_interruption(self):
+        session = FakeSession()
+        calls = {"n": 0}
+        complete = session.complete
+
+        def interrupting(*args):
+            calls["n"] += 1
+            if calls["n"] > 3:  # doc1: 1 call per run (units:4) x 2 runs; doc2 is interrupted in its second run
+                raise KeyboardInterrupt
+            return complete(*args)
+
+        session.complete = interrupting  # type: ignore[method-assign]
+        out, err = io.StringIO(), io.StringIO()
+        with tempfile.TemporaryDirectory() as tmp, \
+                mock.patch.object(probe.ApiSession, "login", return_value=session), redirect_stdout(out), redirect_stderr(err):
+            code = probe.main(["--user", "u", "--password", "p", "--env", "/nonexistent", "--model", "m", "--doc", "doc1", "--doc", "doc2",
+                               "--batches", "units:4", "--repeats", "2", "--out", tmp])
+            report = (Path(tmp) / "report.md").read_text()
+            self.assertFalse(any(p.name.endswith(".tmp") for p in Path(tmp).iterdir()))
+        self.assertEqual(code, 130)
+        self.assertIn("Interrupted", err.getvalue())
+        self.assertIn("## endpoint-local/m on doc1", report)
+        self.assertIn("## endpoint-local/m on doc2\n\n**Incomplete:** 1 of 2 runs finished.", report)
+        self.assertEqual(report.count("**Incomplete:**"), 1)  # doc1 is complete
+
     def test_argument_errors(self):
         for args in (["--model", "m"], ["--model", "m", "--doc", "a", "--doc", "b", "--input", "x"],
                      ["--model", "m", "--doc", "a", "--doc", "b", "--reference", "x"],
