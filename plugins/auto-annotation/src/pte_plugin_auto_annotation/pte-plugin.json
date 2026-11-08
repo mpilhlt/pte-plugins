@@ -1,5 +1,5 @@
 {
-  "version": "1.2.0",
+  "version": "1.2.1",
   "readme": "https://github.com/mpilhlt/pte-plugins/tree/main/plugins/auto-annotation#readme",
   "engines": {
     "pte": ">=0.81.0",
