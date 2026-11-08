@@ -147,8 +147,9 @@ class EditHistoryPlugin(Plugin):
 
             # Get description from text content or desc subelement
             desc_elem = last_change.find("tei:desc", ns)
-            if desc_elem is not None and desc_elem.text:
-                description = desc_elem.text.strip()
+            desc_text = " ".join("".join(desc_elem.itertext()).split()) if desc_elem is not None else ""
+            if desc_text:
+                description = desc_text
             elif last_change.text:
                 description = last_change.text.strip()
             else:
