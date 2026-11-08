@@ -53,10 +53,19 @@ class ApiSession:
 
     @classmethod
     def login(cls, base_url: str, username: str, password: str, timeout: float = DEFAULT_TIMEOUT) -> "ApiSession":
-        """Log in with the SHA-256 password hash, as the web client does."""
+        """
+        Log in with the plain text password, as the web client does; use HTTPS for remote servers.
+
+        Servers from before mpilhlt/pdf-tei-editor#246 only accept the password's SHA-256 hash and reject the
+        plain text password with 422, so retry with the hash then.
+        """
         base = base_url.rstrip("/")
-        passwd_hash = hashlib.sha256(password.encode("utf-8")).hexdigest()
-        data = _check(requests.post(f"{base}/api/v1/auth/login", json={"username": username, "passwd_hash": passwd_hash}, timeout=60))
+        url = f"{base}/api/v1/auth/login"
+        response = requests.post(url, json={"username": username, "password": password}, timeout=60)
+        if response.status_code == 422:
+            passwd_hash = hashlib.sha256(password.encode("utf-8")).hexdigest()
+            response = requests.post(url, json={"username": username, "passwd_hash": passwd_hash}, timeout=60)
+        data = _check(response)
         return cls(base, str(data["sessionId"]), timeout)
 
     @property
