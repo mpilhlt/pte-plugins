@@ -31,6 +31,9 @@ from .batching import BatchSpec
 from .cli_common import add_connection_args, connection_from_args
 from .prompts import OUTPUT_MODES
 
+# One request annotates a whole document, on slow models that takes much longer than one completion
+DEFAULT_ANNOTATE_TIMEOUT = 3600.0
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python -m pte_plugin_auto_annotation.annotate",
@@ -52,6 +55,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--split-on-failure", type=float, default=0.25, help="Share of failed units above which a batch is split and retried; negative: never (default: 0.25)")
     parser.add_argument("--concurrency", type=int, default=1, help="Requests in flight per model (default: 1)")
     parser.add_argument("--retries", type=int, default=4, help="Retries of a request after a provider overload or rate limit (default: 4)")
+    parser.add_argument("--timeout", type=float, default=DEFAULT_ANNOTATE_TIMEOUT, help=f"Seconds to wait for the server to annotate one document (default: {DEFAULT_ANNOTATE_TIMEOUT:.0f})")
     parser.add_argument("--no-marks", action="store_true", help="Do not write unit review marks")
     parser.add_argument("--status", default="extraction", help="Status of the revision change (default: extraction)")
     parser.add_argument("--label", default="Auto-annotation", help="Label of the revision change (default: Auto-annotation)")
@@ -146,7 +150,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     connection = connection_from_args(args, parser)
     out = args.out or Path("auto-annotation-runs") / datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     try:
-        session = ApiSession.login(connection.base_url, connection.user, connection.password)
+        session = ApiSession.connect(connection, timeout=args.timeout)
         failures = run(session, args, out)
     except (ApiError, requests.RequestException) as e:
         print(f"Error: {e}", file=sys.stderr)

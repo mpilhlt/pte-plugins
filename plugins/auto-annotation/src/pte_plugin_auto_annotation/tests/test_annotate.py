@@ -55,9 +55,15 @@ class TestAnnotateCli(unittest.TestCase):
     def run_main(self, *args: str, session: FakeSession | None = None) -> tuple[int, str, FakeSession]:
         session = session or FakeSession()
         err = io.StringIO()
-        with mock.patch.object(annotate.ApiSession, "login", return_value=session), redirect_stderr(err):
+        with mock.patch.object(annotate.ApiSession, "connect", return_value=session), redirect_stderr(err):
             code = annotate.main(["--user", "u", "--password", "p", "--env", "/nonexistent", "--model-a", "a", "--model-b", "b", "--arbiter", "c", *args])
         return code, err.getvalue(), session
+
+    def test_timeout_reaches_the_session(self):
+        for args, expected in (([], annotate.DEFAULT_ANNOTATE_TIMEOUT), (["--timeout", "123"], 123.0)):
+            with tempfile.TemporaryDirectory() as tmp, mock.patch.object(annotate.ApiSession, "connect", return_value=FakeSession()) as connect, redirect_stderr(io.StringIO()):
+                annotate.main(["--user", "u", "--password", "p", "--env", "/nonexistent", "--model-a", "a", "--model-b", "b", "--version", "s1", "--dry-run", "--out", tmp, *args])
+            self.assertEqual(connect.call_args.kwargs["timeout"], expected)
 
     def test_collection_saves_ready_documents_and_skips_others(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -14,6 +14,7 @@ from dataclasses import dataclass
 
 import requests
 
+from .cli_common import Connection
 from .correction import TransientError
 
 # Values of a flat JSON request body
@@ -77,6 +78,22 @@ class ApiSession:
             response = requests.post(url, json={"username": username, "passwd_hash": passwd_hash}, timeout=60)
         data = _check(response)
         return cls(base, str(data["sessionId"]), timeout)
+
+    @classmethod
+    def login_with_token(cls, base_url: str, token: str, timeout: float = DEFAULT_TIMEOUT) -> "ApiSession":
+        """Exchange a personal access token for a session."""
+        base = base_url.rstrip("/")
+        data = _check(requests.post(f"{base}/api/v1/auth/token-login", headers={"Authorization": f"Bearer {token}"}, timeout=60))
+        return cls(base, str(data["sessionId"]), timeout)
+
+    @classmethod
+    def connect(cls, connection: Connection, timeout: float = DEFAULT_TIMEOUT) -> "ApiSession":
+        """Log in with the connection's token if it has one, otherwise with its username and password."""
+        if connection.token:
+            return cls.login_with_token(connection.base_url, connection.token, timeout)
+        if not connection.user or not connection.password:
+            raise ApiError("No credentials: a token, or a username and password, are needed")
+        return cls.login(connection.base_url, connection.user, connection.password, timeout)
 
     @property
     def headers(self) -> dict[str, str]:

@@ -26,7 +26,7 @@ The installed package also provides the command `pte-model-probe` with the same 
 - `--retries`: how often a request is repeated after a provider overload or rate limit (HTTP 429/503), with exponential backoff from 2 s (default 4). Requests that still fail are reported as errors and left out of the scores, since they say nothing about the model.
 - `--rules-file`: pin the rules to a local file instead of the reference version's rule refs.
 
-It runs against a running editor and logs in like `bin/batch-extract.js`: `--base-url`, `--user`, `--password`, or `API_BASE_URL`, `API_USER`, `API_PASSWORD` from the environment or `--env` (default `./.env`). The user needs the reviewer or admin role and access to the models.
+It runs against a running editor and logs in like `bin/batch-extract.js`: `--base-url`, `--token` (a personal access token, preferred) or `--user` and `--password`, or `API_BASE_URL`, `API_TOKEN`, `API_USER`, `API_PASSWORD` from the environment or `--env` (default `./.env`). The user needs the reviewer or admin role and access to the models.
 
 ### What it measures
 
@@ -81,6 +81,8 @@ The result is saved by the client as a new version of the input (through the edi
 - the changed units replaced; the rest of the document keeps its formatting;
 - a `revisionDesc/change` by `#auto-annotation` (status `--status`, default `extraction`; label `--label`, default `Auto-annotation`) naming the models and the counts, and a `respStmt` for `#auto-annotation`;
 - unless `--no-marks`: unit review marks of the reviewer `llm-auto-annotation` in `standOff/listAnnotation[@type="unit-review"]`, as written by the editor's unit review mode: agreed units are OK, arbitrated and unresolved units are not OK, with a comment saying why. A reviewer can thus start with the not-OK units.
+
+The server annotates a whole document in one request; `--timeout` (default 3600 s) is how long the client waits for it.
 
 `--dry-run` saves nothing and writes the annotated XML to `--out`. A JSON run log per document (decisions per unit, which candidate the arbiter chose, requests, retries, timings, rules; with `--raw` the raw answers) is always written to `--out` (default `auto-annotation-runs/<timestamp>/`).
 

@@ -5,7 +5,7 @@ gold version, and how does that change with the number of units sent per request
     uv run python -m pte_plugin_auto_annotation.probe --model kisski/llama-3.3-70b-instruct --doc 10.1234__abc
 
 Runs against a running editor (credentials as for bin/batch-extract.js: --user/--password or
-API_USER/API_PASSWORD/API_BASE_URL from .env). Each --model is evaluated on its own, on each
+API_TOKEN or API_USER/API_PASSWORD, and API_BASE_URL, from .env). Each --model is evaluated on its own, on each
 --doc, for every batch spec and output mode. Writes units.csv, batches.jsonl, summary.json and
 report.md into --out, after every run, so that an interrupted probe keeps what it finished.
 
@@ -130,7 +130,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         written = True
 
     try:
-        session = ApiSession.login(connection.base_url, connection.user, connection.password)
+        session = ApiSession.connect(connection)
         results = asyncio.run(run_probe(
             session, args.model, args.doc or [None], args.variant, args.reference, args.input, sweep(specs, modes, args.repeats),
             args.concurrency, args.temperature, rules_text, args.max_units, RetryPolicy(retries=max(0, args.retries)), on_update=save,

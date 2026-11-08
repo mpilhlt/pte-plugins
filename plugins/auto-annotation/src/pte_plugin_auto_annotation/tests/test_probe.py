@@ -44,7 +44,7 @@ class TestProbeCli(unittest.TestCase):
     def run_main(self, *args: str) -> tuple[int, str, FakeSession]:
         session = FakeSession()
         out, err = io.StringIO(), io.StringIO()
-        with mock.patch.object(probe.ApiSession, "login", return_value=session), redirect_stdout(out), redirect_stderr(err):
+        with mock.patch.object(probe.ApiSession, "connect", return_value=session), redirect_stdout(out), redirect_stderr(err):
             code = probe.main(["--user", "u", "--password", "p", "--env", "/nonexistent", *args])
         return code, out.getvalue(), session
 
@@ -93,7 +93,7 @@ class TestProbeCli(unittest.TestCase):
         session.complete = interrupting  # type: ignore[method-assign]
         out, err = io.StringIO(), io.StringIO()
         with tempfile.TemporaryDirectory() as tmp, \
-                mock.patch.object(probe.ApiSession, "login", return_value=session), redirect_stdout(out), redirect_stderr(err):
+                mock.patch.object(probe.ApiSession, "connect", return_value=session), redirect_stdout(out), redirect_stderr(err):
             code = probe.main(["--user", "u", "--password", "p", "--env", "/nonexistent", "--model", "m", "--doc", "doc1", "--doc", "doc2", "--variant", "grobid.training.references",
                                "--batches", "units:4", "--repeats", "2", "--out", tmp])
             report = (Path(tmp) / "report.md").read_text()
