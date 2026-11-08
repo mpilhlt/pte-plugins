@@ -162,7 +162,6 @@ class AnnotateRequest(BaseModel):
     split_on_failure: float | None = Field(default=0.25, ge=0.0, le=1.0)
     concurrency: int = Field(default=1, ge=1, le=16)
     retries: int = Field(default=4, ge=0, le=10)
-    marks: bool = True
     status: str = "extraction"
     label: str | None = "Auto-annotation"
     include_raw: bool = False
@@ -200,7 +199,7 @@ async def annotate(
     try:
         outcome = await annotate_file(
             body.stable_id, current_user, repo, storage, cache, body.model_a, body.model_b, body.arbiter, config,
-            marks=body.marks, status=body.status, label=body.label,
+            status=body.status, label=body.label,
         )
     except SourceError as e:
         raise HTTPException(status_code=e.status, detail=str(e)) from e

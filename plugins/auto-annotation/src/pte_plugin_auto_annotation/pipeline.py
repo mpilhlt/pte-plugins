@@ -90,7 +90,7 @@ class UnitDecision:
 
     @property
     def comment(self) -> str:
-        """A short explanation for the unit review mark."""
+        """A short explanation of the decision, for the run log."""
         if self.decision == Decision.AGREED:
             return ""
         failed = ", ".join(f"{label}: {status.value}" for label, status in self.statuses.items() if status.is_failure or status == ProposalStatus.ERROR)

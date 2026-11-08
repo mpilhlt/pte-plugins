@@ -80,7 +80,7 @@ The result is saved by the client as a new version of the input (through the edi
 
 - the changed units replaced; the rest of the document keeps its formatting;
 - a `revisionDesc/change` by `#auto-annotation` (status `--status`, default `extraction`; label `--label`, default `Auto-annotation`) naming the models and the counts, and a `respStmt` for `#auto-annotation`;
-- unless `--no-marks`: unit review marks of the reviewer `llm-auto-annotation` in `standOff/listAnnotation[@type="unit-review"]`, as written by the editor's unit review mode: agreed units are OK, arbitrated and unresolved units are not OK, with a comment saying why. A reviewer can thus start with the not-OK units.
+- in the change's `desc`, in addition to the readable text, machine-readable values for later analysis: how often the arbiter chose each version (`<measure type="arbiter-choice" subtype="A|B|own|original" commodity="<model>" quantity="<n>">`, without `commodity` for the original), the same for the units where both models gave a valid proposal (`type="arbiter-choice-both-valid"`, the fair comparison of A and B), how many proposals of each model failed the checks (`type="invalid-proposal"`, `subtype="A|B"`), and the duration (`<time dur="PT4M12S">4 min 12 s</time>`). In `arbiter-choice`, a count for a model includes units where the other model's proposal was invalid. These elements need a schema that allows them in `desc`.
 
 The server annotates a whole document in one request; `--timeout` (default 3600 s) is how long the client waits for it.
 
@@ -106,7 +106,7 @@ The modules `plugin.py`, `routes.py`, `sources.py`, `models.py`, `annotation.py`
 | `pipeline.py` | The pipeline: `annotate_units()` runs A and B, then the arbiter; a decision per unit |
 | `model_spec.py` | Resolving model names |
 | `models.py` | Resolving a model for a user, with key and access checks (server) |
-| `document.py` | Writing a pipeline result into the TEI document: units, revision change, review marks (server) |
+| `document.py` | Writing a pipeline result into the TEI document: units, revision change (server) |
 | `annotation.py` | Annotating a stored version, finding the versions of a collection to annotate (server) |
 | `cli_common.py` | Connection options of the CLIs |
 | `api_client.py` | HTTP client and `ServerChatClient` for the CLI |
@@ -121,7 +121,7 @@ All for reviewers and admins:
 - `POST /api/plugins/auto-annotation/resolve-model` `{"model": "<name>"}`: provider and model id, after checking model access.
 - `POST /api/plugins/auto-annotation/complete` `{"provider_id", "model_id", "system_prompt", "user_prompt", "temperature"}`: one completion with the same model access rules as the LLM Reviewer.
 - `GET /api/plugins/auto-annotation/targets?variant=<variant>&collection=<id>` or `&doc=<id>` (repeatable): per document, the version the pipeline would annotate and its state (`ready`, `annotated`, `gold`, `no-version`).
-- `POST /api/plugins/auto-annotation/annotate` `{"stable_id", "model_a", "model_b", "arbiter", "batch", "arbiter_batch", "mode", "split_on_failure", "concurrency", "retries", "marks", "status", "label", "include_raw"}`: annotates a version and returns the new XML, the counts and the run log; it does not save.
+- `POST /api/plugins/auto-annotation/annotate` `{"stable_id", "model_a", "model_b", "arbiter", "batch", "arbiter_batch", "mode", "split_on_failure", "concurrency", "retries", "status", "label", "include_raw"}`: annotates a version and returns the new XML, the counts and the run log; it does not save.
 
 ## Tests
 

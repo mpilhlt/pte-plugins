@@ -8,6 +8,7 @@ editor's save API, which takes care of version numbers, collections, locks and e
 from __future__ import annotations
 
 import logging
+import time
 from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timezone
 
@@ -151,7 +152,6 @@ async def annotate_file(
     model_b: str,
     arbiter: str | None,
     config: PipelineConfig,
-    marks: bool = True,
     status: str = "extraction",
     label: str | None = "Auto-annotation",
 ) -> AnnotationOutcome:
@@ -164,6 +164,7 @@ async def annotate_file(
         SourceError: see load_input() and gather_rules(), or the version has no review units.
         ModelResolutionError: a model cannot be used.
     """
+    started = time.monotonic()
     file, xml = load_input(repo, storage, stable_id, user)
     unit_path = review_unit_path(file.variant)
     try:
@@ -187,7 +188,7 @@ async def annotate_file(
         units, [(c, t) for c, t, _ in rules], clients["A"], clients["B"], clients.get("arbiter"), config
     )
     when = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    new_xml = write_result(xml, unit_path, result, models, when, status=status, label=label, with_marks=marks)
+    new_xml = write_result(xml, unit_path, result, models, when, time.monotonic() - started, status=status, label=label)
     logger.info(f"auto-annotation: {stable_id} annotated ({result.counts()})")
     return AnnotationOutcome(
         input_stable_id=file.stable_id, doc_id=file.doc_id, variant=file.variant, unit_path=unit_path,

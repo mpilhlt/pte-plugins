@@ -52,7 +52,7 @@ def _run(a, b, arbiter) -> PipelineResult:
 
 
 def _output_units(result: PipelineResult) -> tuple[list[str], str]:
-    out = write_result(INPUT_XML, PATH, result, MODELS, WHEN)
+    out = write_result(INPUT_XML, PATH, result, MODELS, WHEN, 1)
     return [u.xml for u in document_units(out, PATH)], out
 
 
@@ -62,10 +62,7 @@ class TestSegmentingPipeline(unittest.TestCase):
         self.assertEqual([d.decision for d in result.decisions], [Decision.AGREED, Decision.AGREED])
         units, out = _output_units(result)
         self.assertEqual([segments_key(u) for u in units], [segments_key(g) for g in GOLD_UNITS])
-        self.assertEqual(out.count("<note type=\"ok\">"), 1)
-        ok = re.search(r'<note type="ok">([^<]*)</note>', out)
-        assert ok is not None
-        self.assertEqual(len(ok.group(1).split()), 3)
+        self.assertNotIn("unit-review", out)
 
     def test_moved_text_and_split_agree_as_a_group(self):
         result = _run(OracleClient(MOVED), OracleClient(ANSWERS), None)
@@ -80,9 +77,8 @@ class TestSegmentingPipeline(unittest.TestCase):
         result = _run(OracleClient(ANSWERS), EchoClient(), arbiter)
         self.assertEqual([(d.decision, d.chosen) for d in result.decisions], [(Decision.ARBITRATED, "A"), (Decision.ARBITRATED, "A")])
         self.assertIn("split into several elements or merged", arbiter.calls[0][0])
-        units, out = _output_units(result)
+        units, _ = _output_units(result)
         self.assertEqual(len(units), 3)
-        self.assertEqual(len(re.findall(r'<note type="not-ok"', out)), 3)
 
     def test_arbiter_decides_a_group_and_the_result_replaces_its_units(self):
         group = "\n".join(INPUT_UNITS)
@@ -91,10 +87,9 @@ class TestSegmentingPipeline(unittest.TestCase):
         [decision] = result.decisions
         self.assertEqual((decision.decision, decision.covered, decision.chosen), (Decision.ARBITRATED, (0, 1), "A"))
         self.assertIn(f"Original:\n{group}\nCandidate A:", arbiter.calls[0][1])
-        units, out = _output_units(result)
+        units, _ = _output_units(result)
         self.assertEqual([segments_key(u) for u in units], [segments_key(g) for g in GOLD_UNITS])
         self.assertEqual(unit_text("".join(units)), unit_text("".join(INPUT_UNITS)))
-        self.assertEqual(len(re.findall(r'<note type="not-ok"', out)), 3)
 
     def test_arbiter_answer_with_other_text_leaves_the_group_unresolved(self):
         group = "\n".join(INPUT_UNITS)

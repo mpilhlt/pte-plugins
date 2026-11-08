@@ -79,7 +79,7 @@ class TestAnnotateCli(unittest.TestCase):
         self.assertIn("skip doc3: has a gold version", err)
         self.assertIn("skip doc4: no version of", err)
         payload = session.payloads[0]
-        self.assertEqual((payload["model_a"], payload["model_b"], payload["arbiter"], payload["marks"]), ("a", "b", "c", True))
+        self.assertEqual((payload["model_a"], payload["model_b"], payload["arbiter"]), ("a", "b", "c"))
 
     def test_force_and_include_gold(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -89,13 +89,12 @@ class TestAnnotateCli(unittest.TestCase):
 
     def test_dry_run_writes_xml_and_does_not_save(self):
         with tempfile.TemporaryDirectory() as tmp:
-            code, _, session = self.run_main("--version", "s9", "--dry-run", "--no-marks", "--out", tmp)
+            code, _, session = self.run_main("--version", "s9", "--dry-run", "--out", tmp)
             self.assertEqual(code, 0)
             self.assertEqual((Path(tmp) / "docX.xml").read_text(encoding="utf-8"), "<TEI>s9</TEI>")
             self.assertIsNone(json.loads((Path(tmp) / "docX.json").read_text(encoding="utf-8"))["saved_stable_id"])
         self.assertEqual(session.target_calls, [])
         self.assertEqual(session.saved, [])
-        self.assertFalse(session.payloads[0]["marks"])
 
     def test_failure_is_counted_and_run_continues(self):
         with tempfile.TemporaryDirectory() as tmp:

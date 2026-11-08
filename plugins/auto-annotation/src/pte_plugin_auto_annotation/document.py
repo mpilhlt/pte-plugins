@@ -4,29 +4,28 @@ Writing a pipeline result into the TEI document (server side, uses the editor's 
 - the units are replaced by their results; the rest of the document keeps its formatting. For a
   segmenting variant a result may consist of several elements or none (a group's result replaces
   its first unit, the group's other units are removed)
-- a `revisionDesc/change` by `#auto-annotation` records the models and the counts
-- the decisions become unit review marks of the reviewer `llm-auto-annotation`, in
-  `standOff/listAnnotation[@type="unit-review"]` as the editor's unit review mode writes them:
-  agreed units are OK, arbitrated and unresolved units are not OK, with a comment
+- a `revisionDesc/change` by `#auto-annotation` records the models, the counts and the duration.
+  In its `desc`, how often the arbiter chose each version (overall, and where both models gave a
+  valid proposal) and how many proposals of each model failed the checks are `measure` elements (`@type`, `@subtype`, `@quantity`, and the model in
+  `@commodity`), and the duration is a `time` element with `@dur`, for later analysis
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections import Counter
+from collections.abc import Mapping
 
 from lxml import etree
 
 from fastapi_app.lib.utils.tei_utils import add_revision_change, serialize_tei_like_source
 
-from .arbitration import segments_key
+from .checks import ProposalStatus
 from .pipeline import Decision, PipelineResult, UnitDecision
-from .units import TEI_NS, document_units, find_unit_elements, parse_document, parse_unit
+from .units import TEI_NS, find_unit_elements, parse_document, parse_unit
 
-REVIEWER_ID = "llm-auto-annotation"
+VALID_STATUSES = (ProposalStatus.OK, ProposalStatus.UNCHANGED)
 CHANGE_WHO = "auto-annotation"
 CHANGE_NAME = "Auto-annotation"
-LIST_TYPE = "unit-review"
-FP_ALGORITHM = "fp-sha256-8-v1"
 XML_NS = "http://www.w3.org/XML/1998/namespace"
 
 
@@ -89,80 +88,6 @@ def replace_units(root: etree._Element, unit_path: str | None, replacements: Map
     etree.cleanup_namespaces(root)
 
 
-def _annotation_xml(marks: Sequence[tuple[str, UnitDecision]], software_name: str, when: str, indent: str, unit: str) -> str:
-    i1 = indent + unit
-    ok = [fp for fp, d in marks if d.decision == Decision.AGREED]
-    lines = [
-        f'{indent}<annotation xml:id="ur-{REVIEWER_ID}" motivation="assessing" target="#xpath(//text)">',
-        f'{i1}<respStmt><resp>LLM Reviewer</resp><name type="software">{_escape(software_name)}</name></respStmt>',
-        f'{i1}<revisionDesc><change when="{_escape(when)}"/></revisionDesc>',
-    ]
-    if ok:
-        lines.append(f'{i1}<note type="ok">{" ".join(ok)}</note>')
-    for fp, decision in marks:
-        if decision.decision != Decision.AGREED:
-            lines.append(f'{i1}<note type="not-ok" n="{_escape(fp)}">{_escape(decision.comment)}</note>')
-    lines.append(f"{indent}</annotation>")
-    return "\n".join(lines)
-
-
-def add_review_marks(
-    root: etree._Element, unit_path: str | None, marks: Sequence[tuple[str, UnitDecision]], software_name: str, when: str
-) -> None:
-    """
-    Add (or replace) the pipeline's annotation in the unit review list, creating `standOff` after the
-    `teiHeader` and the list if needed. The list's summary note is written only for a new list (the
-    editor recomputes it whenever it saves the marks).
-    """
-    standoff = next((c for c in root if c.tag == _tei("standOff")), None)
-    review_list = None
-    if standoff is not None:
-        review_list = next((c for c in standoff if c.tag == _tei("listAnnotation") and c.get("type") == LIST_TYPE), None)
-
-    if review_list is None:
-        ok = sum(d.decision == Decision.AGREED for _, d in marks)
-        summary = f"units={len(marks)} ok={ok} not-ok={len(marks) - ok} disputed=0 open=0"
-        path_note = f'\n      <note type="unit-xpath">{_escape(unit_path)}</note>' if unit_path else ""
-        list_xml = (
-            f'<listAnnotation xmlns="{TEI_NS}" type="{LIST_TYPE}" subtype="{FP_ALGORITHM}">{path_note}\n'
-            f'      <note type="summary">{summary}</note>\n'
-            f"{_annotation_xml(marks, software_name, when, '      ', '  ')}\n    </listAnnotation>"
-        )
-        review_list = etree.fromstring(list_xml)
-        if standoff is None:
-            standoff = etree.Element(_tei("standOff"))
-            header = next((c for c in root if c.tag == _tei("teiHeader")), None)
-            position = list(root).index(header) + 1 if header is not None else 0
-            sibling_tail = header.tail if header is not None and header.tail else "\n  "
-            standoff.text = "\n    "
-            standoff.tail = sibling_tail
-            if header is not None:
-                header.tail = sibling_tail
-            root.insert(position, standoff)
-            review_list.tail = "\n  "
-            standoff.append(review_list)
-        else:
-            last = standoff[-1] if len(standoff) else None
-            review_list.tail = last.tail if last is not None else "\n  "
-            if last is not None:
-                last.tail = "\n    "
-            else:
-                standoff.text = "\n    "
-            standoff.append(review_list)
-    else:
-        for old in [c for c in review_list if c.tag == _tei("annotation") and c.get(f"{{{XML_NS}}}id") == f"ur-{REVIEWER_ID}"]:
-            review_list.remove(old)
-        annotation = etree.fromstring(
-            _annotation_xml(marks, software_name, when, "", "  ").replace("<annotation ", f'<annotation xmlns="{TEI_NS}" ', 1)
-        )
-        last = review_list[-1] if len(review_list) else None
-        annotation.tail = last.tail if last is not None else "\n    "
-        if last is not None:
-            last.tail = "\n      "
-        review_list.append(annotation)
-    etree.cleanup_namespaces(root)
-
-
 def _indent_appended(element: etree._Element, unit: str = "  ") -> None:
     """Indent an element that was appended as last child without whitespace, as pretty-printing would."""
     parent = element.getparent()
@@ -183,19 +108,59 @@ def models_description(models: Mapping[str, str]) -> str:
     return ", ".join(f"{label}: {model}" for label, model in models.items())
 
 
+def iso_duration(seconds: float) -> tuple[str, str]:
+    """The duration to the second, as xsd:duration and as text: (`PT4M12S`, `4 min 12 s`)."""
+    hours, rest = divmod(round(seconds), 3600)
+    minutes, secs = divmod(rest, 60)
+    parts = [p for p in ((hours, "H", "h"), (minutes, "M", "min"), (secs, "S", "s")) if p[0]] or [(0, "S", "s")]
+    return "PT" + "".join(f"{value}{designator}" for value, designator, _ in parts), " ".join(f"{value} {unit}" for value, _, unit in parts)
+
+
+def _measure(type_: str, subtype: str, quantity: int, commodity: str | None = None) -> str:
+    model = f' commodity="{_escape(commodity)}"' if commodity else ""
+    return f'<measure type="{type_}" subtype="{subtype}"{model} quantity="{quantity}">{subtype} {quantity}</measure>'
+
+
+def description_xml(result: PipelineResult, models: Mapping[str, str], seconds: float) -> str:
+    """The content of the change's `desc`: readable text with the machine-readable values as elements."""
+    counts = result.counts()
+    parts = [_escape(
+        f"Automated first annotation ({models_description(models)}): {len(result.decisions)} units, "
+        f"{counts['agreed']} agreed, {counts['arbitrated']} arbitrated, {counts['unresolved']} unresolved, {counts['changed']} changed."
+    )]
+    if "arbiter" in models:
+        arbitrated = [d for d in result.decisions if d.decision == Decision.ARBITRATED]
+        both_valid = [d for d in arbitrated if all(d.statuses.get(label) in VALID_STATUSES for label in ("A", "B"))]
+        choices = [("A", models.get("A")), ("B", models.get("B")), ("own", models["arbiter"]), ("original", None)]
+
+        def tally(type_: str, decisions: list[UnitDecision]) -> str:
+            chosen = Counter(d.chosen for d in decisions)
+            return ", ".join(_measure(type_, label, chosen[label], model) for label, model in choices)
+
+        parts.append(f"Arbiter chose {tally('arbiter-choice', arbitrated)}; with valid proposals from both models: {tally('arbiter-choice-both-valid', both_valid)}.")
+    invalid = ", ".join(
+        _measure("invalid-proposal", label, sum(d.statuses[label].is_failure for d in result.decisions if label in d.statuses), models.get(label))
+        for label in ("A", "B")
+    )
+    parts.append(f"Invalid proposals: {invalid}.")
+    iso, text = iso_duration(seconds)
+    parts.append(f'Completed in <time dur="{iso}">{text}</time>.')
+    return " ".join(parts)
+
+
 def write_result(
     xml: str,
     unit_path: str | None,
     result: PipelineResult,
     models: Mapping[str, str],
     when: str,
+    seconds: float,
     status: str = "extraction",
     label: str | None = "Auto-annotation",
-    with_marks: bool = True,
 ) -> str:
     """
-    The document with the results of all changed units, a revision change and (optionally) the
-    unit review marks.
+    The document with the results of all changed units and a revision change. `seconds` is how
+    long the annotation took.
 
     Raises:
         ValueError: the document is not well-formed, or a result cannot be inserted.
@@ -208,33 +173,24 @@ def write_result(
             replacements[first] = d.result_xml
             replacements.update({i: "" for i in rest})
     replace_units(root, unit_path, replacements, segmenting=result.segmenting)
-    counts = result.counts()
-    desc = (
-        f"Automated first annotation ({models_description(models)}): {len(result.decisions)} units, "
-        f"{counts['agreed']} agreed, {counts['arbitrated']} arbitrated, {counts['unresolved']} unresolved, {counts['changed']} changed"
-    )
     has_title_stmt_parent = root.find(f"{_tei('teiHeader')}/{_tei('fileDesc')}") is not None
     # the respStmt that names the pipeline needs a fileDesc; without one the change is still recorded
     revision_desc_path = f"{_tei('teiHeader')}/{_tei('revisionDesc')}"
     had_revision_desc = root.find(revision_desc_path) is not None
     had_resp_stmt = root.find(f".//{_tei('persName')}[@{{{XML_NS}}}id='{CHANGE_WHO}']") is not None
-    add_revision_change(root, when, status, CHANGE_WHO, desc, full_name=CHANGE_NAME if has_title_stmt_parent else None, label=label)
+    add_revision_change(root, when, status, CHANGE_WHO, "", full_name=CHANGE_NAME if has_title_stmt_parent else None, label=label)
     person = root.find(f".//{_tei('persName')}[@{{{XML_NS}}}id='{CHANGE_WHO}']")
     if person is not None and not had_resp_stmt and person.getparent() is not None:
         _indent_appended(person.getparent())  # type: ignore[arg-type]
     revision_desc = root.find(revision_desc_path)
     if revision_desc is not None and len(revision_desc):
         _indent_appended(revision_desc[-1] if had_revision_desc else revision_desc)
-    if with_marks:
-        fingerprints = [u.fingerprint for u in document_units(etree.tostring(root, encoding="unicode"), unit_path)]
-        marks: list[tuple[str, UnitDecision]] = []
-        position = 0
-        for d in result.decisions:
-            # the units a decision produced: its result's elements, or its original units if unchanged
-            count = len(segments_key(d.result_xml) or ()) if d.changed else len(d.covered)
-            marks.extend((fp, d) for fp in fingerprints[position:position + count])
-            position += count
-        if position != len(fingerprints):
-            raise ValueError(f"The annotated document has {len(fingerprints)} units, the results account for {position}")
-        add_review_marks(root, unit_path, marks, f"{CHANGE_NAME} ({models_description(models)})", when)
+        # add_revision_change() takes plain text; the description has elements, so it is set here
+        change = revision_desc[-1]
+        placeholder = change.find(_tei("desc"))
+        if placeholder is not None:
+            desc = etree.fromstring(f'<desc xmlns="{TEI_NS}">{description_xml(result, models, seconds)}</desc>')
+            desc.tail = placeholder.tail
+            change.replace(placeholder, desc)
+            etree.cleanup_namespaces(root)
     return serialize_tei_like_source(root, xml)

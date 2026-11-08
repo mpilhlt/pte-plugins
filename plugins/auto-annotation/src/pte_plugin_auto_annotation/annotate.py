@@ -56,7 +56,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--concurrency", type=int, default=1, help="Requests in flight per model (default: 1)")
     parser.add_argument("--retries", type=int, default=4, help="Retries of a request after a provider overload or rate limit (default: 4)")
     parser.add_argument("--timeout", type=float, default=DEFAULT_ANNOTATE_TIMEOUT, help=f"Seconds to wait for the server to annotate one document (default: {DEFAULT_ANNOTATE_TIMEOUT:.0f})")
-    parser.add_argument("--no-marks", action="store_true", help="Do not write unit review marks")
     parser.add_argument("--status", default="extraction", help="Status of the revision change (default: extraction)")
     parser.add_argument("--label", default="Auto-annotation", help="Label of the revision change (default: Auto-annotation)")
     parser.add_argument("--dry-run", action="store_true", help="Do not save; write the annotated XML to --out")
@@ -92,7 +91,7 @@ def request_payload(args: argparse.Namespace, stable_id: str) -> dict[str, JsonS
         "stable_id": stable_id, "model_a": args.model_a, "model_b": args.model_b, "arbiter": args.arbiter,
         "batch": args.batch, "arbiter_batch": args.arbiter_batch, "mode": args.mode,
         "split_on_failure": args.split_on_failure if args.split_on_failure >= 0 else None,
-        "concurrency": args.concurrency, "retries": args.retries, "marks": not args.no_marks,
+        "concurrency": args.concurrency, "retries": args.retries,
         "status": args.status, "label": args.label, "include_raw": args.raw,
     }
 

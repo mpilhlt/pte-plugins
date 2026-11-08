@@ -117,7 +117,7 @@ class TestAnnotationRoutes(unittest.TestCase):
         self.assertEqual(log["rules"], [{"category": "references", "url": "https://raw.example.org/guidelines-llm.md#L1-L5"}])
 
     def test_annotate_without_arbiter_and_with_raw_answers(self):
-        response = self.post(stable_id="d2v1", arbiter=None, include_raw=True, marks=False)
+        response = self.post(stable_id="d2v1", arbiter=None, include_raw=True)
         body = response.json()
         self.assertEqual(body["counts"]["unresolved"], 1)
         self.assertIn("raw_response", body["log"]["runs"]["B"]["batches"][0])
