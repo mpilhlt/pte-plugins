@@ -24,19 +24,21 @@ VARIANT = "grobid.training.references"
 ANNOTATED_XML = INPUT_XML.replace("</teiHeader>", '<revisionDesc><change who="#auto-annotation"/></revisionDesc></teiHeader>')
 
 
-def _file(stable_id: str, doc_id: str, version: int | None, *, gold: bool = False, variant: str = VARIANT) -> SimpleNamespace:
+def _file(stable_id: str, doc_id: str, version: int | None, *, gold: bool = False, variant: str = VARIANT, parent: str | None = None) -> SimpleNamespace:
     return SimpleNamespace(id=f"hash-{stable_id}", stable_id=stable_id, doc_id=doc_id, file_type="tei", variant=variant,
-                           is_gold_standard=gold, version=version, created_at="2026-11-01", doc_collections=["c1"])
+                           is_gold_standard=gold, version=version, created_at="2026-11-01", doc_collections=["c1"], parent_stable_id=parent)
 
 
 FILES = [
-    _file("d1v1", "doc1", 1), _file("d1v2", "doc1", 2),  # doc1: already annotated in v2
+    _file("d1v1", "doc1", 1), _file("d1v2", "doc1", 2, parent="d1v1"),  # doc1: already annotated in v2
     _file("d2v1", "doc2", 1),  # doc2: ready
     _file("d3v1", "doc3", 1), _file("d3g", "doc3", None, gold=True),  # doc3: has a gold version
     _file("d4s", "doc4", 1, variant="grobid.training.segmentation"),  # other variant only
+    _file("d5v1", "doc5", 1), _file("d5v2", "doc5", 1), _file("d5v3", "doc5", 2, parent="d5v2"),  # doc5: two extractions
+    _file("d6v2", "doc6", 2, parent="deleted"), _file("d6v3", "doc6", 3, parent="d6v2"),  # doc6: no version without a parent
 ]
 CONTENT = {"hash-d1v1": INPUT_XML, "hash-d1v2": ANNOTATED_XML, "hash-d2v1": INPUT_XML, "hash-d3v1": INPUT_XML, "hash-d3g": GOLD_XML,
-           "hash-d4s": INPUT_XML}
+           "hash-d4s": INPUT_XML, "hash-d5v1": INPUT_XML, "hash-d5v2": INPUT_XML, "hash-d5v3": INPUT_XML, "hash-d6v2": INPUT_XML, "hash-d6v3": INPUT_XML}
 
 
 class FakeRepo:
@@ -137,7 +139,11 @@ class TestAnnotationRoutes(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.text)
         self.assertEqual(
             [(t["doc_id"], t["input_stable_id"], t["state"], t["annotated_stable_id"]) for t in response.json()],
-            [("doc1", "d1v1", "annotated", "d1v2"), ("doc2", "d2v1", "ready", None), ("doc3", "d3v1", "gold", None)],
+            [("doc1", "d1v1", "annotated", "d1v2"), ("doc2", "d2v1", "ready", None), ("doc3", "d3v1", "gold", None), ("doc5", "d5v1", "ready", None), ("doc6", "d6v2", "ready", None)],
+        )
+        self.assertEqual(
+            [t["extraction_stable_ids"] for t in response.json()],
+            [["d1v1"], ["d2v1"], ["d3v1"], ["d5v1", "d5v2"], ["d6v2", "d6v3"]],
         )
         by_doc = self.client.get("/api/plugins/auto-annotation/targets", params=[("doc", "doc4"), ("doc", "doc2"), ("variant", VARIANT)]).json()
         self.assertEqual([(t["doc_id"], t["state"]) for t in by_doc], [("doc4", "no-version"), ("doc2", "ready")])

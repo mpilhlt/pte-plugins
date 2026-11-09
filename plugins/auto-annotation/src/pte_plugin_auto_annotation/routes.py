@@ -216,6 +216,7 @@ class TargetResponse(BaseModel):
     input_stable_id: str | None
     state: str
     annotated_stable_id: str | None = None
+    extraction_stable_ids: list[str] = []
 
 
 @router.get("/targets", response_model=list[TargetResponse])

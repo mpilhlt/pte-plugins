@@ -65,7 +65,7 @@ What to annotate (exactly one of):
 - `--doc`: given document ids (repeatable);
 - `--version`: given stable ids (repeatable), annotated without the checks below.
 
-For `--collection` and `--doc`, the earliest version of the variant (normally the extraction) is annotated. A document is skipped if one of its versions was already annotated by the pipeline (its `revisionDesc` has a change by `#auto-annotation`; `--force` annotates it again) or if it has a gold version (`--include-gold`). A repeated run therefore continues where an interrupted one stopped.
+For `--collection` and `--doc`, the extraction of the variant (its version without a parent) is annotated. If a document that would be annotated has several extractions, the command stops before annotating anything and names them; choose one with `--version`. A document is skipped if one of its versions was already annotated by the pipeline (its `revisionDesc` has a change by `#auto-annotation`; `--force` annotates it again) or if it has a gold version (`--include-gold`). A repeated run therefore continues where an interrupted one stopped.
 
 Per document, on the server:
 

@@ -5,8 +5,9 @@ Automated first annotation of documents or a whole collection, against a running
       --model-a kisski/<model> --model-b google/<model> --arbiter anthropic/<model> \\
       --variant grobid.training.references --collection my-collection
 
-For each document, the earliest version of --variant (normally the extraction) is annotated on the
-server (two models, arbiter for disagreements, see pipeline.py) and saved as a new version of it.
+For each document, the extraction of --variant (its version without a parent) is annotated on the
+server (two models, arbiter for disagreements, see pipeline.py) and saved as a new version of it. If
+a document to annotate has several extractions, nothing is annotated and --version must be used.
 Documents already annotated by the pipeline, or with a gold version, are skipped unless --force or
 --include-gold is given; so an interrupted run can be repeated. --version annotates given versions.
 With --dry-run nothing is saved and the XML is written to --out. A JSON run log per document is
@@ -65,23 +66,38 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+class AmbiguousExtractionError(Exception):
+    """A document to annotate has several extractions, so the version must be given explicitly."""
+
+
 def select_targets(
     session: ApiSession, args: argparse.Namespace
 ) -> tuple[list[tuple[str, str]], list[tuple[str, str]]]:
-    """(doc id or "-", stable id) pairs to annotate, and (doc id, reason) pairs that are skipped."""
+    """
+    (doc id or "-", stable id) pairs to annotate, and (doc id, reason) pairs that are skipped.
+
+    Raises:
+        AmbiguousExtractionError: a document that would be annotated has several extractions.
+    """
     if args.version:
         return [("-", v) for v in args.version], []
     selected: list[tuple[str, str]] = []
     skipped: list[tuple[str, str]] = []
+    ambiguous: list[str] = []
     for target in session.targets(args.variant, args.collection, args.doc or None):
         doc_id, state, input_id = str(target["doc_id"]), str(target["state"]), target.get("input_stable_id")
         allowed = state == "ready" or (state == "annotated" and args.force) or (state == "gold" and args.include_gold)
-        if allowed and isinstance(input_id, str):
+        extractions = target.get("extraction_stable_ids")
+        if allowed and isinstance(extractions, list) and len(extractions) > 1:
+            ambiguous.append(f"{doc_id} ({', '.join(str(e) for e in extractions)})")
+        elif allowed and isinstance(input_id, str):
             selected.append((doc_id, input_id))
         else:
             reason = {"annotated": f"already annotated ({target.get('annotated_stable_id')}); --force to repeat",
                       "gold": "has a gold version; --include-gold to annotate", "no-version": f"no version of {args.variant}"}.get(state, state)
             skipped.append((doc_id, reason))
+    if ambiguous:
+        raise AmbiguousExtractionError(f"Several extraction versions, nothing was annotated: {'; '.join(ambiguous)}. Specify the exact version to annotate with --version.")
     return selected, skipped
 
 
@@ -151,7 +167,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         session = ApiSession.connect(connection, timeout=args.timeout)
         failures = run(session, args, out)
-    except (ApiError, requests.RequestException) as e:
+    except (ApiError, AmbiguousExtractionError, requests.RequestException) as e:
         print(f"Error: {e}", file=sys.stderr)
         return 1
     return 1 if failures else 0

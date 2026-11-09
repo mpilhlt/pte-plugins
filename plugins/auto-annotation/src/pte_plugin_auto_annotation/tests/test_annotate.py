@@ -24,8 +24,9 @@ TARGETS = [
 class FakeSession:
     """Stands in for ApiSession."""
 
-    def __init__(self, fail_on: str | None = None):
+    def __init__(self, fail_on: str | None = None, target_list: list[dict[str, object]] | None = None):
         self.fail_on = fail_on
+        self.target_list = TARGETS if target_list is None else target_list
         self.target_calls: list[tuple[str, str | None, list[str] | None]] = []
         self.payloads: list[dict[str, object]] = []
         self.saved: list[tuple[str, str]] = []
@@ -33,7 +34,7 @@ class FakeSession:
 
     def targets(self, variant, collection=None, doc_ids=None):
         self.target_calls.append((variant, collection, doc_ids))
-        return TARGETS
+        return self.target_list
 
     def annotate(self, payload):
         self.payloads.append(payload)
@@ -86,6 +87,34 @@ class TestAnnotateCli(unittest.TestCase):
             _, _, session = self.run_main("--doc", "doc1", "--doc", "doc2", "--variant", "v.refs", "--force", "--include-gold", "--out", tmp)
         self.assertEqual(session.target_calls[0][2], ["doc1", "doc2"])
         self.assertEqual([p["stable_id"] for p in session.payloads], ["s1", "s2", "s3"])
+
+    def test_several_extractions_abort_before_annotating(self):
+        targets = [
+            {"doc_id": "doc1", "input_stable_id": "s1", "state": "ready", "extraction_stable_ids": ["s1"]},
+            {"doc_id": "doc5", "input_stable_id": "s5", "state": "ready", "extraction_stable_ids": ["s5", "s6"]},
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            code, err, session = self.run_main("--collection", "coll", "--variant", "v.refs", "--out", tmp, session=FakeSession(target_list=targets))
+        self.assertEqual(code, 1)
+        self.assertEqual(session.payloads, [])
+        self.assertIn("doc5 (s5, s6)", err)
+        self.assertIn("--version", err)
+
+    def test_several_extractions_only_matter_for_documents_to_annotate(self):
+        targets = [{"doc_id": "doc2", "input_stable_id": "s2", "state": "annotated", "annotated_stable_id": "s2b", "extraction_stable_ids": ["s2", "s7"]}]
+        with tempfile.TemporaryDirectory() as tmp:
+            code, err, session = self.run_main("--doc", "doc2", "--variant", "v.refs", "--out", tmp, session=FakeSession(target_list=targets))
+            self.assertEqual((code, session.payloads), (0, []))
+            self.assertIn("skip doc2: already annotated", err)
+            code, err, session = self.run_main("--doc", "doc2", "--variant", "v.refs", "--force", "--out", tmp, session=FakeSession(target_list=targets))
+        self.assertEqual((code, session.payloads), (1, []))
+        self.assertIn("doc2 (s2, s7)", err)
+
+    def test_version_selects_one_of_several_extractions(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            code, _, session = self.run_main("--version", "s6", "--out", tmp)
+        self.assertEqual(code, 0)
+        self.assertEqual([p["stable_id"] for p in session.payloads], ["s6"])
 
     def test_dry_run_writes_xml_and_does_not_save(self):
         with tempfile.TemporaryDirectory() as tmp:

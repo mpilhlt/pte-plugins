@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 import time
-from dataclasses import asdict, dataclass, replace
+from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime, timezone
 
 from fastapi_app.lib.core.url_cache import UrlCache
@@ -39,6 +39,8 @@ class Target:
     # "ready", or why the document is skipped: "annotated", "gold", "no-version"
     state: str
     annotated_stable_id: str | None = None
+    # The versions without a parent; more than one means the version to annotate must be given explicitly
+    extraction_stable_ids: list[str] = field(default_factory=list)
 
 
 def is_auto_annotated(content: bytes) -> bool:
@@ -52,8 +54,10 @@ def find_targets(
 ) -> list[Target]:
     """
     One target per document (of the collection, or the given ids) with a TEI version of the variant:
-    the earliest version (normally the extraction), unless a version of the variant was already
-    annotated by the pipeline ("annotated") or the document has a gold version of it ("gold").
+    its extraction, the earliest version without a parent, unless a version of the variant was already
+    annotated by the pipeline ("annotated") or the document has a gold version of it ("gold"). All
+    extractions are listed in the target, so that the caller can refuse to choose between several.
+    If no version lacks a parent, all versions count as extractions.
     Versions the user cannot read are left out.
     """
     if doc_ids is None:
@@ -66,13 +70,15 @@ def find_targets(
         if not versions:
             targets.append(Target(doc_id, None, "no-version"))
             continue
+        extractions = [v for v in versions if not v.parent_stable_id] or versions
+        extraction_ids = [v.stable_id for v in extractions]
         annotated = next((v for v in versions if (c := storage.read_file(v.id, "tei")) is not None and is_auto_annotated(c)), None)
         if annotated is not None:
-            targets.append(Target(doc_id, versions[0].stable_id, "annotated", annotated.stable_id))
+            targets.append(Target(doc_id, extraction_ids[0], "annotated", annotated.stable_id, extraction_ids))
         elif any(f.is_gold_standard for f in files):
-            targets.append(Target(doc_id, versions[0].stable_id, "gold"))
+            targets.append(Target(doc_id, extraction_ids[0], "gold", extraction_stable_ids=extraction_ids))
         else:
-            targets.append(Target(doc_id, versions[0].stable_id, "ready"))
+            targets.append(Target(doc_id, extraction_ids[0], "ready", extraction_stable_ids=extraction_ids))
     return targets
 
 
