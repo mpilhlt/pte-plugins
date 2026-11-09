@@ -24,6 +24,7 @@ The installed package also provides the command `pte-model-probe` with the same 
 - `--batches`: batch specs, `units:N` (at most N units per request) or `chars:N` (at most N characters of unit XML).
 - `--modes`: `all` (the model returns every unit) or `changed` (only the units it changed).
 - `--retries`: how often a request is repeated after a provider overload or rate limit (HTTP 429/503), with exponential backoff from 2 s (default 4). Requests that still fail are reported as errors and left out of the scores, since they say nothing about the model.
+- `--force-busy`: start even if a model is reported as busy. Without it, `probe` and `annotate` refuse to start while one of their models is `busy` or `very_busy` in the provider's status, because most requests to a busy model time out. Models whose provider reports no status count as free. In `annotate`, `--force` is unrelated: it re-annotates documents annotated before.
 - `--rules-file`: pin the rules to a local file instead of the reference version's rule refs.
 
 It runs against a running editor and logs in like `bin/batch-extract.js`: `--base-url`, `--token` (a personal access token, preferred) or `--user` and `--password`, or `API_BASE_URL`, `API_TOKEN`, `API_USER`, `API_PASSWORD` from the environment or `--env` (default `./.env`). The user needs the reviewer or admin role and access to the models.

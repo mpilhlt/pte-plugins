@@ -11,6 +11,7 @@ from pathlib import Path
 from unittest import mock
 
 from pte_plugin_auto_annotation import probe
+from pte_plugin_auto_annotation.api_client import ApiSession, ModelsBusyError
 from pte_plugin_auto_annotation.cli_common import load_env
 from pte_plugin_auto_annotation.evaluation import EvalSource
 from pte_plugin_auto_annotation.units import document_units
@@ -35,9 +36,54 @@ class FakeSession:
     def resolve_model(self, spec):
         return "endpoint-local", spec.split("/")[-1]
 
+    busy = False
+
+    def ensure_models_not_busy(self, specs):
+        if self.busy:
+            raise ModelsBusyError("these models are busy: kisski/m")
+
     def complete(self, provider_id, model_id, system_prompt, user_prompt, temperature):
         self.completions.append((model_id, user_prompt))
         return "\n\n".join(f"### Unit {uid}\n{self.mapping[xml]}" for uid, xml in prompt_units(user_prompt).items())
+
+
+class TestBusyModels(unittest.TestCase):
+    PROVIDERS = [
+        {"id": "kisski", "models": [
+            {"id": "free", "status": {"availability": "available", "detail": "demand: 0"}},
+            {"id": "busy", "status": {"availability": "busy", "detail": "demand: 5"}},
+            {"id": "full", "status": {"availability": "very_busy", "detail": "demand: 9"}},
+        ]},
+        {"id": "anthropic", "models": [{"id": "sonnet", "status": None}]},
+        {"id": "other", "models": [], "error": "Could not list models"},
+    ]
+
+    def setUp(self):
+        self.session = ApiSession("http://server", "sid")
+        patcher = mock.patch("pte_plugin_auto_annotation.api_client.requests.get")
+        get = patcher.start()
+        self.addCleanup(patcher.stop)
+        get.return_value.ok = True
+        get.return_value.json.return_value = self.PROVIDERS
+
+    def test_reports_busy_and_very_busy_with_their_detail(self):
+        busy = self.session.busy_models([("kisski", "free"), ("kisski", "busy"), ("kisski", "full")])
+        self.assertEqual(busy, ["kisski/busy (busy, demand: 5)", "kisski/full (very_busy, demand: 9)"])
+
+    def test_no_status_or_unknown_model_counts_as_free(self):
+        self.assertEqual(self.session.busy_models([("anthropic", "sonnet"), ("other", "x"), ("kisski", "unknown")]), [])
+
+    def test_model_used_twice_is_reported_once(self):
+        self.assertEqual(len(self.session.busy_models([("kisski", "busy"), ("kisski", "busy")])), 1)
+
+    def test_ensure_raises_and_names_the_option(self):
+        with mock.patch.object(self.session, "resolve_model", return_value=("kisski", "busy")):
+            with self.assertRaisesRegex(ModelsBusyError, "kisski/busy.*--force-busy"):
+                self.session.ensure_models_not_busy(["kisski/busy"])
+
+    def test_ensure_passes_for_free_models(self):
+        with mock.patch.object(self.session, "resolve_model", return_value=("kisski", "free")):
+            self.session.ensure_models_not_busy(["kisski/free"])
 
 
 class TestProbeCli(unittest.TestCase):
@@ -61,6 +107,18 @@ class TestProbeCli(unittest.TestCase):
         self.assertIn("Reference version `gold1` (gold)", out)
         # 2 models x (4 + 1 calls) x 2 modes
         self.assertEqual(len(session.completions), 20)
+
+    def test_busy_model_stops_the_run(self):
+        with mock.patch.object(FakeSession, "busy", True), tempfile.TemporaryDirectory() as tmp:
+            code, _, session = self.run_main("--model", "m", "--doc", "doc1", "--variant", "v", "--batches", "units:4", "--out", tmp)
+        self.assertEqual(code, 1)
+        self.assertEqual(session.completions, [])
+
+    def test_force_busy_starts_anyway(self):
+        with mock.patch.object(FakeSession, "busy", True), tempfile.TemporaryDirectory() as tmp:
+            code, _, session = self.run_main("--model", "m", "--doc", "doc1", "--variant", "v", "--batches", "units:4", "--force-busy", "--out", tmp)
+        self.assertEqual(code, 0)
+        self.assertGreater(len(session.completions), 0)
 
     def test_rules_file_pins_the_rules(self):
         with tempfile.TemporaryDirectory() as tmp:

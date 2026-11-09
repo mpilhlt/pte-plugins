@@ -11,7 +11,7 @@ from pathlib import Path
 from unittest import mock
 
 from pte_plugin_auto_annotation import annotate
-from pte_plugin_auto_annotation.api_client import ApiError
+from pte_plugin_auto_annotation.api_client import ApiError, ModelsBusyError
 
 TARGETS = [
     {"doc_id": "doc1", "input_stable_id": "s1", "state": "ready"},
@@ -31,6 +31,13 @@ class FakeSession:
         self.payloads: list[dict[str, object]] = []
         self.saved: list[tuple[str, str]] = []
         self.released: list[str] = []
+        self.busy = False
+        self.checked_specs: list[str] = []
+
+    def ensure_models_not_busy(self, specs):
+        self.checked_specs = list(specs)
+        if self.busy:
+            raise ModelsBusyError("these models are busy: kisski/m")
 
     def targets(self, variant, collection=None, doc_ids=None):
         self.target_calls.append((variant, collection, doc_ids))
@@ -65,6 +72,31 @@ class TestAnnotateCli(unittest.TestCase):
             with tempfile.TemporaryDirectory() as tmp, mock.patch.object(annotate.ApiSession, "connect", return_value=FakeSession()) as connect, redirect_stderr(io.StringIO()):
                 annotate.main(["--user", "u", "--password", "p", "--env", "/nonexistent", "--model-a", "a", "--model-b", "b", "--version", "s1", "--dry-run", "--out", tmp, *args])
             self.assertEqual(connect.call_args.kwargs["timeout"], expected)
+
+    def test_busy_model_stops_the_run_before_any_work(self):
+        session = FakeSession()
+        session.busy = True
+        code, err, session = self.run_main("--version", "s1", "--dry-run", session=session)
+        self.assertEqual(code, 1)
+        self.assertIn("these models are busy", err)
+        self.assertEqual(session.payloads, [])
+        self.assertEqual(session.checked_specs, ["a", "b", "c"])
+
+    def test_force_busy_skips_the_check(self):
+        session = FakeSession()
+        session.busy = True
+        with tempfile.TemporaryDirectory() as tmp:
+            code, _, session = self.run_main("--version", "s1", "--dry-run", "--force-busy", "--out", tmp, session=session)
+        self.assertEqual(code, 0)
+        self.assertEqual(len(session.payloads), 1)
+        self.assertEqual(session.checked_specs, [])
+
+    def test_force_does_not_skip_the_busy_check(self):
+        session = FakeSession()
+        session.busy = True
+        code, _, session = self.run_main("--version", "s1", "--dry-run", "--force", session=session)
+        self.assertEqual(code, 1)
+        self.assertEqual(session.payloads, [])
 
     def test_collection_saves_ready_documents_and_skips_others(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 import requests
@@ -31,6 +32,10 @@ class ApiError(RuntimeError):
 
 class TransientApiError(ApiError, TransientError):
     """The server answered 429 or 503: retrying may help."""
+
+
+class ModelsBusyError(ApiError):
+    """A model of the run is reported as busy, so the run was not started."""
 
 
 TRANSIENT_STATUSES = frozenset({429, 503})
@@ -125,6 +130,25 @@ class ApiSession:
         """(provider id, model id) for a model name."""
         data = _check(requests.post(f"{self.base_url}/api/plugins/auto-annotation/resolve-model", json={"model": spec}, headers=self.headers, timeout=120))
         return str(data["provider_id"]), str(data["model_id"])
+
+    def busy_models(self, models: Sequence[tuple[str, str]]) -> list[str]:
+        """Descriptions of those (provider id, model id) that their provider reports as busy; models without a status count as free."""
+        data = _check_any(requests.get(f"{self.base_url}/api/v1/llm/providers", headers=self.headers, timeout=120))
+        if not isinstance(data, list):
+            raise ApiError("providers: expected a JSON list")
+        statuses = {(provider["id"], model["id"]): model.get("status") for provider in data for model in provider.get("models", [])}
+        busy = []
+        for provider_id, model_id in dict.fromkeys(models):
+            status = statuses.get((provider_id, model_id))
+            if status and status["availability"] != "available":
+                busy.append(f"{provider_id}/{model_id} ({status['availability']}, {status['detail']})")
+        return busy
+
+    def ensure_models_not_busy(self, specs: Sequence[str]) -> None:
+        """Raise ModelsBusyError if a model is busy: most requests to a busy model time out, which costs hours and loses units."""
+        busy = self.busy_models([self.resolve_model(spec) for spec in specs])
+        if busy:
+            raise ModelsBusyError(f"Nothing was started, these models are busy: {', '.join(busy)}. Try again later, or start anyway with --force-busy.")
 
     def complete(self, provider_id: str, model_id: str, system_prompt: str, user_prompt: str, temperature: float) -> str:
         """One completion through the server; raises TransientError when retrying may help."""

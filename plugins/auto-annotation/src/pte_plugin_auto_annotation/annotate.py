@@ -49,6 +49,7 @@ def build_parser() -> argparse.ArgumentParser:
     target.add_argument("--version", action="append", default=[], help="Stable id of a version to annotate (repeatable); no skipping")
     parser.add_argument("--variant", help="Variant to annotate (required with --collection and --doc), e.g. grobid.training.references")
     parser.add_argument("--force", action="store_true", help="Also annotate documents the pipeline has annotated before")
+    parser.add_argument("--force-busy", action="store_true", help="Start even if a model is reported as busy")
     parser.add_argument("--include-gold", action="store_true", help="Also annotate documents that have a gold version")
     parser.add_argument("--batch", default="units:16", help="Batch spec of models A and B (default: units:16)")
     parser.add_argument("--arbiter-batch", default="units:8", help="Batch spec of the arbiter (default: units:8)")
@@ -166,6 +167,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     out = args.out or Path("auto-annotation-runs") / datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     try:
         session = ApiSession.connect(connection, timeout=args.timeout)
+        if not args.force_busy:
+            session.ensure_models_not_busy([spec for spec in (args.model_a, args.model_b, args.arbiter) if spec])
         failures = run(session, args, out)
     except (ApiError, AmbiguousExtractionError, requests.RequestException) as e:
         print(f"Error: {e}", file=sys.stderr)

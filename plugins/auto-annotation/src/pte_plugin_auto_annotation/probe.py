@@ -50,6 +50,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--repeats", type=int, default=1, help="Repetitions of each configuration (default: 1)")
     parser.add_argument("--concurrency", type=int, default=1, help="Requests in flight per run (default: 1)")
     parser.add_argument("--retries", type=int, default=RetryPolicy.retries, help=f"Retries of a request after a provider overload or rate limit, with exponential backoff (default: {RetryPolicy.retries})")
+    parser.add_argument("--force-busy", action="store_true", help="Start even if a model is reported as busy")
     parser.add_argument("--temperature", type=float, default=0.0)
     parser.add_argument("--rules-file", type=Path, help="Use this file as the only rule text instead of the gold version's rule refs")
     parser.add_argument("--max-units", type=int, help="Evaluate only the first N aligned units")
@@ -131,6 +132,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     try:
         session = ApiSession.connect(connection)
+        if not args.force_busy:
+            session.ensure_models_not_busy(args.model)
         results = asyncio.run(run_probe(
             session, args.model, args.doc or [None], args.variant, args.reference, args.input, sweep(specs, modes, args.repeats),
             args.concurrency, args.temperature, rules_text, args.max_units, RetryPolicy(retries=max(0, args.retries)), on_update=save,
