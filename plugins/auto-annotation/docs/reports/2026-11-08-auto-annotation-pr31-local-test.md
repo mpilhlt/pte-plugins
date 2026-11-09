@@ -6,9 +6,9 @@ Document `10.5771__2699-1284-2024-3-149`, collection `grobid-batch-2`, variant `
 
 ## Result
 
-The pipeline works end to end on real models. A new extraction (`gczy7r`) was annotated and saved as `yqtump`, with text, revision entry, review marks, schema validity and lock release all correct.
+The pipeline works end to end on real models. A new extraction (`gczy7r`) was annotated and saved as `yqtump`, with text, revision entry, review marks, schema validity and lock release all correct. A [rerun](#rerun-with-run-statistics-instead-of-review-marks) on the same extraction, after review marks were replaced by run statistics, saved `4uhyhb` with edit F1 81.4.
 
-Against the reference `38cs7r`, on the 70 units that could be aligned:
+The commands and tables up to the rerun section describe the first run. Against the reference `38cs7r`, on the 70 units that could be aligned:
 
 | Version | Units | Exact | Edit P | Edit R | Edit F1 | Field F1 | Edits made/needed |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -143,7 +143,118 @@ Quality by decision, on the 70 aligned units:
 | Arbitrated, own correction | 19 | 1 | 76.1 | 74.4 |
 | Arbitrated, kept original | 2 | 0 | - | 0.0 |
 
-Agreed units are clearly the most reliable, which supports marking them OK and sending reviewers to the not-OK units first.
+Agreed units are clearly the most reliable in this run, which supports marking them OK and sending reviewers to the not-OK units first. The [rerun](#rerun-with-run-statistics-instead-of-review-marks) did not confirm this as strongly, and review marks were removed afterwards.
+
+## Rerun with run statistics instead of review marks
+
+After the first run, review marks were removed from the pipeline, and the `revisionDesc/change/desc` of the new revision now records run statistics. The rerun tests this, at pte-plugins commit `af76127`, on the same extraction `gczy7r` and with the same models.
+
+```bash
+UV_NO_SYNC=1 uv run python -m pte_plugin_auto_annotation.annotate \
+  --model-a google/gemini-3.5-flash-lite \
+  --model-b kisski/deepseek-v4.1-flash-1017 \
+  --arbiter anthropic/claude-sonnet-5-5 \
+  --version gczy7r \
+  --batch units:8 --concurrency 2 --raw \
+  --out $OUT/rerun/annotate
+
+UV_NO_SYNC=1 uv run python compare.py gczy7r 4uhyhb 38cs7r \
+  $OUT/rerun/annotate/10.5771__2699-1284-2024-3-149.json
+```
+
+The run took 8 min 27 s and saved `4uhyhb`, version 4, parent `gczy7r`, status `extraction`, in `grobid-batch-2`. The lock was released. The document contains no `standOff` or `unit-review` elements. Logs are in the artifacts directory under `rerun/`.
+
+### Encoding in the revision description
+
+Each count is a TEI `measure`, the duration a `time`:
+
+```xml
+<measure type="arbiter-choice" subtype="B" commodity="kisski/deepseek-v4.1-flash-1017" quantity="40">B 40</measure>
+<measure type="arbiter-choice-both-valid" subtype="B" commodity="kisski/deepseek-v4.1-flash-1017" quantity="33">B 33</measure>
+<measure type="invalid-proposal" subtype="A" commodity="google/gemini-3.5-flash-lite" quantity="8">A 8</measure>
+Completed in <time dur="PT8M27S">8 min 27 s</time>.
+```
+
+`type` is the statistic and `subtype` the role: `A`, `B`, `own` (with the arbiter as `commodity`) or `original` (no `commodity`). `arbiter-choice-both-valid` counts only units where both models gave a valid proposal, so a model is not credited for winning against an invalid candidate.
+
+The file is valid against the schema on fossil branch `feat/change-desc-measures` ([fossil#92](https://github.com/mpilhlt/fossil/pull/92)). The instance validates against the published schema and reports "Did not expect element measure there" until that PR is merged and published.
+
+### Comparison of the two runs
+
+| | First run `yqtump` | Rerun `4uhyhb` |
+| --- | --- | --- |
+| Agreed / arbitrated / unresolved (of 86) | 17 / 69 / 0 | 10 / 76 / 0 |
+| Changed units | 82 | 82 |
+| Exact (of 70 aligned) | 15 (21.4%) | 14 (20.0%) |
+| Edit P / R / F1 | 79.1 / 83.4 / 81.2 | 77.3 / 85.9 / 81.4 |
+| Field F1 | 79.4 | 78.9 |
+| Edits made/needed | 612/580 | 644/580 |
+| Invalid proposals, A / B | 7 / 0 | 8 / 0 |
+| Arbiter chose A / B / own / original | 5 / 39 / 23 / 2 | 4 / 40 / 30 / 2 |
+
+With valid proposals from both models, the rerun's arbiter chose A 4, B 33, own 29, original 2.
+
+| Run | Calls | Retries | Request seconds (sum) | Prompt characters |
+| --- | --- | --- | --- | --- |
+| A (Gemini) | 13 | 0 | 51.5 | 482,242 |
+| B (DeepSeek) | 11 | 0 | 863.8 | 410,861 |
+| Arbiter (Sonnet) | 10 | 0 | 130.2 | 437,894 |
+
+Quality by decision in the rerun, on the 70 aligned units:
+
+| Decision | Units | Exact | Edit P | Edit R |
+| --- | --- | --- | --- | --- |
+| Agreed | 8 | 4 | 84.5 | 93.8 |
+| Arbitrated, chose A | 2 | 0 | 81.8 | 64.3 |
+| Arbitrated, chose B | 31 | 5 | 76.8 | 88.1 |
+| Arbitrated, own correction | 27 | 5 | 75.8 | 84.7 |
+| Arbitrated, kept original | 2 | 0 | - | 0.0 |
+
+Observations:
+
+- The overall score is stable between the runs (edit F1 81.2 and 81.4).
+- Agreement is not: identical settings gave 17 and 10 agreed units. Agreed-unit precision fell from 94.6 (15 units) to 84.5 (8 units). It remains the highest of the larger groups, but on few units.
+- DeepSeek leads Gemini clearly among units where both were valid (33 to 4), but in 29 of those 68 units the arbiter wrote its own correction instead of choosing either.
+- The arbiter received about 438,000 prompt characters, about as much as sending all units to the arbiter once would (estimated at 415,000, not measured). On this document the two smaller models do not reduce the arbiter's load.
+
+## Single-model probe
+
+To see what the three-model pipeline adds, each model corrected the same extraction alone, with the pipeline's batch settings and two repeats, to match the two pipeline runs:
+
+```bash
+UV_NO_SYNC=1 uv run python -m pte_plugin_auto_annotation.probe \
+  --model anthropic/claude-sonnet-5-5 \
+  --model kisski/deepseek-v4.1-flash-1017 \
+  --model google/gemini-3.5-flash-lite \
+  --reference 38cs7r --input gczy7r \
+  --batches units:8 --modes all --repeats 2 --concurrency 2 \
+  --out $OUT/single-model
+```
+
+Results are in the artifacts directory under `single-model/`. All scores are on the same 70 aligned units against `38cs7r`. Precision and recall of the single models are pooled over their two repeats; those of the pipeline are given per run.
+
+| Setup | Exact (of 70) | Edit P | Edit R | Edit F1 per run | Edit F1 pooled |
+| --- | --- | --- | --- | --- | --- |
+| Pipeline (Gemini + DeepSeek + Sonnet) | 15, 14 | 79.1, 77.3 | 83.4, 85.9 | 81.2, 81.4 | - |
+| DeepSeek alone | 12, 14 | 77.6 | 84.1 | 80.8, 80.7 | 80.7 |
+| Sonnet alone | 11, 12 | 79.7 | 79.0 | 79.9, 78.7 | 79.3 |
+| Gemini alone | 8, 8 | 66.6 | 54.1 | 57.1, 62.2 | 59.7 |
+
+| Setup | Units | Calls per run | Prompt characters per run | Summed request seconds per run |
+| --- | --- | --- | --- | --- |
+| DeepSeek alone | 70 | 9 | 331,344 | 532 |
+| Sonnet alone | 70 | 9 | 331,344 | 99 |
+| Gemini alone | 70 | 9 | 331,344 | 26 |
+| Pipeline, rerun | 86 | 34 | 1,330,997, of which 437,894 to Sonnet | 1,045 |
+
+Observations:
+
+- The pipeline scores about 0.5 F1 above DeepSeek alone, too little to count with two runs per setup. It reaches at most two or three more exact units per run.
+- Sonnet alone makes about as many edits as are needed (571 and 579 of 580), but fewer correct ones than DeepSeek. As arbiter, with candidates to choose from, it matches DeepSeek's recall.
+- Gemini is far weaker alone, and the arbiter chose it only 4 or 5 times per run.
+- Scaled to 86 units, a Sonnet-only pass would take about 407,000 prompt characters, less than the arbiter received in the rerun.
+
+Limits: one document, a reference that is not flagged gold, and the probe leaves out the 16 unaligned input units, so its batches differ slightly from the pipeline's.
 
 ## Findings
 
@@ -172,4 +283,5 @@ The E2E failure is `plugin-admin.spec.js:110` ("confirming an untrusted reposito
 
 - Decide whether `annotate --doc` should keep selecting the earliest version (finding 4).
 - Find where the 120 s Kisski read timeout is set (finding 5).
-- `64cff68c` is committed on `devel` but not pushed.
+- Merge and publish [fossil#92](https://github.com/mpilhlt/fossil/pull/92), so that annotated documents validate on the instance.
+- Repeat the single-model comparison on a document with a flagged gold version, such as `10.12775__clr.2013.008`, before deciding whether to keep three models.
