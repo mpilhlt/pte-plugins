@@ -225,7 +225,7 @@ On the present numbers, DeepSeek is the only Kisski model that would correct alo
 
 ## Next steps
 
-- Make unresolved units fall back to the stronger corrector, and retry connection errors on the `annotate` route, which currently records 0 retries for them.
+- Measure the fallback to model B and the per-model time budget, added after this report, on these two documents. The failed batches were read timeouts: with retries, 5 of 6 clr batches succeeded, but one took up to 1,615 s, so retries need the budget.
 - Test a pipeline with `gemma-4-31b-it` as second corrector and a reliable arbiter against DeepSeek alone on these two documents.
 - Check whether turning off reasoning makes `gemma-4` more accurate. It stayed below the 75 F1 set as a condition for this work, so this has low priority.
 - Add the per-model routing and cached probe once the fallback exists.

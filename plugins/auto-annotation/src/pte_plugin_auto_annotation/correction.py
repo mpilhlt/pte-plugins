@@ -28,9 +28,9 @@ class TransientError(RuntimeError):
     """A request failed for a reason unrelated to the prompt (overload, rate limit); retrying may help."""
 
 
-# HTTP statuses and wordings with which providers report overload and rate limits
+# HTTP statuses and wordings with which providers report overload, rate limits and timeouts
 _TRANSIENT = re.compile(
-    r"\b(429|500|502|503|504)\b|overload|high demand|rate.?limit|too many requests|resource.?exhausted|temporarily unavailable|try again",
+    r"\b(429|500|502|503|504)\b|overload|high demand|rate.?limit|too many requests|resource.?exhausted|temporarily unavailable|try again|timed out",
     re.IGNORECASE,
 )
 
@@ -160,6 +160,8 @@ async def correct_units(
     system_prompt: str | None = None,
     render: UnitRenderer | None = None,
     move_text: bool = True,
+    time_budget: float | None = None,
+    clock: Callable[[], float] = time.monotonic,
 ) -> CorrectionRun:
     """
     Send the units to the model in batches and check every proposed unit.
@@ -179,8 +181,17 @@ async def correct_units(
     arbiter uses them to show the candidates. Answers are always checked against the unit's XML.
     move_text=False keeps segmenting units from passing on their batch's text (the arbiter's units
     are not neighbours).
+
+    time_budget limits the seconds of this run, so that a stalling model cannot cost hours: once it
+    is used up, requests are neither repeated nor sent, and the units of those not sent are ERROR.
+    A request already under way is not interrupted.
     """
     run = CorrectionRun()
+    deadline = None if time_budget is None else clock() + time_budget
+
+    def out_of_time() -> bool:
+        return deadline is not None and clock() >= deadline
+
     semaphore = asyncio.Semaphore(max(1, concurrency))
     system_prompt = system_prompt if system_prompt is not None else build_system_prompt(mode, segmenting)
     by_index: dict[int, UnitOutcome] = {}
@@ -195,6 +206,9 @@ async def correct_units(
         seconds = 0.0
         async with semaphore:
             while True:
+                if out_of_time() and retries == 0:
+                    error = f"TimeBudgetExceeded: the time budget of {time_budget:.0f} s is used up, the request was not sent"
+                    break
                 started = time.monotonic()
                 try:
                     raw = await client.complete(system_prompt, user_prompt)
@@ -205,7 +219,7 @@ async def correct_units(
                 else:
                     transient = False
                 seconds += time.monotonic() - started
-                if not (transient and retry is not None and retries < retry.retries):
+                if not (transient and retry is not None and retries < retry.retries and not out_of_time()):
                     break
                 retries += 1
                 await sleep(retry.delay(retries))

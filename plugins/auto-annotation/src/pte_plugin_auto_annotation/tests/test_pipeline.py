@@ -5,6 +5,7 @@
 
 import asyncio
 import unittest
+from dataclasses import replace
 
 from pte_plugin_auto_annotation.arbitration import (
     ORIGINAL,
@@ -15,6 +16,7 @@ from pte_plugin_auto_annotation.arbitration import (
 )
 from pte_plugin_auto_annotation.batching import BatchSpec
 from pte_plugin_auto_annotation.checks import ProposalStatus
+from pte_plugin_auto_annotation.correction import ProviderChatClient, RetryPolicy, TransientError, correct_units, is_transient_message
 from pte_plugin_auto_annotation.pipeline import Decision, PipelineConfig, annotate_units
 from pte_plugin_auto_annotation.units import Unit, document_units
 
@@ -62,7 +64,7 @@ class TestPipeline(unittest.TestCase):
         self.assertEqual([d.decision for d in result.decisions], [Decision.AGREED] * 4)
         self.assertEqual([d.result_xml for d in result.decisions], GOLD_UNITS)
         self.assertEqual(arbiter.calls, [])
-        self.assertEqual(result.counts(), {"agreed": 4, "arbitrated": 0, "unresolved": 0, "changed": 4})
+        self.assertEqual(result.counts(), {"agreed": 4, "arbitrated": 0, "fallback": 0, "unresolved": 0, "changed": 4})
         self.assertEqual(set(result.runs), {"A", "B"})
 
     def test_disagreement_goes_to_the_arbiter_with_both_candidates(self):
@@ -87,11 +89,28 @@ class TestPipeline(unittest.TestCase):
         self.assertFalse(any(d.changed for d in result.decisions))
         self.assertIn("no arbiter", result.decisions[0].comment)
 
-    def test_arbiter_failing_the_checks_leaves_the_unit_unresolved(self):
-        result = _run(OracleClient(gold_mapping()), EchoClient(), FixedAnswerClient("<bibl>other text</bibl>"))
+    def test_arbiter_failing_the_checks_falls_back_to_model_b(self):
+        result = _run(EchoClient(), OracleClient(gold_mapping()), FixedAnswerClient("<bibl>other text</bibl>"))
         decision = result.decisions[0]
-        self.assertEqual((decision.decision, decision.arbiter_status), (Decision.UNRESOLVED, ProposalStatus.TEXT_CHANGED))
+        self.assertEqual((decision.decision, decision.arbiter_status, decision.chosen), (Decision.FALLBACK, ProposalStatus.TEXT_CHANGED, "B"))
+        self.assertEqual(decision.result_xml, GOLD_UNITS[0])
+        self.assertIn("fell back to B", decision.comment)
+        self.assertEqual(result.counts()["fallback"], 4)
+
+    def test_failed_arbiter_request_falls_back_to_model_b(self):
+        result = _run(EchoClient(), OracleClient(gold_mapping()), FailingClient())
+        self.assertEqual((result.decisions[0].decision, result.decisions[0].arbiter_status), (Decision.FALLBACK, ProposalStatus.ERROR))
+
+    def test_no_fallback_proposal_leaves_the_unit_unresolved(self):
+        result = _run(OracleClient(gold_mapping()), FailingClient(), FixedAnswerClient("<bibl>other text</bibl>"))
+        decision = result.decisions[0]
+        self.assertEqual((decision.decision, decision.chosen), (Decision.UNRESOLVED, None))
         self.assertEqual(decision.result_xml, _units()[0].xml)
+
+    def test_fallback_can_be_switched_off(self):
+        result = _run(EchoClient(), OracleClient(gold_mapping()), FixedAnswerClient("<bibl>other text</bibl>"), replace(CONFIG, fallback=None))
+        decision = result.decisions[0]
+        self.assertEqual((decision.decision, decision.result_xml), (Decision.UNRESOLVED, _units()[0].xml))
 
     def test_arbiter_corrects_when_both_models_fail(self):
         broken = FixedAnswerClient("<bibl>changed text</bibl>")
@@ -103,7 +122,65 @@ class TestPipeline(unittest.TestCase):
 
     def test_agreement_on_the_input_counts_as_agreed_and_unchanged(self):
         result = _run(EchoClient(), EchoClient(), None)
-        self.assertEqual(result.counts(), {"agreed": 4, "arbitrated": 0, "unresolved": 0, "changed": 0})
+        self.assertEqual(result.counts(), {"agreed": 4, "arbitrated": 0, "fallback": 0, "unresolved": 0, "changed": 0})
+
+
+class FakeClock:
+    def __init__(self):
+        self.now = 0.0
+
+    def __call__(self):
+        return self.now
+
+
+class StallingClient:
+    """Every request takes 400 s and then times out."""
+
+    def __init__(self, clock):
+        self.clock = clock
+        self.calls = 0
+
+    async def complete(self, system_prompt, user_prompt):
+        self.calls += 1
+        self.clock.now += 400
+        raise TransientError("Read timed out")
+
+
+async def _no_sleep(_seconds):
+    return None
+
+
+class TestTimeBudget(unittest.TestCase):
+    def _run(self, budget):
+        clock = FakeClock()
+        client = StallingClient(clock)
+        run = asyncio.run(correct_units(client, [], _units(), BatchSpec(max_units=2), retry=RetryPolicy(retries=4), sleep=_no_sleep, time_budget=budget, clock=clock))
+        return client, run
+
+    def test_retries_and_new_requests_stop_when_the_budget_is_used_up(self):
+        client, run = self._run(500)
+        self.assertEqual(client.calls, 2)
+        self.assertEqual(run.batches[0].retries, 1)
+        self.assertTrue(run.batches[1].error.startswith("TimeBudgetExceeded"))
+        self.assertEqual({o.status for o in run.outcomes}, {ProposalStatus.ERROR})
+
+    def test_without_a_budget_all_retries_are_used(self):
+        client, _ = self._run(None)
+        self.assertEqual(client.calls, 10)
+
+
+class _TimingOutProvider:
+    async def chat_completion(self, model_id, system_prompt, user_prompt, temperature=0.2):
+        raise ConnectionError("HTTPSConnectionPool(host='x', port=443): Max retries exceeded (Caused by ReadTimeoutError(\"Read timed out. (read timeout=180)\"))")
+
+
+class TestTimeoutsAreTransient(unittest.TestCase):
+    def test_read_timeout_message_is_transient(self):
+        self.assertTrue(is_transient_message("Read timed out. (read timeout=180)"))
+
+    def test_provider_client_retries_a_read_timeout(self):
+        with self.assertRaises(TransientError):
+            asyncio.run(ProviderChatClient(_TimingOutProvider(), "m").complete("s", "u"))
 
 
 if __name__ == "__main__":

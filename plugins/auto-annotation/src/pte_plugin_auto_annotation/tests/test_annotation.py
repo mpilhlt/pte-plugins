@@ -109,7 +109,7 @@ class TestAnnotationRoutes(unittest.TestCase):
         body = response.json()
         self.assertEqual((body["input_stable_id"], body["doc_id"], body["variant"]), ("d2v1", "doc2", VARIANT))
         self.assertEqual(body["models"], {"A": "pa/m", "B": "pb/m", "arbiter": "pc/m"})
-        self.assertEqual(body["counts"], {"agreed": 3, "arbitrated": 1, "unresolved": 0, "changed": 4})
+        self.assertEqual(body["counts"], {"agreed": 3, "arbitrated": 1, "fallback": 0, "unresolved": 0, "changed": 4})
         self.assertEqual([u.xml for u in document_units(body["xml"], ".//listBibl/bibl")], GOLD_UNITS)
         log = body["log"]
         self.assertEqual(log["runs"]["A"]["calls"], 2)

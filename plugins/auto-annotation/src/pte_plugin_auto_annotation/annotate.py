@@ -33,7 +33,7 @@ from .cli_common import add_connection_args, connection_from_args
 from .prompts import OUTPUT_MODES
 
 # One request annotates a whole document, on slow models that takes much longer than one completion
-DEFAULT_ANNOTATE_TIMEOUT = 3600.0
+DEFAULT_ANNOTATE_TIMEOUT = 7200.0
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -56,7 +56,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--mode", default="all", choices=OUTPUT_MODES, help="Output mode of models A and B (default: all)")
     parser.add_argument("--split-on-failure", type=float, default=0.25, help="Share of failed units above which a batch is split and retried; negative: never (default: 0.25)")
     parser.add_argument("--concurrency", type=int, default=1, help="Requests in flight per model (default: 1)")
-    parser.add_argument("--retries", type=int, default=4, help="Retries of a request after a provider overload or rate limit (default: 4)")
+    parser.add_argument("--retries", type=int, default=4, help="Retries of a request after a provider overload, rate limit or timeout (default: 4)")
+    parser.add_argument("--fallback", default="B", choices=("A", "B", "none"), help="Model whose proposal a unit takes if the arbiter gives no valid answer; none: keep the original (default: B)")
+    parser.add_argument("--time-budget", type=float, default=1800.0, help="Seconds each model may take per document, after which its requests are no longer sent or repeated; 0: no limit (default: 1800)")
     parser.add_argument("--timeout", type=float, default=DEFAULT_ANNOTATE_TIMEOUT, help=f"Seconds to wait for the server to annotate one document (default: {DEFAULT_ANNOTATE_TIMEOUT:.0f})")
     parser.add_argument("--status", default="extraction", help="Status of the revision change (default: extraction)")
     parser.add_argument("--label", default="Auto-annotation", help="Label of the revision change (default: Auto-annotation)")
@@ -109,6 +111,7 @@ def request_payload(args: argparse.Namespace, stable_id: str) -> dict[str, JsonS
         "batch": args.batch, "arbiter_batch": args.arbiter_batch, "mode": args.mode,
         "split_on_failure": args.split_on_failure if args.split_on_failure >= 0 else None,
         "concurrency": args.concurrency, "retries": args.retries,
+        "fallback": None if args.fallback == "none" else args.fallback, "time_budget": args.time_budget if args.time_budget > 0 else None,
         "status": args.status, "label": args.label, "include_raw": args.raw,
     }
 

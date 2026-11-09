@@ -124,9 +124,10 @@ def _measure(type_: str, subtype: str, quantity: int, commodity: str | None = No
 def description_xml(result: PipelineResult, models: Mapping[str, str], seconds: float) -> str:
     """The content of the change's `desc`: readable text with the machine-readable values as elements."""
     counts = result.counts()
+    fallback = f"{counts['fallback']} fallback, " if counts["fallback"] else ""
     parts = [_escape(
         f"Automated first annotation ({models_description(models)}): {len(result.decisions)} units, "
-        f"{counts['agreed']} agreed, {counts['arbitrated']} arbitrated, {counts['unresolved']} unresolved, {counts['changed']} changed."
+        f"{counts['agreed']} agreed, {counts['arbitrated']} arbitrated, {fallback}{counts['unresolved']} unresolved, {counts['changed']} changed."
     )]
     if "arbiter" in models:
         arbitrated = [d for d in result.decisions if d.decision == Decision.ARBITRATED]

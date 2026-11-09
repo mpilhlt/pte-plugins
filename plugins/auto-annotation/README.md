@@ -70,10 +70,10 @@ For `--collection` and `--doc`, the extraction of the variant (its version witho
 
 Per document, on the server:
 
-1. Models A and B correct all review units independently, with batching, split-and-retry and retries as in the probe (`--batch`, default `units:16`; `--mode`, `--split-on-failure`, `--concurrency`, `--retries`). Every proposal is checked (well-formed, same outermost element, text unchanged).
+1. Models A and B correct all review units independently, with batching, split-and-retry and retries as in the probe (`--batch`, default `units:16`; `--mode`, `--split-on-failure`, `--concurrency`, `--retries`). Every proposal is checked (well-formed, same outermost element, text unchanged). Each model has a time budget per document (`--time-budget`, default 1800 s, 0 for none): once it is used up, its requests are no longer sent or repeated and their units count as errors.
 2. Units on which both models return valid, canonically equal proposals are **agreed** and take that proposal.
 3. The other units go to the arbiter (`--arbiter-batch`, default `units:8`), which sees the original and the distinct valid candidates and answers with a candidate, the original or its own correction (if both models failed, it corrects the unit itself). A valid answer makes the unit **arbitrated**.
-4. Units without an arbiter, or whose arbiter answer fails the checks, are **unresolved** and keep the original.
+4. Units whose arbiter answer fails the checks, or whose arbiter request failed, take the proposal of model B (`--fallback`, default `B`; `none` keeps the original) and are recorded as **fallback** in the run log and the revision change, so that a reviewer can find them. Units without an arbiter or without a fallback proposal are **unresolved** and keep the original.
 
 For segmenting variants (see above), the models may split and merge units, and text may move between neighbouring units. Decisions are then made per group: the shortest run of consecutive units after which both models' proposals have the same text as the original. Usually a group is one unit; text that a model moved into the next unit joins the two. A group's proposals are compared element by element; a disputed group goes to the arbiter as one unit (the original then consists of several elements), and its answer may have any number of elements with the group's text. In the saved version, a group's result replaces its first unit and its other units are removed; every resulting unit gets the group's review mark.
 

@@ -91,11 +91,11 @@ class TestSegmentingPipeline(unittest.TestCase):
         self.assertEqual([segments_key(u) for u in units], [segments_key(g) for g in GOLD_UNITS])
         self.assertEqual(unit_text("".join(units)), unit_text("".join(INPUT_UNITS)))
 
-    def test_arbiter_answer_with_other_text_leaves_the_group_unresolved(self):
+    def test_arbiter_answer_with_other_text_falls_back_to_model_b(self):
         group = "\n".join(INPUT_UNITS)
         result = _run(OracleClient(MOVED), EchoClient(), GroupArbiter({group: GOLD_UNITS[0]}))
         [decision] = result.decisions
-        self.assertEqual((decision.decision, decision.arbiter_status), (Decision.UNRESOLVED, ProposalStatus.TEXT_CHANGED))
+        self.assertEqual((decision.decision, decision.arbiter_status), (Decision.FALLBACK, ProposalStatus.TEXT_CHANGED))
         units, _ = _output_units(result)
         self.assertEqual(units, INPUT_UNITS)
 

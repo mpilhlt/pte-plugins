@@ -4,7 +4,8 @@ independently, units on which they agree take their common proposal, the others 
 
     agreed      both models returned valid, canonically equal proposals
     arbitrated  the arbiter returned a valid unit (a candidate, the original, or its own correction)
-    unresolved  no arbiter, or its answer failed the checks: the original unit is kept
+    fallback    the arbiter gave no valid answer: the unit takes the proposal of the configured model
+    unresolved  no arbiter, or neither a valid arbiter answer nor a fallback proposal: the original unit is kept
 
 For segmenting variants (units may be split and merged, see correction.correct_units) decisions
 are made per group: the shortest runs of consecutive units after which both models' proposals
@@ -42,6 +43,7 @@ class Decision(StrEnum):
 
     AGREED = "agreed"
     ARBITRATED = "arbitrated"
+    FALLBACK = "fallback"
     UNRESOLVED = "unresolved"
 
 
@@ -59,6 +61,10 @@ class PipelineConfig:
     retry: RetryPolicy | None = field(default_factory=RetryPolicy)
     # Units may be split and merged (decided per group, see the module docstring)
     segmenting: bool = False
+    # Model whose proposal a unit takes if the arbiter gives no valid answer (None: the original is kept)
+    fallback: str | None = "B"
+    # Seconds each model may take in a run (None: no limit), see correction.correct_units
+    time_budget: float | None = None
 
 
 @dataclass
@@ -97,6 +103,8 @@ class UnitDecision:
         suffix = f" ({failed})" if failed else ""
         if self.decision == Decision.ARBITRATED:
             return f"Models disagreed{suffix}; the arbiter chose {self.chosen}."
+        if self.decision == Decision.FALLBACK:
+            return f"Models disagreed{suffix}; no valid arbiter answer (arbiter: {self.arbiter_status.value if self.arbiter_status else 'none'}), fell back to {self.chosen}."
         reason = "no arbiter" if self.arbiter_status is None else f"arbiter: {self.arbiter_status.value}"
         return f"Models disagreed{suffix}; unresolved ({reason}), original kept."
 
@@ -192,6 +200,7 @@ async def annotate_units(
         correct_units(
             client, rules, units, config.spec, config.mode, concurrency=config.concurrency,
             split_on_failure=config.split_on_failure, retry=config.retry, sleep=sleep, segmenting=config.segmenting,
+            time_budget=config.time_budget,
         )
         for client in (model_a, model_b)
     ))
@@ -217,7 +226,7 @@ async def annotate_units(
             split_on_failure=config.split_on_failure, retry=config.retry, sleep=sleep,
             system_prompt=build_arbiter_system_prompt(config.segmenting),
             render=lambda u: render_candidates(u, candidates_by_index[u.index]),
-            segmenting=config.segmenting, move_text=False,
+            segmenting=config.segmenting, move_text=False, time_budget=config.time_budget,
         )
         runs["arbiter"] = arbiter_run
         for (decision, candidates), outcome in zip(disputed, arbiter_run.outcomes, strict=True):
@@ -227,4 +236,10 @@ async def annotate_units(
                 decision.decision = Decision.ARBITRATED
                 decision.result_xml = result
                 decision.chosen = which_candidate(result, decision.unit, candidates)
+                continue
+            fallback = decision.proposals.get(config.fallback) if config.fallback else None
+            if fallback is not None:
+                decision.decision = Decision.FALLBACK
+                decision.result_xml = fallback
+                decision.chosen = config.fallback
     return PipelineResult(decisions, runs, segmenting=config.segmenting)

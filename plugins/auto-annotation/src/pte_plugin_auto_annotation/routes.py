@@ -19,6 +19,8 @@ from dataclasses import asdict
 
 import requests
 from fastapi import APIRouter, Depends, HTTPException, Query
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 from fastapi_app.lib.core.dependencies import get_file_repository, get_file_storage, require_reviewer_or_admin
@@ -162,6 +164,8 @@ class AnnotateRequest(BaseModel):
     split_on_failure: float | None = Field(default=0.25, ge=0.0, le=1.0)
     concurrency: int = Field(default=1, ge=1, le=16)
     retries: int = Field(default=4, ge=0, le=10)
+    fallback: Literal["A", "B"] | None = "B"
+    time_budget: float | None = Field(default=1800.0, gt=0)
     status: str = "extraction"
     label: str | None = "Auto-annotation"
     include_raw: bool = False
@@ -192,6 +196,7 @@ async def annotate(
         config = PipelineConfig(
             spec=BatchSpec.parse(body.batch), mode=body.mode, arbiter_spec=BatchSpec.parse(body.arbiter_batch),
             split_on_failure=body.split_on_failure, concurrency=body.concurrency, retry=RetryPolicy(retries=body.retries),
+            fallback=body.fallback, time_budget=body.time_budget,
         )
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
