@@ -1,0 +1,2135 @@
+{
+  "input_stable_id": "gczy7r",
+  "doc_id": "10.5771__2699-1284-2024-3-149",
+  "variant": "grobid.training.references",
+  "unit_path": ".//listBibl/bibl",
+  "models": {
+    "A": "kisski/qwen3.6-35b-a3b",
+    "B": "kisski/deepseek-v4.1-flash-1017",
+    "arbiter": "kisski/glm-5.3"
+  },
+  "rules": [
+    {
+      "category": "primary",
+      "url": "https://github.com/mpilhlt/fossil/blob/0071837271988a8f7c2ee674a0c03baf281edd9a/docs/guidelines-llm.md#L79-L222"
+    },
+    {
+      "category": "data-correction",
+      "url": "https://github.com/mpilhlt/fossil/blob/0071837271988a8f7c2ee674a0c03baf281edd9a/docs/guidelines-llm.md#L17-L25"
+    },
+    {
+      "category": "schema-fragment",
+      "url": "https://github.com/mpilhlt/fossil/blob/0071837271988a8f7c2ee674a0c03baf281edd9a/schema/grobid.training.references.rng"
+    }
+  ],
+  "counts": {
+    "agreed": 8,
+    "arbitrated": 30,
+    "unresolved": 48,
+    "changed": 36
+  },
+  "units": [
+    {
+      "index": 0,
+      "indices": [
+        0
+      ],
+      "fingerprint": "226e7fe3",
+      "decision": "unresolved",
+      "changed": false,
+      "statuses": {
+        "A": "text_changed",
+        "B": "error"
+      },
+      "arbiter_status": "error",
+      "chosen": null,
+      "comment": "Models disagreed (A: text_changed, B: error); unresolved (arbiter: error), original kept."
+    },
+    {
+      "index": 1,
+      "indices": [
+        1
+      ],
+      "fingerprint": "af504249",
+      "decision": "unresolved",
+      "changed": false,
+      "statuses": {
+        "A": "ok",
+        "B": "error"
+      },
+      "arbiter_status": "error",
+      "chosen": null,
+      "comment": "Models disagreed (B: error); unresolved (arbiter: error), original kept."
+    },
+    {
+      "index": 2,
+      "indices": [
+        2
+      ],
+      "fingerprint": "6f9f340c",
+      "decision": "unresolved",
+      "changed": false,
+      "statuses": {
+        "A": "ok",
+        "B": "error"
+      },
+      "arbiter_status": "error",
+      "chosen": null,
+      "comment": "Models disagreed (B: error); unresolved (arbiter: error), original kept."
+    },
+    {
+      "index": 3,
+      "indices": [
+        3
+      ],
+      "fingerprint": "0cafb300",
+      "decision": "unresolved",
+      "changed": false,
+      "statuses": {
+        "A": "ok",
+        "B": "error"
+      },
+      "arbiter_status": "error",
+      "chosen": null,
+      "comment": "Models disagreed (B: error); unresolved (arbiter: error), original kept."
+    },
+    {
+      "index": 4,
+      "indices": [
+        4
+      ],
+      "fingerprint": "9b63a5df",
+      "decision": "unresolved",
+      "changed": false,
+      "statuses": {
+        "A": "ok",
+        "B": "error"
+      },
+      "arbiter_status": "error",
+      "chosen": null,
+      "comment": "Models disagreed (B: error); unresolved (arbiter: error), original kept."
+    },
+    {
+      "index": 5,
+      "indices": [
+        5
+      ],
+      "fingerprint": "a921c823",
+      "decision": "unresolved",
+      "changed": false,
+      "statuses": {
+        "A": "ok",
+        "B": "error"
+      },
+      "arbiter_status": "error",
+      "chosen": null,
+      "comment": "Models disagreed (B: error); unresolved (arbiter: error), original kept."
+    },
+    {
+      "index": 6,
+      "indices": [
+        6
+      ],
+      "fingerprint": "efc3a332",
+      "decision": "unresolved",
+      "changed": false,
+      "statuses": {
+        "A": "ok",
+        "B": "error"
+      },
+      "arbiter_status": "error",
+      "chosen": null,
+      "comment": "Models disagreed (B: error); unresolved (arbiter: error), original kept."
+    },
+    {
+      "index": 7,
+      "indices": [
+        7
+      ],
+      "fingerprint": "51144f93",
+      "decision": "unresolved",
+      "changed": false,
+      "statuses": {
+        "A": "ok",
+        "B": "error"
+      },
+      "arbiter_status": "error",
+      "chosen": null,
+      "comment": "Models disagreed (B: error); unresolved (arbiter: error), original kept."
+    },
+    {
+      "index": 8,
+      "indices": [
+        8
+      ],
+      "fingerprint": "617f4dab",
+      "decision": "agreed",
+      "changed": true,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": null,
+      "chosen": null,
+      "comment": ""
+    },
+    {
+      "index": 9,
+      "indices": [
+        9
+      ],
+      "fingerprint": "fe34ce61",
+      "decision": "unresolved",
+      "changed": false,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": "error",
+      "chosen": null,
+      "comment": "Models disagreed; unresolved (arbiter: error), original kept."
+    },
+    {
+      "index": 10,
+      "indices": [
+        10
+      ],
+      "fingerprint": "0fbabda6",
+      "decision": "unresolved",
+      "changed": false,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": "error",
+      "chosen": null,
+      "comment": "Models disagreed; unresolved (arbiter: error), original kept."
+    },
+    {
+      "index": 11,
+      "indices": [
+        11
+      ],
+      "fingerprint": "be985148",
+      "decision": "unresolved",
+      "changed": false,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": "error",
+      "chosen": null,
+      "comment": "Models disagreed; unresolved (arbiter: error), original kept."
+    },
+    {
+      "index": 12,
+      "indices": [
+        12
+      ],
+      "fingerprint": "2cd0b14c",
+      "decision": "unresolved",
+      "changed": false,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": "error",
+      "chosen": null,
+      "comment": "Models disagreed; unresolved (arbiter: error), original kept."
+    },
+    {
+      "index": 13,
+      "indices": [
+        13
+      ],
+      "fingerprint": "7255b2dc",
+      "decision": "unresolved",
+      "changed": false,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": "error",
+      "chosen": null,
+      "comment": "Models disagreed; unresolved (arbiter: error), original kept."
+    },
+    {
+      "index": 14,
+      "indices": [
+        14
+      ],
+      "fingerprint": "7966f23c",
+      "decision": "unresolved",
+      "changed": false,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": "error",
+      "chosen": null,
+      "comment": "Models disagreed; unresolved (arbiter: error), original kept."
+    },
+    {
+      "index": 15,
+      "indices": [
+        15
+      ],
+      "fingerprint": "6f6569a1",
+      "decision": "unresolved",
+      "changed": false,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": "error",
+      "chosen": null,
+      "comment": "Models disagreed; unresolved (arbiter: error), original kept."
+    },
+    {
+      "index": 16,
+      "indices": [
+        16
+      ],
+      "fingerprint": "993ed516",
+      "decision": "unresolved",
+      "changed": false,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": "error",
+      "chosen": null,
+      "comment": "Models disagreed; unresolved (arbiter: error), original kept."
+    },
+    {
+      "index": 17,
+      "indices": [
+        17
+      ],
+      "fingerprint": "3552b5a8",
+      "decision": "arbitrated",
+      "changed": true,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": "ok",
+      "chosen": "B",
+      "comment": "Models disagreed; the arbiter chose B."
+    },
+    {
+      "index": 18,
+      "indices": [
+        18
+      ],
+      "fingerprint": "c169d141",
+      "decision": "arbitrated",
+      "changed": true,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": "ok",
+      "chosen": "B",
+      "comment": "Models disagreed; the arbiter chose B."
+    },
+    {
+      "index": 19,
+      "indices": [
+        19
+      ],
+      "fingerprint": "4cb1051b",
+      "decision": "arbitrated",
+      "changed": true,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": "ok",
+      "chosen": "B",
+      "comment": "Models disagreed; the arbiter chose B."
+    },
+    {
+      "index": 20,
+      "indices": [
+        20
+      ],
+      "fingerprint": "2d654838",
+      "decision": "arbitrated",
+      "changed": true,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": "ok",
+      "chosen": "B",
+      "comment": "Models disagreed; the arbiter chose B."
+    },
+    {
+      "index": 21,
+      "indices": [
+        21
+      ],
+      "fingerprint": "450481ba",
+      "decision": "arbitrated",
+      "changed": true,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": "ok",
+      "chosen": "A",
+      "comment": "Models disagreed; the arbiter chose A."
+    },
+    {
+      "index": 22,
+      "indices": [
+        22
+      ],
+      "fingerprint": "89154953",
+      "decision": "arbitrated",
+      "changed": true,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": "ok",
+      "chosen": "B",
+      "comment": "Models disagreed; the arbiter chose B."
+    },
+    {
+      "index": 23,
+      "indices": [
+        23
+      ],
+      "fingerprint": "945a37d6",
+      "decision": "arbitrated",
+      "changed": true,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": "ok",
+      "chosen": "B",
+      "comment": "Models disagreed; the arbiter chose B."
+    },
+    {
+      "index": 24,
+      "indices": [
+        24
+      ],
+      "fingerprint": "1c34cc29",
+      "decision": "arbitrated",
+      "changed": true,
+      "statuses": {
+        "A": "text_changed",
+        "B": "ok"
+      },
+      "arbiter_status": "ok",
+      "chosen": "B",
+      "comment": "Models disagreed (A: text_changed); the arbiter chose B."
+    },
+    {
+      "index": 25,
+      "indices": [
+        25
+      ],
+      "fingerprint": "f0d389f7",
+      "decision": "unresolved",
+      "changed": false,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": "error",
+      "chosen": null,
+      "comment": "Models disagreed; unresolved (arbiter: error), original kept."
+    },
+    {
+      "index": 26,
+      "indices": [
+        26
+      ],
+      "fingerprint": "28f08465",
+      "decision": "unresolved",
+      "changed": false,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": "error",
+      "chosen": null,
+      "comment": "Models disagreed; unresolved (arbiter: error), original kept."
+    },
+    {
+      "index": 27,
+      "indices": [
+        27
+      ],
+      "fingerprint": "539da14e",
+      "decision": "unresolved",
+      "changed": false,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": "error",
+      "chosen": null,
+      "comment": "Models disagreed; unresolved (arbiter: error), original kept."
+    },
+    {
+      "index": 28,
+      "indices": [
+        28
+      ],
+      "fingerprint": "133664d5",
+      "decision": "unresolved",
+      "changed": false,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": "error",
+      "chosen": null,
+      "comment": "Models disagreed; unresolved (arbiter: error), original kept."
+    },
+    {
+      "index": 29,
+      "indices": [
+        29
+      ],
+      "fingerprint": "8587b9f0",
+      "decision": "unresolved",
+      "changed": false,
+      "statuses": {
+        "A": "text_changed",
+        "B": "ok"
+      },
+      "arbiter_status": "error",
+      "chosen": null,
+      "comment": "Models disagreed (A: text_changed); unresolved (arbiter: error), original kept."
+    },
+    {
+      "index": 30,
+      "indices": [
+        30
+      ],
+      "fingerprint": "d9be8cf2",
+      "decision": "unresolved",
+      "changed": false,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": "error",
+      "chosen": null,
+      "comment": "Models disagreed; unresolved (arbiter: error), original kept."
+    },
+    {
+      "index": 31,
+      "indices": [
+        31
+      ],
+      "fingerprint": "ce63496e",
+      "decision": "unresolved",
+      "changed": false,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": "error",
+      "chosen": null,
+      "comment": "Models disagreed; unresolved (arbiter: error), original kept."
+    },
+    {
+      "index": 32,
+      "indices": [
+        32
+      ],
+      "fingerprint": "ff3cde44",
+      "decision": "unresolved",
+      "changed": false,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": "error",
+      "chosen": null,
+      "comment": "Models disagreed; unresolved (arbiter: error), original kept."
+    },
+    {
+      "index": 33,
+      "indices": [
+        33
+      ],
+      "fingerprint": "1269c00b",
+      "decision": "arbitrated",
+      "changed": true,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": "ok",
+      "chosen": "B",
+      "comment": "Models disagreed; the arbiter chose B."
+    },
+    {
+      "index": 34,
+      "indices": [
+        34
+      ],
+      "fingerprint": "83b3e838",
+      "decision": "arbitrated",
+      "changed": true,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": "ok",
+      "chosen": "B",
+      "comment": "Models disagreed; the arbiter chose B."
+    },
+    {
+      "index": 35,
+      "indices": [
+        35
+      ],
+      "fingerprint": "4326d67a",
+      "decision": "arbitrated",
+      "changed": true,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": "ok",
+      "chosen": "B",
+      "comment": "Models disagreed; the arbiter chose B."
+    },
+    {
+      "index": 36,
+      "indices": [
+        36
+      ],
+      "fingerprint": "d19cf4ed",
+      "decision": "arbitrated",
+      "changed": true,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": "ok",
+      "chosen": "B",
+      "comment": "Models disagreed; the arbiter chose B."
+    },
+    {
+      "index": 37,
+      "indices": [
+        37
+      ],
+      "fingerprint": "3f363f26",
+      "decision": "arbitrated",
+      "changed": true,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": "ok",
+      "chosen": "B",
+      "comment": "Models disagreed; the arbiter chose B."
+    },
+    {
+      "index": 38,
+      "indices": [
+        38
+      ],
+      "fingerprint": "79cd5940",
+      "decision": "arbitrated",
+      "changed": true,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": "ok",
+      "chosen": "B",
+      "comment": "Models disagreed; the arbiter chose B."
+    },
+    {
+      "index": 39,
+      "indices": [
+        39
+      ],
+      "fingerprint": "364463db",
+      "decision": "arbitrated",
+      "changed": true,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": "ok",
+      "chosen": "B",
+      "comment": "Models disagreed; the arbiter chose B."
+    },
+    {
+      "index": 40,
+      "indices": [
+        40
+      ],
+      "fingerprint": "929c31ff",
+      "decision": "arbitrated",
+      "changed": true,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": "ok",
+      "chosen": "B",
+      "comment": "Models disagreed; the arbiter chose B."
+    },
+    {
+      "index": 41,
+      "indices": [
+        41
+      ],
+      "fingerprint": "682a9ef9",
+      "decision": "arbitrated",
+      "changed": true,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": "ok",
+      "chosen": "A",
+      "comment": "Models disagreed; the arbiter chose A."
+    },
+    {
+      "index": 42,
+      "indices": [
+        42
+      ],
+      "fingerprint": "b2466730",
+      "decision": "arbitrated",
+      "changed": true,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": "ok",
+      "chosen": "B",
+      "comment": "Models disagreed; the arbiter chose B."
+    },
+    {
+      "index": 43,
+      "indices": [
+        43
+      ],
+      "fingerprint": "a73faa91",
+      "decision": "arbitrated",
+      "changed": true,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": "ok",
+      "chosen": "B",
+      "comment": "Models disagreed; the arbiter chose B."
+    },
+    {
+      "index": 44,
+      "indices": [
+        44
+      ],
+      "fingerprint": "529a5f9a",
+      "decision": "arbitrated",
+      "changed": true,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": "ok",
+      "chosen": "B",
+      "comment": "Models disagreed; the arbiter chose B."
+    },
+    {
+      "index": 45,
+      "indices": [
+        45
+      ],
+      "fingerprint": "b20e0cd1",
+      "decision": "arbitrated",
+      "changed": true,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": "ok",
+      "chosen": "B",
+      "comment": "Models disagreed; the arbiter chose B."
+    },
+    {
+      "index": 46,
+      "indices": [
+        46
+      ],
+      "fingerprint": "87ea58e2",
+      "decision": "arbitrated",
+      "changed": true,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": "ok",
+      "chosen": "B",
+      "comment": "Models disagreed; the arbiter chose B."
+    },
+    {
+      "index": 47,
+      "indices": [
+        47
+      ],
+      "fingerprint": "cf2800d9",
+      "decision": "arbitrated",
+      "changed": true,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": "ok",
+      "chosen": "B",
+      "comment": "Models disagreed; the arbiter chose B."
+    },
+    {
+      "index": 48,
+      "indices": [
+        48
+      ],
+      "fingerprint": "b20e0cd1.2",
+      "decision": "arbitrated",
+      "changed": true,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": "ok",
+      "chosen": "B",
+      "comment": "Models disagreed; the arbiter chose B."
+    },
+    {
+      "index": 49,
+      "indices": [
+        49
+      ],
+      "fingerprint": "3f363f26.2",
+      "decision": "unresolved",
+      "changed": false,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": "error",
+      "chosen": null,
+      "comment": "Models disagreed; unresolved (arbiter: error), original kept."
+    },
+    {
+      "index": 50,
+      "indices": [
+        50
+      ],
+      "fingerprint": "b04a10bc",
+      "decision": "unresolved",
+      "changed": false,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": "error",
+      "chosen": null,
+      "comment": "Models disagreed; unresolved (arbiter: error), original kept."
+    },
+    {
+      "index": 51,
+      "indices": [
+        51
+      ],
+      "fingerprint": "756c28ae",
+      "decision": "unresolved",
+      "changed": false,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": "error",
+      "chosen": null,
+      "comment": "Models disagreed; unresolved (arbiter: error), original kept."
+    },
+    {
+      "index": 52,
+      "indices": [
+        52
+      ],
+      "fingerprint": "f54470bb",
+      "decision": "unresolved",
+      "changed": false,
+      "statuses": {
+        "A": "text_changed",
+        "B": "ok"
+      },
+      "arbiter_status": "error",
+      "chosen": null,
+      "comment": "Models disagreed (A: text_changed); unresolved (arbiter: error), original kept."
+    },
+    {
+      "index": 53,
+      "indices": [
+        53
+      ],
+      "fingerprint": "f8a3881f",
+      "decision": "unresolved",
+      "changed": false,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": "error",
+      "chosen": null,
+      "comment": "Models disagreed; unresolved (arbiter: error), original kept."
+    },
+    {
+      "index": 54,
+      "indices": [
+        54
+      ],
+      "fingerprint": "2c0fb265",
+      "decision": "unresolved",
+      "changed": false,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": "error",
+      "chosen": null,
+      "comment": "Models disagreed; unresolved (arbiter: error), original kept."
+    },
+    {
+      "index": 55,
+      "indices": [
+        55
+      ],
+      "fingerprint": "86829d3b",
+      "decision": "unresolved",
+      "changed": false,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": "error",
+      "chosen": null,
+      "comment": "Models disagreed; unresolved (arbiter: error), original kept."
+    },
+    {
+      "index": 56,
+      "indices": [
+        56
+      ],
+      "fingerprint": "fab97707",
+      "decision": "agreed",
+      "changed": true,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": null,
+      "chosen": null,
+      "comment": ""
+    },
+    {
+      "index": 57,
+      "indices": [
+        57
+      ],
+      "fingerprint": "d418b16d",
+      "decision": "unresolved",
+      "changed": false,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": "error",
+      "chosen": null,
+      "comment": "Models disagreed; unresolved (arbiter: error), original kept."
+    },
+    {
+      "index": 58,
+      "indices": [
+        58
+      ],
+      "fingerprint": "3f9097c7",
+      "decision": "unresolved",
+      "changed": false,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": "error",
+      "chosen": null,
+      "comment": "Models disagreed; unresolved (arbiter: error), original kept."
+    },
+    {
+      "index": 59,
+      "indices": [
+        59
+      ],
+      "fingerprint": "20d81151",
+      "decision": "agreed",
+      "changed": false,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": null,
+      "chosen": null,
+      "comment": ""
+    },
+    {
+      "index": 60,
+      "indices": [
+        60
+      ],
+      "fingerprint": "38d97f88",
+      "decision": "unresolved",
+      "changed": false,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": "error",
+      "chosen": null,
+      "comment": "Models disagreed; unresolved (arbiter: error), original kept."
+    },
+    {
+      "index": 61,
+      "indices": [
+        61
+      ],
+      "fingerprint": "667eaef3",
+      "decision": "unresolved",
+      "changed": false,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": "error",
+      "chosen": null,
+      "comment": "Models disagreed; unresolved (arbiter: error), original kept."
+    },
+    {
+      "index": 62,
+      "indices": [
+        62
+      ],
+      "fingerprint": "1149ff82",
+      "decision": "unresolved",
+      "changed": false,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": "error",
+      "chosen": null,
+      "comment": "Models disagreed; unresolved (arbiter: error), original kept."
+    },
+    {
+      "index": 63,
+      "indices": [
+        63
+      ],
+      "fingerprint": "7bf7b83d",
+      "decision": "unresolved",
+      "changed": false,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": "error",
+      "chosen": null,
+      "comment": "Models disagreed; unresolved (arbiter: error), original kept."
+    },
+    {
+      "index": 64,
+      "indices": [
+        64
+      ],
+      "fingerprint": "34bf845a",
+      "decision": "unresolved",
+      "changed": false,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": "error",
+      "chosen": null,
+      "comment": "Models disagreed; unresolved (arbiter: error), original kept."
+    },
+    {
+      "index": 65,
+      "indices": [
+        65
+      ],
+      "fingerprint": "11f1a36d",
+      "decision": "unresolved",
+      "changed": false,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": "error",
+      "chosen": null,
+      "comment": "Models disagreed; unresolved (arbiter: error), original kept."
+    },
+    {
+      "index": 66,
+      "indices": [
+        66
+      ],
+      "fingerprint": "21902184",
+      "decision": "agreed",
+      "changed": false,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": null,
+      "chosen": null,
+      "comment": ""
+    },
+    {
+      "index": 67,
+      "indices": [
+        67
+      ],
+      "fingerprint": "2e28ccee",
+      "decision": "unresolved",
+      "changed": false,
+      "statuses": {
+        "A": "text_changed",
+        "B": "ok"
+      },
+      "arbiter_status": "error",
+      "chosen": null,
+      "comment": "Models disagreed (A: text_changed); unresolved (arbiter: error), original kept."
+    },
+    {
+      "index": 68,
+      "indices": [
+        68
+      ],
+      "fingerprint": "143c9694",
+      "decision": "unresolved",
+      "changed": false,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": "error",
+      "chosen": null,
+      "comment": "Models disagreed; unresolved (arbiter: error), original kept."
+    },
+    {
+      "index": 69,
+      "indices": [
+        69
+      ],
+      "fingerprint": "617f4dab.2",
+      "decision": "unresolved",
+      "changed": false,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": "error",
+      "chosen": null,
+      "comment": "Models disagreed; unresolved (arbiter: error), original kept."
+    },
+    {
+      "index": 70,
+      "indices": [
+        70
+      ],
+      "fingerprint": "eb36a2ce",
+      "decision": "unresolved",
+      "changed": false,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": "error",
+      "chosen": null,
+      "comment": "Models disagreed; unresolved (arbiter: error), original kept."
+    },
+    {
+      "index": 71,
+      "indices": [
+        71
+      ],
+      "fingerprint": "a72ea784",
+      "decision": "unresolved",
+      "changed": false,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": "error",
+      "chosen": null,
+      "comment": "Models disagreed; unresolved (arbiter: error), original kept."
+    },
+    {
+      "index": 72,
+      "indices": [
+        72
+      ],
+      "fingerprint": "c12b210d",
+      "decision": "unresolved",
+      "changed": false,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": "error",
+      "chosen": null,
+      "comment": "Models disagreed; unresolved (arbiter: error), original kept."
+    },
+    {
+      "index": 73,
+      "indices": [
+        73
+      ],
+      "fingerprint": "d7b9c07a",
+      "decision": "agreed",
+      "changed": true,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": null,
+      "chosen": null,
+      "comment": ""
+    },
+    {
+      "index": 74,
+      "indices": [
+        74
+      ],
+      "fingerprint": "4bbf96a4",
+      "decision": "agreed",
+      "changed": true,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": null,
+      "chosen": null,
+      "comment": ""
+    },
+    {
+      "index": 75,
+      "indices": [
+        75
+      ],
+      "fingerprint": "4a34bca0",
+      "decision": "unresolved",
+      "changed": false,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": "error",
+      "chosen": null,
+      "comment": "Models disagreed; unresolved (arbiter: error), original kept."
+    },
+    {
+      "index": 76,
+      "indices": [
+        76
+      ],
+      "fingerprint": "b331aaca",
+      "decision": "unresolved",
+      "changed": false,
+      "statuses": {
+        "A": "text_changed",
+        "B": "ok"
+      },
+      "arbiter_status": "error",
+      "chosen": null,
+      "comment": "Models disagreed (A: text_changed); unresolved (arbiter: error), original kept."
+    },
+    {
+      "index": 77,
+      "indices": [
+        77
+      ],
+      "fingerprint": "17789143",
+      "decision": "unresolved",
+      "changed": false,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": "error",
+      "chosen": null,
+      "comment": "Models disagreed; unresolved (arbiter: error), original kept."
+    },
+    {
+      "index": 78,
+      "indices": [
+        78
+      ],
+      "fingerprint": "dad1709d",
+      "decision": "agreed",
+      "changed": true,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": null,
+      "chosen": null,
+      "comment": ""
+    },
+    {
+      "index": 79,
+      "indices": [
+        79
+      ],
+      "fingerprint": "53e9f56a",
+      "decision": "arbitrated",
+      "changed": true,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": "ok",
+      "chosen": "own",
+      "comment": "Models disagreed; the arbiter chose own."
+    },
+    {
+      "index": 80,
+      "indices": [
+        80
+      ],
+      "fingerprint": "73297c56",
+      "decision": "arbitrated",
+      "changed": true,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": "ok",
+      "chosen": "B",
+      "comment": "Models disagreed; the arbiter chose B."
+    },
+    {
+      "index": 81,
+      "indices": [
+        81
+      ],
+      "fingerprint": "534d420c",
+      "decision": "arbitrated",
+      "changed": true,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": "ok",
+      "chosen": "B",
+      "comment": "Models disagreed; the arbiter chose B."
+    },
+    {
+      "index": 82,
+      "indices": [
+        82
+      ],
+      "fingerprint": "79145f68",
+      "decision": "arbitrated",
+      "changed": true,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": "ok",
+      "chosen": "B",
+      "comment": "Models disagreed; the arbiter chose B."
+    },
+    {
+      "index": 83,
+      "indices": [
+        83
+      ],
+      "fingerprint": "68accd80",
+      "decision": "agreed",
+      "changed": true,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": null,
+      "chosen": null,
+      "comment": ""
+    },
+    {
+      "index": 84,
+      "indices": [
+        84
+      ],
+      "fingerprint": "4a04b056",
+      "decision": "arbitrated",
+      "changed": true,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": "ok",
+      "chosen": "B",
+      "comment": "Models disagreed; the arbiter chose B."
+    },
+    {
+      "index": 85,
+      "indices": [
+        85
+      ],
+      "fingerprint": "e516f2e2",
+      "decision": "arbitrated",
+      "changed": true,
+      "statuses": {
+        "A": "ok",
+        "B": "ok"
+      },
+      "arbiter_status": "ok",
+      "chosen": "B",
+      "comment": "Models disagreed; the arbiter chose B."
+    }
+  ],
+  "runs": {
+    "A": {
+      "calls": 15,
+      "retries": 0,
+      "seconds": 873.58,
+      "prompt_chars": 555772,
+      "response_chars": 41317,
+      "batches": [
+        {
+          "index": 0,
+          "unit_indices": [
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15
+          ],
+          "prompt_chars": 37820,
+          "response_chars": 3713,
+          "seconds": 63.88908424999681,
+          "raw_response": "\n\n### Unit 1\n<bibl><author>P. Organisciak</author>, <author>J. S. Downie</author>, <title level=\"a\">Research access to in-copyright texts in the humanities</title>, in: <title level=\"m\">Information and Knowledge Organisation in Digital Humanities</title>, <publisher>Routledge</publisher>, <date>2021</date>, pp. <biblScope unit=\"page\" from=\"157\" to=\"177\">157-177</biblScope>.</bibl>\n\n### Unit 2\n<bibl><author>J. Baudry</author> (<date>2023</date>), <title level=\"m\">Non-consumptive research use, an analysis of the legal situation, on Couperin</title>.org, <ptr type=\"web\" target=\"https://www.couperin.org/le-consortium/actus/non-consumptive-research-us e/\">https://www.couperin.org/le-consortium/actus/non-consumptive-research-us e/</ptr>.</bibl>\n\n### Unit 3\n<bibl><seg type=\"citationContext\">Some authors distinguish between \"token-based\" and \"vector-based\" DTF, see Schöch et al.</seg> <date>2020</date>, <author>F. Barth</author>, <author>J. Calvo Tello</author>, <author>K. Du</author>, <author>P. Genêt</author>, <author>L. Keller</author>, <author>J. Knappen</author>, <title level=\"m\">Liste der Abgeleiteten Textformate (working title</title>), <note>forthcoming</note>, <date>2025</date>.</bibl>\n\n### Unit 4\n<bibl><note>Note that for a number of kinds of statistical DTFs, a conversion into transformative DTFs with identical information content is possible, and vice versa, so that these two types are not necessarily fundamentally different</note>.</bibl>\n\n### Unit 5\n<bibl><ptr type=\"web\" target=\"https://textgridrep.org/search?query=&amp;order=relevance&amp;limit=20&amp;mode=list&amp;filter=format :application%2Fxml%3Bderived%3Dtrue&amp;filter=project\">https://textgridrep.org/search?query=&amp;order=relevance&amp;limit=20&amp;mode=list&amp;filter=format :application%2Fxml%3Bderived%3Dtrue&amp;filter=project</ptr>.id%3ATGPR-8b44ca41-6fa1-9b49-67b7-6374d97e29eb.</bibl>\n\n### Unit 6\n<bibl><seg type=\"citationContext\">See e.g.</seg> <author>C. Schöch</author>, <author>F. Döhl</author>, <author>A. Rettinger</author>, <author>E. Gius</author>, <author>P. Trilcke</author>, <author>P. Leinen</author>, <author>F. Jannidis</author>, <author>M. Hinzmann</author>, <author>J. Röpke</author>, <title level=\"m\">Abgeleitete Textformate: Text und Data Mining mit urheberrechtlich geschützten Textbeständen</title> (<date>2020</date>), <ptr type=\"web\" target=\"http://zfdg.de/2020_006\">http://zfdg.de/2020_006</ptr>,. doi:<idno type=\"DOI\">10.17175/2020_006</idno>;</bibl>\n\n### Unit 7\n<bibl><author>Hessel, J.</author>, <author>&amp; Schofield, A.</author> (<date>2021</date>, <date>August</date>). <title level=\"a\">How effective is BERT without word ordering? implica tions for language understanding and data privacy</title>. In <title level=\"m\">Proceedings of the 59th Annual Meeting of the Association for Computational Linguistics and the 11th International Joint Conference on Natural Language Processing</title> (Volume <biblScope unit=\"volume\">2</biblScope>: <title level=\"m\">Short Papers</title>) (pp. <biblScope unit=\"page\" from=\"204\" to=\"211\">204-211</biblScope>);</bibl>\n\n### Unit 8\n<bibl><author>Keli Du</author> &amp; <author>Christof Schöch</author>: \"<title level=\"a\">Shifting Sentiments? What happens to BERT-based Sentiment Classification when derived text formats are used for fine-tuning</title>\" (<note>long presentation</note>). In: <editor>Karajgikar, J.</editor>, <editor>Janco, A.</editor>, <editor>&amp; Otis, J.</editor> (<date>2024</date>). DH<date>2024</date> <title level=\"m\">Book of Abstracts</title>. <publisher>Zenodo</publisher>, <ptr type=\"web\" target=\"https://doi.org/10.5281/zenodo.13761 079\">https://doi.org/<idno type=\"DOI\">10.5281/zenodo.13761 079</idno></ptr>.</bibl>",
+          "error": null,
+          "split_from": null,
+          "retries": 0
+        },
+        {
+          "index": 1,
+          "unit_indices": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "prompt_chars": 37553,
+          "response_chars": 4049,
+          "seconds": 69.260805042024,
+          "raw_response": "\n\n### Unit 1\n<bibl type=\"legislation\"><title level=\"m\" type=\"legislation\" key=\"DSM Directive\">Directive (EU) <idno type=\"actNumber\">2019/790</idno> of <authority type=\"legislature\">the European Parliament and of the Council</authority> of <date type=\"enacted\" when=\"2019-04-17\">17 April 2019</date> on copyright and related rights in the Digital Single Market and amending Directives <ref type=\"work\">96/9/EC</ref> and <ref type=\"work\">2001/29/EC</ref>, DSM Directive</title>, <title level=\"m\" type=\"legislation\" subtype=\"short\" key=\"DSM Directive\">DSM Directive</title>, <ptr type=\"web\" target=\"https://eur-lex.europa.eu/legal-content/EN/TXT/HTML/? uri=CELEX:32019L0790\">https://eur-lex.europa.eu/legal-content/EN/TXT/HTML/? uri=CELEX:<idno type=\"CELEX\">32019L0790</idno></ptr>.</bibl>\n\n### Unit 2\n<bibl><seg type=\"citationContext\">See art.</seg> <biblScope unit=\"volume\">2</biblScope>.</bibl>\n\n### Unit 3\n<bibl><title level=\"m\" type=\"legislation\" key=\"DSM Directive\">DSM Directive</title>.</bibl>\n\n### Unit 4\n<bibl><seg type=\"citationContext\">For a comprehensive analysis of the TDM exceptions in the DSM Directive, their transpo sition into German law and the limitations concerning storage, publication and re-use of datasets, see:</seg> <editor>G. Iacino</editor>, <editor>P. Kamocki</editor>, <editor>P. Leinen</editor>, <title level=\"m\">Assessment of the Impact of the DSM-Direc tive on Text+</title>, <ptr type=\"web\" target=\"https://zenodo.org/doi/10.5281/zenodo.12759959\">https://zenodo.org/doi/<idno type=\"DOI\">10.5281/zenodo.12759959</idno></ptr>.</bibl>\n\n### Unit 5\n<bibl><seg type=\"citationContext\">See e.g.,</seg> <author>Y. Lin</author>, <author>J.-B. Michel</author>, <author>E. Aiden Lieberman</author>, <author>J. Orwant</author>, <author>W. Brockman</author>, <author>S. Petrov</author>, <title level=\"a\">Syntactic Annotations for the Google Books NGram Corpus</title>, in: <title level=\"m\">Proceedings of the ACL 2012 System Demonstrations, Association for Computational Linguistics</title>, <pubPlace>Jeju Island, Korea</pubPlace>, <date>2012</date>, pp. <biblScope unit=\"page\" from=\"169\" to=\"174\">169-174</biblScope>, <ptr type=\"web\" target=\"https://aclanthology.org/P12-3029\">https://aclanthology.org/P12-3029</ptr>;</bibl>\n\n### Unit 6\n<bibl><author>S. Bhattacharyya</author>, <author>P. Organisciak</author>, <author>J. S. Downie</author>, <title level=\"a\">A Fragmentizing Interface to a Large Corpus of Digitized Text: (Post)humanism and Non-consumptive Reading via Features</title>, <title level=\"j\">Interdisciplinary Science Reviews</title> <biblScope unit=\"volume\">40</biblScope> (<date>2015</date>) <biblScope unit=\"page\" from=\"61\" to=\"77\">61-77</biblScope>, <ptr type=\"web\" target=\"http://www.tandfonline.com/doi/\">http://www.tandfonline.com/doi/</ptr>;</bibl>\n\n### Unit 7\n<bibl><author>J. Jett</author>, <author>B. Capitanu</author>, <author>D. Kudeki</author>, <author>T. Cole</author>, <author>Y. Hu</author>, <author>P. Organis ciak</author>, <author>T. Underwood</author>, <author>E. Dickson Koehl</author>, <author>R. Dubnicek</author>, <author>J. S. Downie</author>, <title level=\"m\">The HathiTrust Research Center Extracted Features Dataset</title> (<note>2.0</note>), <date>2020</date>, <ptr type=\"web\" target=\"https://wiki.htrc.illinois.edu/pages/viewpage .action?pageId= 79069329, doi:10.13012/R2TE-C227\">https://wiki.htrc.illinois.edu/pages/viewpage .action?pageId= 79069329, doi:<idno type=\"DOI\">10.13012/R2TE-C227</idno></ptr>;</bibl>\n\n### Unit 8\n<bibl><author>C. Schöch</author>, <author>F. Döhl</author>, <author>A. Rettinger</author>, <author>E. Gius</author>, <author>P. Trilcke</author>, <author>P. Leinen</author>, <author>F. Jannidis</author>, <author>M. Hinzmann</author>, <author>J. Röpke</author>, <title level=\"m\">Abgeleitete Textformate: Text und Data Mining mit urheberrechtlich geschützten Textbeständen</title> (<date>2020</date>), <ptr type=\"web\" target=\"http://zfdg.de/202 0_006. doi:10.17175/2020_006\">http://zfdg.de/202 0_006. doi:<idno type=\"DOI\">10.17175/2020_006</idno></ptr>;</bibl>",
+          "error": null,
+          "split_from": null,
+          "retries": 0
+        },
+        {
+          "index": 2,
+          "unit_indices": [
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23
+          ],
+          "prompt_chars": 37375,
+          "response_chars": 3391,
+          "seconds": 80.47686937500839,
+          "raw_response": "\n\n### Unit 1\n<bibl><seg type=\"citationContext\">See § 64 Urheberrechtsgesetz (UrhG) for the German legal framework</seg>, <ptr type=\"web\" target=\"https://www.gesetze -im-internet.de/englisch_urhg/\">https://www.gesetze -im-internet.de/englisch_urhg/</ptr>.</bibl>\n\n### Unit 2\n<bibl><seg type=\"citationContext\">See § 5 UrhG</seg>.</bibl>\n\n### Unit 3\n<bibl><seg type=\"citationContext\">The Court of Justice of the European Union ruled that texts as short as 11 consecutive words can be protected by copyright; however, very short texts (around 4 words and shorter) are generally regarded as too short to be protected by copyright, see </seg><authority type=\"court\">CJEU</authority>, <date type=\"decision\" when=\"2009-07-16\">judgement of 16 July 2009</date>, <title level=\"a\" type=\"caseName\">Infopaq</title>, <idno type=\"docket\">Case C-5/08</idno>, ECLI:<idno>EU:C:2009:465</idno>, <ptr type=\"web\" target=\"https://curia.europa.eu/juris/docum ent/document.jsf?docid=72482&amp;doclang=EN\">https://curia.europa.eu/juris/docum ent/document.jsf?docid=72482&amp;doclang=EN</ptr>.</bibl>\n\n### Unit 4\n<bibl><seg type=\"citationContext\">See e.g. </seg><authority type=\"court\">LG München I</authority>, Urteil vom <date type=\"decision\" when=\"2017-12-12\">12.12.2017</date>, <idno type=\"docket\">33 O 15792/16</idno>, <ptr type=\"web\" target=\"https://openjur.de/u/970910. html\">https://openjur.de/u/970910. html</ptr>.</bibl>\n\n### Unit 5\n<bibl><title level=\"m\" type=\"legislation\" key=\"InfoSoc Directive\">Directive <idno type=\"actNumber\">2001/29/EC</idno> of <authority type=\"legislature\">the European Parliament and of the Council</authority> of <date type=\"enacted\" when=\"2001-05-22\">22 May 2001</date> on the harmonisation of certain aspects of copyright and related rights in the information society, InfoSoc Directive</title>, <ptr type=\"web\" target=\"https://eur-lex.europa.eu/eli/dir/2001/29/oj\">https://eur-lex.europa.eu/eli/dir/2001/29/oj</ptr>.</bibl>\n\n### Unit 6\n<bibl><authority>WTO</authority>, <title level=\"a\">Report of the Panel</title>, <idno type=\"report\">WT/DS160/R</idno>, <date type=\"publication\" when=\"2000-06-15\">15 June 2000</date>, <citedRange unit=\"number\" n=\"6.229\">para 6.229</citedRange>.</bibl>\n\n### Unit 7\n<bibl><author>M. Senftleben</author>, <title level=\"a\">The International Three-Step Test: A Model Provision for EC Fair Use Legislation</title>, <biblScope unit=\"volume\">1</biblScope> (<date type=\"publication\" when=\"2010\">2010</date>) <title level=\"j\">JIPITEC</title> <biblScope unit=\"page\">67</biblScope>, <citedRange unit=\"number\" n=\"1\">para. 1</citedRange>, <ptr type=\"web\" target=\"https://www.jipitec.eu/archive/issues/jipitec-1-2-2 010/2605/JIPITEC%202%20-%20Senftleben-Three%20Step%20Test.pdf\">https://www.jipitec.eu/archive/issues/jipitec-1-2-2 010/2605/JIPITEC%202%20-%20Senftleben-Three%20Step%20Test.pdf</ptr>.</bibl>\n\n### Unit 8\n<bibl><seg type=\"citationContext\">See esp. </seg><author>M. Senftleben</author>, <title level=\"a\">The International Three-Step Test: A Model Provision for EC Fair Use Legislation</title>, <biblScope unit=\"volume\">1</biblScope> (<date type=\"publication\" when=\"2010\">2010</date>) <title level=\"j\">Journal of Intellectual Property, Information Technology and E-Commerce Law</title>, Vol. <biblScope unit=\"volume\">1</biblScope>, No. <biblScope unit=\"issue\">2</biblScope>, pp. <biblScope unit=\"page\" from=\"67\" to=\"82\">67-82</biblScope>;</bibl>",
+          "error": null,
+          "split_from": null,
+          "retries": 0
+        },
+        {
+          "index": 3,
+          "unit_indices": [
+            24,
+            25,
+            26,
+            27,
+            28,
+            29,
+            30,
+            31
+          ],
+          "prompt_chars": 37465,
+          "response_chars": 2938,
+          "seconds": 76.83589020799263,
+          "raw_response": "\n\n### Unit 1\n<bibl><seg type=\"citationContext\">see also</seg> <author>Gervais, Daniel J</author>. <title level=\"a\">Towards a New Core International Copyright Norm: The Reverse Three-Step Test</title>, <publisher>SRRN</publisher>, <ptr type=\"web\">https://ssrn.com/abstr act=499924</ptr>.</bibl>\n\n### Unit 2\n<bibl><seg type=\"citationContext\">The beneficiaries mentioned in the DSM directive are limited to research organisations (including universities and public research institutes) and cultural heritage institutions (libraries</seg>, museums, archives…). <note>Going beyond the wording of the DSM Directive, the Ger man transposition adds to the list \"citizen scientists\", i.e. researchers without academic affili ation, as long as they are acting for non-commercial purposes. This addition was possible due to a creative fusion of Art. 3 of the DSM Directive with the \"general\" exception for non-commercial scientific research in Art. 5(3)(a) DSM DIrective</note>.</bibl>\n\n### Unit 3\n<bibl><seg type=\"citationContext\">For a more detailed analysis of § 60 d UrhG</seg>, <author>G. Iacino</author>, <editor>P. Kamocki</editor>, <editor>P. Leinen</editor>, <title level=\"m\">Assessment of the Impact of the DSM-Directive on Text+</title>.</bibl>\n\n### Unit 4\n<bibl><title level=\"m\">BeckOK UrhR/Grübler</title>, <edition n=\"42\">42</edition>. Ed. <biblScope unit=\"issue\">1</biblScope>.<biblScope unit=\"issue\">5</biblScope>.<date>2024</date>, <title level=\"a\">UrhG § 60c</title> <citedRange unit=\"margin\" n=\"5\">Rn. 5</citedRange>;</bibl>\n\n### Unit 5\n<bibl><title level=\"m\">Dreier/Schulze/Dreier</title>, <edition n=\"7\">7. Aufl.</edition> <date>2022</date>, <title level=\"a\">UrhG § 60c</title> <citedRange unit=\"margin\" n=\"1\">Rn. 1</citedRange>.</bibl>\n\n### Unit 6\n<bibl><authority type=\"court\">LG Hamburg</authority>, <date type=\"decision\" when=\"2024-09-27\">27.9.2024</date>, Az.: <idno type=\"docket\">310 O 227/23</idno>, <citedRange unit=\"margin\" n=\"113\">Rz. 113</citedRange>, <ptr type=\"web\" target=\"https://openjur.de/u/24956 51.html\">https://openjur.de/u/24956 51.html</ptr>.</bibl>\n\n### Unit 7\n<bibl><seg type=\"citationContext\">See</seg> <citedRange unit=\"recital\" n=\"9\">Recital 9</citedRange> <title level=\"m\" type=\"legislation\" key=\"DSM Directive\">DSM Directive</title>.</bibl>\n\n### Unit 8\n<bibl><authority type=\"court\">CJEU</authority>, judgement of <date type=\"decision\" when=\"2017-04-26\">26 April 2017</date>, <title level=\"a\" type=\"caseName\">Stichting Brein</title>, <idno type=\"docket\">Case C-527/15</idno>, ECLI:<idno type=\"ECLI\">EU:C:2017:300</idno>: <ptr type=\"web\" target=\"https://curia.europa.eu/juris/document/document.jsf?text=&amp;docid=190142&amp;pageIndex=0&amp; doclang=EN&amp;mode=lst&amp;dir=&amp;occ=first&amp;part=1&amp;cid=8019316\">https://curia.europa.eu/juris/document/document.jsf?text=&amp;docid=190142&amp;pageIndex=0&amp; doclang=EN&amp;mode=lst&amp;dir=&amp;occ=first&amp;part=1&amp;cid=8019316</ptr>.</bibl>",
+          "error": null,
+          "split_from": null,
+          "retries": 0
+        },
+        {
+          "index": 4,
+          "unit_indices": [
+            40,
+            41,
+            42,
+            43,
+            44,
+            45,
+            46,
+            47
+          ],
+          "prompt_chars": 36519,
+          "response_chars": 1896,
+          "seconds": 38.46594008401735,
+          "raw_response": "\n\n### Unit 1\n<bibl><authority type=\"court\">CJEU</authority>, <title level=\"a\" type=\"caseName\">Infopaq</title>, <citedRange unit=\"number\" from=\"47\" to=\"48\">para 47-48</citedRange>.</bibl>\n\n### Unit 2\n<bibl><seg type=\"citationContext\">First formulated in</seg> <author>A. Elster</author>, <title level=\"m\">Gewerblicher rechtsschutz, umfassend Urheber-und Verlags recht, Patent-und Musterschutzrecht, Warenzeichenrecht und Wettbewerbsrecht</title>, <publisher>De Gruy ter</publisher>, <date type=\"publication\">1921</date>.</bibl>\n\n### Unit 3\n<bibl><authority type=\"court\">OLG Düsseldorf</authority>, <biblScope unit=\"volume\">28</biblScope>.<biblScope unit=\"issue\">2</biblScope>.<date type=\"publication\">1964</date>, <idno type=\"docket\">2 U 76/63</idno>.</bibl>\n\n### Unit 4\n<bibl><authority type=\"court\">OLG Frankfurt</authority>, <biblScope unit=\"volume\">4</biblScope>.<biblScope unit=\"issue\">8</biblScope>.<date type=\"publication\">1986</date>, <idno type=\"docket\">6 W 134/8</idno>.</bibl>\n\n### Unit 5\n<bibl><authority type=\"court\">LG Mannheim</authority>, <biblScope unit=\"volume\">11</biblScope>.<biblScope unit=\"page\">12</biblScope>.<date type=\"publication\">2009</date>, <idno type=\"docket\">7 O 343/08</idno>.</bibl>\n\n### Unit 6\n<bibl><authority type=\"court\">OLG Köln</authority>, <biblScope unit=\"volume\">8</biblScope>.<biblScope unit=\"page\">4</biblScope>.<date type=\"publication\">2016</date>, <idno type=\"docket\">6 U 120/15</idno>.</bibl>\n\n### Unit 7\n<bibl><authority type=\"court\">OLG Köln</authority>, <biblScope unit=\"volume\">30</biblScope>.<biblScope unit=\"page\">9</biblScope>.<date type=\"publication\">2011</date>, <idno type=\"docket\">I-6 U 82/11</idno>.</bibl>\n\n### Unit 8\n<bibl><authority type=\"court\">LG Frankenthal</authority>, <biblScope unit=\"volume\">3</biblScope>.<biblScope unit=\"page\">11</biblScope>.<date type=\"publication\">2020</date>, <idno type=\"docket\">6 O 102/20</idno>.</bibl>",
+          "error": null,
+          "split_from": null,
+          "retries": 0
+        },
+        {
+          "index": 5,
+          "unit_indices": [
+            32,
+            33,
+            34,
+            35,
+            36,
+            37,
+            38,
+            39
+          ],
+          "prompt_chars": 36186,
+          "response_chars": 1964,
+          "seconds": 62.70251908298815,
+          "raw_response": "\n\n### Unit 1\n<bibl><authority type=\"court\">CJEU</authority>, <title level=\"a\" type=\"caseName\">Infopaq</title>, <citedRange unit=\"number\">para 64</citedRange>.</bibl>\n\n### Unit 2\n<bibl><authority type=\"court\">CJEU</authority>, order of <date type=\"decision\" when=\"2012-01-17\">17 January 2012</date>, <title level=\"a\" type=\"caseName\">Infopaq II</title>, <idno type=\"docket\">Case C-302/10</idno>, ECLI:<idno type=\"ECLI\">EU:C:2012</idno>, <citedRange unit=\"page\">16</citedRange>, <citedRange unit=\"number\">para 39</citedRange>, <ptr type=\"web\" target=\"https://curia.europa.eu/juris/document/document.jsf?text=&amp;docid=118441&amp;pageIndex= 0&amp;doclang=EN&amp;mode=lst&amp;dir=&amp;occ=first&amp;part=1&amp;cid=8021836\">https://curia.europa.eu/juris/document/document.jsf?text=&amp;docid=118441&amp;pageIndex= 0&amp;doclang=EN&amp;mode=lst&amp;dir=&amp;occ=first&amp;part=1&amp;cid=8021836</ptr>.</bibl>\n\n### Unit 3\n<bibl><title level=\"m\">Recital 33 of the InfoSoc Directive; CJEU, Infopaq II</title>, <citedRange unit=\"number\">para 42</citedRange>.</bibl>\n\n### Unit 4\n<bibl><authority type=\"court\">CJEU</authority>, <title level=\"a\" type=\"caseName\">Infopaq II</title>, <citedRange unit=\"number\">para 54</citedRange>.</bibl>\n\n### Unit 5\n<bibl><authority type=\"court\">CJEU</authority>, <title level=\"a\" type=\"caseName\">Infopaq</title>, <citedRange unit=\"number\">para 39</citedRange>.</bibl>\n\n### Unit 6\n<bibl><authority type=\"court\">CJEU</authority>, <title level=\"a\" type=\"caseName\">Infopaq</title>, <citedRange unit=\"number\">para 50</citedRange>.</bibl>\n\n### Unit 7\n<bibl><authority type=\"court\">CJEU</authority>, <title level=\"a\" type=\"caseName\">Pelham</title>, <date type=\"decision\" when=\"2019-07-29\">29 July 2019</date>, <citedRange unit=\"number\">para 39</citedRange>.</bibl>\n\n### Unit 8\n<bibl><authority type=\"court\">CJEU</authority>, <title level=\"a\" type=\"caseName\">Infopaq</title>, <citedRange unit=\"number\" from=\"45\" to=\"46\">para 45-46</citedRange>.</bibl>",
+          "error": null,
+          "split_from": null,
+          "retries": 0
+        },
+        {
+          "index": 6,
+          "unit_indices": [
+            48,
+            49,
+            50,
+            51,
+            52,
+            53,
+            54,
+            55
+          ],
+          "prompt_chars": 36977,
+          "response_chars": 2562,
+          "seconds": 49.65524987500976,
+          "raw_response": "\n\n### Unit 1\n<bibl><authority type=\"court\">OLG Köln</authority>, <biblScope unit=\"volume\">8</biblScope>.<biblScope unit=\"page\">4</biblScope>.<date>2016</date>, <idno type=\"docket\">6 U 120/15</idno>.</bibl>\n\n### Unit 2\n<bibl><authority type=\"court\">CJEU</authority>, <title level=\"a\" type=\"caseName\">Infopaq</title>, <citedRange unit=\"number\" n=\"50\">para 50</citedRange>.</bibl>\n\n### Unit 3\n<bibl><author>K. Du</author> (<date>2024</date>), <title level=\"m\">Rekonstruierbarkeit von abgeleiteten Textformaten</title>, <ptr type=\"web\" target=\"https://events.gwdg.de/ev ent/607/contributions/1408/\">https://events.gwdg.de/ev ent/607/contributions/1408/</ptr>.</bibl>\n\n### Unit 4\n<bibl><author>K. Kugler, S. Münker, J. Höhmann, A. Rettinger</author> (<date type=\"publication\">2023</date>), <title level=\"a\">InvBERT: Reconstructing Text from Contextualized Word Embeddings by inverting the BERT pipeline</title>, <title level=\"j\">Journal of Compu tational Literary Studies</title> <biblScope unit=\"volume\">2</biblScope>(<biblScope unit=\"issue\">1</biblScope>), <biblScope unit=\"page\" from=\"1\" to=\"18\">1-18</biblScope>, doi: <ptr type=\"web\" target=\"https://doi.org/10.48694/jcls.3572\">https://doi.org/<idno type=\"DOI\">10.48694/jcls.3572</idno></ptr>.</bibl>\n\n### Unit 5\n<bibl><author>B. Raue, C. Schöch</author>, <title level=\"a\">Zugang zu großen Textkorpora…</title> <seg type=\"citationContext\">cf. in the context of anonymisation of personal data Recital 26 of the GDPR</seg>.</bibl>\n\n### Unit 6\n<bibl><authority type=\"court\">CJEU</authority>, <idno type=\"docket\">C-476/17</idno>, <title level=\"a\" type=\"caseName\">Pelham</title>, <date type=\"decision\" when=\"2019-07-29\">29 July 2019</date>, <citedRange unit=\"number\" n=\"39\">para 39</citedRange>.</bibl>\n\n### Unit 7\n<bibl><author>M. Senftleben</author>, <title level=\"a\">Flexibility Grave -Partial Reproduction Focus and Closed System Fetishism in CJEU</title>, <publisher>Pelham</publisher>, <title level=\"j\">IIC</title>, <date type=\"publication\">2020</date>, <biblScope unit=\"volume\">51</biblScope>, pp. <biblScope unit=\"page\" from=\"751\" to=\"769\">751 -769</biblScope>.</bibl>\n\n### Unit 8\n<bibl><seg type=\"citationContext\">See also</seg> <author>K. Grisse</author>, <title level=\"m\">Nutzbarmachung urheber rechtlich geschützter Textbestände für die Forschung durch Dritte -Rechtliche Bedingungen und Möglichkeiten</title>, <title level=\"j\">Recht und Zugang</title>, <date type=\"publication\">2020</date>, <biblScope unit=\"volume\">2</biblScope>, pp. <biblScope unit=\"page\" from=\"143\" to=\"159\">143-159</biblScope>.</bibl>",
+          "error": null,
+          "split_from": null,
+          "retries": 0
+        },
+        {
+          "index": 7,
+          "unit_indices": [
+            56,
+            57,
+            58,
+            59,
+            60,
+            61,
+            62,
+            63
+          ],
+          "prompt_chars": 37670,
+          "response_chars": 3265,
+          "seconds": 57.04269133298658,
+          "raw_response": "\n\n### Unit 1\n<bibl><ref type=\"precedingWork\">Ibid.</ref></bibl>\n\n### Unit 2\n<bibl><author>K. Chang, M. Cramer, S. Soni, D. Bamman</author>, (<date type=\"publication\">2023</date>, December). <title level=\"a\">Speak, Memory: An Archae ology of Books Known to ChatGPT/GPT-4</title> (<date type=\"publication\">2023</date>), in: <title level=\"m\">Proceedings of the 2023 Conference on Empirical Methods in Natural Language Processing</title> (pp. <biblScope unit=\"page\" from=\"7312\" to=\"7327\">7312-7327</biblScope>).</bibl>\n\n### Unit 3\n<bibl>Bibliography <ptr type=\"web\">https://zfdg.de/2020_006 https://www.nomos-elibrary.de/10.5771/2699-1284-2020-2-118/zugang-zu-grossen-te xtkorpora-des-20-und-21-jahrhunderts-mit-hilfe-abgeleiteter-textformate-versoehnun g-von-urheberrecht-und-textbasierter-forschung-jahrgang-1-2020-heft-2?page=1 https://www.nomos-elibrary.de/10.5771/2699-1284-2020-2-143.pdf https://www.nomos-elibrary.de/10.5771/2699-1284-2020-2-128</ptr>.</bibl>\n\n### Unit 4\n<bibl>pdf</bibl>\n\n### Unit 5\n<bibl><author>Keli Du &amp; Christof Schöch</author>: \"<title level=\"a\">Shifting Sentiments? What happens to BERT-based Sentiment Classification when derived text formats are used for fine-tuning</title>\" (<note>long pre sentation</note>). In: <editor>Karajgikar, J., Janco, A., &amp; Otis, J.</editor> (<date type=\"publication\">2024</date>). DH<date type=\"publication\">2024</date> <title level=\"m\">Book of Abstracts</title>. Zenodo. <ptr type=\"web\" target=\"https://doi.org/10.5281/zenodo.13761079\">https://doi.org/<idno type=\"DOI\">10.5281/zenodo.13761079</idno></ptr>.</bibl>\n\n### Unit 6\n<bibl><author>Kent Chang, Mackenzie Cramer, Sandeep Soni, and David Bamman</author>. <date type=\"publication\">2023</date>. <title level=\"a\">Speak, Memory: An Archaeology of Books Known to ChatGPT/GPT-4</title>. In <title level=\"m\">Proceedings of the 2023 Conference on Empirical Methods in Natural Language Processing</title>, pages <biblScope unit=\"page\" from=\"7312\" to=\"7327\">7312-7327</biblScope>, <pubPlace>Singapore</pubPlace>. <publisher>Association for Computational Linguistics</publisher>. <ptr type=\"web\" target=\"https://doi.org/10.1 8653/v1/2023.emnlp-main.453\">https://doi.org/<idno type=\"DOI\">10.1 8653/v1/2023.emnlp-main.453</idno></ptr>.</bibl>\n\n### Unit 7\n<bibl><author>Karina Grisse</author>, \"<title level=\"a\">Nutzbarmachung urheberrechtlich geschützter Textbestände für die Forschung durch Dritte -Rechtliche Bedingungen und Möglichkeiten</title>\", <title level=\"j\">Recht und Zugang</title>, <date type=\"publication\">2020</date>, <biblScope unit=\"volume\">2</biblScope>, pp. <biblScope unit=\"page\" from=\"143\" to=\"159\">143-159</biblScope>.</bibl>\n\n### Unit 8\n<bibl><author>Kai Kugler, Simon Münker, Johannes Höhmann, &amp; Achim Rettinger</author> (<date type=\"publication\">2023</date>), \"<title level=\"a\">InvBERT: Reconstructing Text from Contextualized Word Embeddings by inverting the BERT pipeline</title>\", <title level=\"j\">Journal of Computational Literary Studies</title> <biblScope unit=\"volume\">2</biblScope>(<biblScope unit=\"issue\">1</biblScope>), <biblScope unit=\"page\" from=\"1\" to=\"18\">1-18</biblScope>. doi: <ptr type=\"web\" target=\"https:// doi.org/10.48694/jcls.3572\">https:// doi.org/<idno type=\"DOI\">10.48694/jcls.3572</idno></ptr>.</bibl>",
+          "error": null,
+          "split_from": null,
+          "retries": 0
+        },
+        {
+          "index": 8,
+          "unit_indices": [
+            64,
+            65,
+            66,
+            67,
+            68,
+            69,
+            70,
+            71
+          ],
+          "prompt_chars": 37969,
+          "response_chars": 4352,
+          "seconds": 65.7415722500009,
+          "raw_response": "\n\n### Unit 1\n<bibl><author>Y. Lin</author>, <author>J.-B. Michel</author>, <author>E. Aiden Lieberman</author>, <author>J. Orwant</author>, <author>W. Brockman</author>, <author>S. Petrov</author>, <title level=\"a\">Syntac tic Annotations for the Google Books NGram Corpus</title>, in: <title level=\"m\">Proceedings of the ACL 2012 System Demonstrations, Association for Computational Linguistics</title>, <pubPlace>Jeju Island, Korea</pubPlace>, <date type=\"publication\">2012</date>, pp. <biblScope unit=\"page\">169-174</biblScope>. URL: <ptr type=\"web\" target=\"https://aclanthology.org/P12-3029\">https://aclanthology.org/P12-3029</ptr>.</bibl>\n\n### Unit 2\n<bibl><author>S. Bhattacharyya</author>, <author>P. Organisciak</author>, <author>J. S. Downie</author>, <title level=\"a\">A Fragmentizing Interface to a Large Corpus of Digitized Text: (Post)humanism and Non-consumptive Reading via Fea tures</title>, <title level=\"j\">Interdisciplinary Science Reviews</title> <biblScope unit=\"volume\">40</biblScope> (<date type=\"publication\">2015</date>) <biblScope unit=\"page\">61-77</biblScope>. URL: <ptr type=\"web\" target=\"http://www.tandfonli VI. ne.com/doi/full/10.1179/0308018814Z.000000000105. doi:10.1179/0308018814Z.00000 0000105\">http://www.tandfonli VI. ne.com/doi/full/10.1179/0308018814Z.000000000105 doi:<idno type=\"DOI\">10.1179/0308018814Z.00000 0000105</idno></ptr></bibl>\n\n### Unit 3\n<bibl>.</bibl>\n\n### Unit 4\n<bibl><author>J. Jett</author>, <author>B. Capitanu</author>, <author>D. Kudeki</author>, <author>T. Cole</author>, <author>Y. Hu</author>, <author>P. Organisciak</author>, <author>T. Underwood</author>, <author>E. Dickson Koehl</author>, <author>R. Dubnicek</author>, <author>J. S. Downie</author>, <title level=\"m\">The HathiTrust Research Center Extracted Features Dataset</title> (<edition>2.0</edition>), <date type=\"publication\">2020</date>. URL: <ptr type=\"web\" target=\"https://wiki.htrc.illinois.edu/pages/viewp age.action?pageId=79069329. doi:10.13012/R2TE-C227\">https://wiki.htrc.illinois.edu/pages/viewp age.action?pageId=79069329 doi:<idno type=\"DOI\">10.13012/R2TE-C227</idno></ptr>.</bibl>\n\n### Unit 5\n<bibl><author>C. Schöch</author>, <author>F. Döhl</author>, <author>A. Rettinger</author>, <author>E. Gius</author>, <author>P. Trilcke</author>, <author>P. Leinen</author>, <author>F. Jannidis</author>, <author>M. Hinz mann</author>, <author>J. Röpke</author>, <title level=\"m\">Abgeleitete Textformate: Text und Data Mining mit urheberrechtlich geschützten Textbeständen</title> (<date type=\"publication\">2020</date>). URL: <ptr type=\"web\" target=\"http://zfdg.de/2020_006. doi:10.17175/2020_ 006\">http://zfdg.de/2020_006 doi:<idno type=\"DOI\">10.17175/2020_ 006</idno></ptr>.</bibl>\n\n### Unit 6\n<bibl><author>P. Organisciak</author>, <author>J. S. Downie</author>, <title level=\"a\">Research access to in-copyright texts in the humanities</title>, in: <title level=\"m\">Information and Knowledge Organisation in Digital Humanities</title>, <publisher>Routledge</publisher>, <date type=\"publication\">2021</date>, pp. <biblScope unit=\"page\">157-177</biblScope>.</bibl>\n\n### Unit 7\n<bibl><author>P. Organisciak</author>, <author>B. Capitanu</author>, <author>T. Underwood</author>, <author>J. S. Downie</author>, <title level=\"a\">Access to Billions of Pages for Large-Scale Text Analysis</title>, <title level=\"m\">iConference 2017 Proceedings</title> Vol. <biblScope unit=\"volume\">2</biblScope> (<date type=\"publication\">2017</date>). URL: <ptr type=\"web\" target=\"https://hdl.handle.net/2142/98873\">https://hdl.handle.net/2142/98873</ptr>.</bibl>\n\n### Unit 8\n<bibl><author>N. N. Parulian</author>, <author>R. Dubnicek</author>, <author>G. Worthey</author>, <author>D. J. Evans</author>, <author>J. A. Walsh</author>, <author>J. S. Downie</author>, <title level=\"a\">Uncovering Black Fantastic: Piloting A Word Feature Analysis and Machine Learning Approach for Genre Classification</title>, <title level=\"j\">Proceedings of the Association for Information Science and Technology</title> <biblScope unit=\"volume\">59</biblScope> (<date type=\"publication\">2022</date>) <biblScope unit=\"page\">242-250</biblScope>. URL: <ptr type=\"web\" target=\"https://onlinelibrary.wiley.com/doi/ 10.1002/pra2.620. doi:10.1002/pra2.620\">https://onlinelibrary.wiley.com/doi/ 10.1002/pra2.620 doi:<idno type=\"DOI\">10.1002/pra2.620</idno></ptr>.</bibl>",
+          "error": null,
+          "split_from": null,
+          "retries": 0
+        },
+        {
+          "index": 9,
+          "unit_indices": [
+            80,
+            81,
+            82,
+            83,
+            84,
+            85
+          ],
+          "prompt_chars": 37218,
+          "response_chars": 2494,
+          "seconds": 48.865139750007074,
+          "raw_response": "\n\n### Unit 1\n<bibl><seg type=\"citationContext\">First formulated in</seg> <author>A. Elster</author>, <title level=\"m\">Gewerblicher rechtsschutz, umfassend Urheber-und Verlagsrecht, Patent-und Musterschutztrecht, Warenzeichenrecht und Wettbewerbs recht</title>, <publisher>De Gruyter</publisher>, <date>1921</date>.</bibl>\n\n### Unit 2\n<bibl><author>N. Carlini et al.</author>, <title level=\"a\">Extracting Training Data from Large Language Models</title> in: <title level=\"m\">Pro ceedings of the 30th USENIX Security Symposium</title> (<date>August 11-13, 2021</date>), <publisher>USENIX Association</publisher>, <date>2021</date>, pp. <biblScope unit=\"page\">2633-2650</biblScope>.</bibl>\n\n### Unit 3\n<bibl><author>Keli Du</author> (<date>2024</date>), \"<title level=\"a\">Rekonstruierbarkeit von abgeleiteten Textformaten</title>\", <ptr type=\"web\">https://events.g wdg.de/event/607/contributions/1408/</ptr>.</bibl>\n\n### Unit 4\n<bibl><author>M. Senftleben</author>, \"<title level=\"a\">Flexibility Grave -Partial Reproduction Focus and Closed System Fetishism in CJEU, Pelham</title>\", <title level=\"j\">IIC</title>, <date>2020</date>, <biblScope unit=\"volume\">51</biblScope>, pp. <biblScope unit=\"page\">751 -769</biblScope>.</bibl>\n\n### Unit 5\n<bibl><author>Calvo Tello, José, Mathias Göbel, Ubbo Veentjer, Stefan E. Funk, Nanette Rißler-Pipika, and Keli Du</author>. <date>2025</date> (<date>accepted</date>). '<title level=\"a\">FAIR Derived Data in TEI and Its Publication in the TextGrid Repository</title>'. <title level=\"j\">jTEI</title>.</bibl>\n<bibl><author>Burnard, Lou</author>. <date>2004</date>. '<title level=\"a\">Metadata for Corpus Work</title>'. In <title level=\"m\">Developing Linguistic Corpora: A Guide to Good Practice</title>, edited by <editor>Martin Wynne</editor>. <pubPlace>Oxford</pubPlace>: <title level=\"m\">AHDS Literature, Lan guages and Linguistics</title>. <ptr type=\"web\">https://ota.ox.ac.uk/documents/creating/dlc/chapter3.htm</ptr>.</bibl>\n\n### Unit 6\n<bibl><author>Wilkinson, Mark D., Michel Dumontier, IJsbrand Jan Aalbersberg, Gabrielle Apple ton, Myles Axton, Arie Baak, Niklas Blomberg, et al.</author> <date>2016</date>. '<title level=\"a\">The FAIR Guiding Principles for Scientific Data Management and Stewardship</title>'. <title level=\"j\">Scientific Data</title> <biblScope unit=\"volume\">3</biblScope> (<date>March</date>). <ptr type=\"web\" target=\"https://doi.org/10.1038/sdata.2016.18\">https://doi.org/<idno type=\"DOI\">10.1038/sdata.2016.18</idno></ptr></bibl>",
+          "error": null,
+          "split_from": null,
+          "retries": 0
+        },
+        {
+          "index": 10,
+          "unit_indices": [
+            72,
+            73,
+            74,
+            75,
+            76,
+            77,
+            78,
+            79
+          ],
+          "prompt_chars": 38109,
+          "response_chars": 3792,
+          "seconds": 86.88722391598276,
+          "raw_response": "\n\n### Unit 1\n<bibl><author>Michel, J. B.</author>, <author>Shen, Y. K.</author>, <author>Aiden, A. P.</author>, <author>Veres, A.</author>, <author>Gray, M. K.</author>, <author>Google Books Team</author>, ... &amp; <author>Aiden, E. L.</author> (<date>2011</date>). <title level=\"a\">Quantitative analysis of culture using millions of digitized books</title>. <title level=\"j\">science</title>, <biblScope unit=\"volume\">331</biblScope> (<biblScope unit=\"issue\">6014</biblScope>), <biblScope unit=\"page\" from=\"176\" to=\"182\">176-182</biblScope>.</bibl>\n\n### Unit 2\n<bibl><author>Richey, S.</author>, &amp; <author>Taylor, J. B.</author> (<date>2020</date>). <title level=\"a\">Google Books Ngrams and political science: Two validity tests for a novel data source</title>. <title level=\"j\">PS: Political Science &amp; Politics</title>, <biblScope unit=\"volume\">53</biblScope> (<biblScope unit=\"issue\">1</biblScope>), <biblScope unit=\"page\" from=\"72\" to=\"77\">72-77</biblScope>.</bibl>\n\n### Unit 3\n<bibl><author>El-Ebshihy, A.</author>, <author>El-Makky, N. M.</author>, &amp; <author>Nagi, K.</author> (<date>2018</date>). <title level=\"a\">Using Google Books Ngram in Detecting Linguistic Shifts over Time</title>. In <title level=\"m\">KDIR</title> (pp. <biblScope unit=\"page\" from=\"330\" to=\"337\">330-337</biblScope>).</bibl>\n\n### Unit 4\n<bibl><author>Hessel, J.</author>, &amp; <author>Schofield, A.</author> (<date>2021</date>, <date>August</date>). <title level=\"a\">How effective is BERT without word ordering? implications for language understanding and data privacy</title>. In <title level=\"m\">Proceedings of the 59th Annual Meeting of the Association for Computational Linguistics and the 11 th International Joint Conference on Natural Language Processing</title> (Volume <biblScope unit=\"volume\">2</biblScope>: <title level=\"m\">Short Papers</title>) (pp. <biblScope unit=\"page\" from=\"204\" to=\"211\">204-211</biblScope>).</bibl>\n\n### Unit 5\n<bibl><author>G. Iacino</author>, <author>P. Kamocki</author>, <author>P. Leinen</author>, <title level=\"a\">Assessment of the Impact of the DSM-Directive on Text+ F</title> <author>. Barth</author>, <author>J. Calvo Tello</author>, <author>K. Du</author>, <author>P</author>, <editor>. Genêt</editor>, <editor>L. Keller</editor>, <editor>J. Knappen</editor>, <note>Liste der Abgeleiteten Textformate (working title</note>, <note>forthcoming</note>, <date>2025</date>.</bibl>\n\n### Unit 6\n<bibl><author>J. Baudry</author> (<date>2023</date>). <title level=\"m\">Non-consumptive research use, an analysis of the legal situation, on Couperin</title>.org, <ptr type=\"web\">https://www.couperin.org/le-consortium/actus/non-consumptive-resea rch-use/</ptr>. WTO, Report of the Panel, WT/DS160/R, <date when=\"2000-06-15\">15 June 2000</date>, <citedRange unit=\"number\" n=\"6.229\">para 6.229</citedRange>.</bibl>\n\n### Unit 7\n<bibl><author>Martin Senftleben</author>, <title level=\"a\">The International Three-Step Test: A Model Provision for EC Fair Use Legislation</title>, <biblScope unit=\"volume\">1</biblScope> (<date>2010</date>) <title level=\"j\">Journal of Intellectual Property, Information Technology and E-Commerce Law</title>, Vol. <biblScope unit=\"volume\">1</biblScope>, No. <biblScope unit=\"issue\">2</biblScope>, pp. <biblScope unit=\"page\" from=\"67\" to=\"82\">67-82</biblScope>.</bibl>\n\n### Unit 8\n<bibl><author>Gervais, Daniel J.</author>, <title level=\"a\">Towards a New Core International Copyright Norm: The Reverse Three-Step Test</title>. Available at SSRN: <ptr type=\"web\">https://ssrn.com/abstract=499924</ptr>. <title level=\"m\">BeckOK UrhR/Grübler</title>, <edition n=\"42\">42. Ed.</edition> <date type=\"publication\" when=\"2024-05-01\">1.5.2024</date>, <note>UrhG § 60c Rn Dreier/Schulze/Dreier, 7. Aufl. 2022</note>, <note>UrhG § 60c Rn</note>.</bibl>",
+          "error": null,
+          "split_from": null,
+          "retries": 0
+        },
+        {
+          "index": 11,
+          "unit_indices": [
+            68,
+            69,
+            70,
+            71
+          ],
+          "prompt_chars": 36500,
+          "response_chars": 2154,
+          "seconds": 40.9720610420045,
+          "raw_response": "\n\n### Unit 1\n<bibl><author>C. Schöch</author>, <author>F. Döhl</author>, <author>A. Rettinger</author>, <author>E. Gius</author>, <author>P. Trilcke</author>, <author>P. Leinen</author>, <author>F. Jannidis</author>, <author>M. Hinz mann</author>, <author>J. Röpke</author>, <title level=\"m\">Abgeleitete Textformate: Text und Data Mining mit urheberrechtlich geschützten Textbeständen</title> (<date>2020</date>). URL: <ptr type=\"web\" target=\"http://zfdg.de/2020_006\">http://zfdg.de/2020_006. doi:<idno type=\"DOI\">10.17175/2020_ 006</idno></ptr>.</bibl>\n\n### Unit 2\n<bibl><author>P. Organisciak</author>, <author>J. S. Downie</author>, <title level=\"a\">Research access to in-copyright texts in the humanities</title>, in: <title level=\"m\">Information and Knowledge Organisation in Digital Humanities</title>, <publisher>Routledge</publisher>, <date>2021</date>, pp. <biblScope unit=\"page\" from=\"157\" to=\"177\">157-177</biblScope>.</bibl>\n\n### Unit 3\n<bibl><author>P. Organisciak</author>, <author>B. Capitanu</author>, <author>T. Underwood</author>, <author>J. S. Downie</author>, <title level=\"a\">Access to Billions of Pages for Large-Scale Text Analysis</title>, <title level=\"m\">iConference 2017 Proceedings</title> Vol. <biblScope unit=\"volume\">2</biblScope> (<date>2017</date>). URL: <ptr type=\"web\" target=\"https://hdl.handle.net/2142/98873\">https://hdl.handle.net/2142/98873</ptr>.</bibl>\n\n### Unit 4\n<bibl><author>N. N. Parulian</author>, <author>R. Dubnicek</author>, <author>G. Worthey</author>, <author>D. J. Evans</author>, <author>J. A. Walsh</author>, <author>J. S. Downie</author>, <title level=\"a\">Uncovering Black Fantastic: Piloting A Word Feature Analysis and Machine Learning Approach for Genre Classification</title>, <title level=\"j\">Proceedings of the Association for Information Science and Technology</title> <biblScope unit=\"volume\">59</biblScope> (<date>2022</date>) <biblScope unit=\"page\" from=\"242\" to=\"250\">242-250</biblScope>. URL: <ptr type=\"web\" target=\"https://onlinelibrary.wiley.com/doi/ 10.1002/pra2.620\">https://onlinelibrary.wiley.com/doi/ 10.1002/pra2.620. doi:<idno type=\"DOI\">10.1002/pra2.620</idno></ptr>.</bibl>",
+          "error": null,
+          "split_from": 8,
+          "retries": 0
+        },
+        {
+          "index": 12,
+          "unit_indices": [
+            64,
+            65,
+            66,
+            67
+          ],
+          "prompt_chars": 36331,
+          "response_chars": 1816,
+          "seconds": 43.81458529201336,
+          "raw_response": "\n\n### Unit 1\n<bibl><author>Y. Lin</author>, <author>J.-B. Michel</author>, <author>E. Aiden Lieberman</author>, <author>J. Orwant</author>, <author>W. Brockman</author>, <author>S. Petrov</author>, <title level=\"a\">Syntac tic Annotations for the Google Books NGram Corpus</title>, in: <title level=\"m\">Proceedings of the ACL 2012 System Demonstrations</title>, <publisher>Association for Computational Linguistics</publisher>, <pubPlace>Jeju Island, Korea</pubPlace>, <date>2012</date>, pp. <biblScope unit=\"page\">169-174</biblScope>. URL: <ptr type=\"web\">https://aclanthology.org/P12-3029</ptr>.</bibl>\n\n### Unit 2\n<bibl><author>S. Bhattacharyya</author>, <author>P. Organisciak</author>, <author>J. S. Downie</author>, <title level=\"a\">A Fragmentizing Interface to a Large Corpus of Digitized Text: (Post)humanism and Non-consumptive Reading via Fea tures</title>, <title level=\"j\">Interdisciplinary Science Reviews</title> <biblScope unit=\"volume\">40</biblScope> (<date>2015</date>) <biblScope unit=\"page\">61-77</biblScope>. URL: <ptr type=\"web\">http://www.tandfonli VI. ne.com/doi/full/<idno type=\"DOI\">10.1179/0308018814Z.000000000105</idno>. doi:10.1179/0308018814Z.00000 0000105</ptr></bibl>\n\n### Unit 3\n<bibl>.</bibl>\n\n### Unit 4\n<bibl><author>J. Jett</author>, <author>B. Capitanu</author>, <author>D. Kudeki</author>, <author>T. Cole</author>, <author>Y. Hu</author>, <author>P. Organisciak</author>, <author>T. Underwood</author>, <author>E. Dickson Koehl</author>, <author>R. Dubnicek</author>, <author>J. S. Downie</author>, <title level=\"m\">The HathiTrust Research Center Extracted Features Dataset</title> <edition>2.0</edition>, <date>2020</date>. URL: <ptr type=\"web\">https://wiki.htrc.illinois.edu/pages/viewp age.action?pageId=79069329. doi:<idno type=\"DOI\">10.13012/R2TE-C227</idno></ptr>.</bibl>",
+          "error": null,
+          "split_from": 8,
+          "retries": 0
+        },
+        {
+          "index": 13,
+          "unit_indices": [
+            80,
+            81,
+            82
+          ],
+          "prompt_chars": 35767,
+          "response_chars": 1033,
+          "seconds": 34.59742283402011,
+          "raw_response": "\n\n### Unit 1\n<bibl><seg type=\"citationContext\">First formulated</seg> in <author>A. Elster</author>, <title level=\"m\">Gewerblicher rechtsschutz, umfassend Urheber-und Verlagsrecht, Patent-und Musterschutztrecht, Warenzeichenrecht und Wettbewerbs recht</title>, <publisher>De Gruyter</publisher>, <date>1921</date>.</bibl>\n\n### Unit 2\n<bibl><author>N. Carlini et al.</author>, \"<title level=\"a\">Extracting Training Data from Large Language Models</title>\" in: <title level=\"m\">Pro ceedings of the 30th USENIX Security Symposium</title> (<date from=\"2021-08-11\" to=\"2021-08-13\">August 11-13, 2021</date>), <publisher>USENIX Association</publisher>, <date>2021</date>, pp. <biblScope unit=\"page\" from=\"2633\" to=\"2650\">2633-2650</biblScope>.</bibl>\n\n### Unit 3\n<bibl><author>Keli Du</author> (<date>2024</date>), \"<title level=\"a\">Rekonstruierbarkeit von abgeleiteten Textformaten</title>\", <ptr type=\"web\" target=\"https://events.g wdg.de/event/607/contributions/1408/\">https://events.g wdg.de/event/607/contributions/1408/</ptr>.</bibl>",
+          "error": null,
+          "split_from": 9,
+          "retries": 0
+        },
+        {
+          "index": 14,
+          "unit_indices": [
+            83,
+            84,
+            85
+          ],
+          "prompt_chars": 36313,
+          "response_chars": 1898,
+          "seconds": 54.37759966700105,
+          "raw_response": "\n\n### Unit 1\n<bibl><author>M. Senftleben</author>, \"<title level=\"a\">Flexibility Grave -Partial Reproduction Focus and Closed System Fetishism in CJEU, Pelham</title>\", <title level=\"j\">IIC</title>, <date>2020</date>, <biblScope unit=\"volume\">51</biblScope>, pp.<biblScope unit=\"page\" from=\"751\" to=\"769\">751 -769</biblScope>.</bibl>\n\n### Unit 2\n<bibl><author>Calvo Tello, José</author>, <author>Mathias Göbel</author>, <author>Ubbo Veentjer</author>, <author>Stefan E. Funk</author>, <author>Nanette Rißler-Pipika</author>, and <author>Keli Du</author>. <date type=\"publication\">2025</date> (<date>accepted</date>). '<title level=\"a\">FAIR Derived Data in TEI and Its Publication in the TextGrid Repository</title>'. <title level=\"j\">jTEI</title>. <author>Burnard, Lou</author>. <date type=\"publication\">2004</date>. '<title level=\"a\">Metadata for Corpus Work</title>'. In <title level=\"m\">Developing Linguistic Corpora: A Guide to Good Practice</title>, edited by <editor>Martin Wynne</editor>. <pubPlace>Oxford</pubPlace>: <title level=\"s\">AHDS Literature, Lan guages and Linguistics</title>. <ptr type=\"web\" target=\"https://ota.ox.ac.uk/documents/creating/dlc/chapter3.htm\">https://ota.ox.ac.uk/documents/creating/dlc/chapter3.htm</ptr>.</bibl>\n\n### Unit 3\n<bibl><author>Wilkinson, Mark D.</author>, <author>Michel Dumontier</author>, <author>IJsbrand Jan Aalbersberg</author>, <author>Gabrielle Apple ton</author>, <author>Myles Axton</author>, <author>Arie Baak</author>, <author>Niklas Blomberg</author>, et al. <date type=\"publication\">2016</date>. '<title level=\"a\">The FAIR Guiding Principles for Scientific Data Management and Stewardship</title>'. <title level=\"j\">Scientific Data</title> <biblScope unit=\"volume\">3</biblScope> (<date>March</date>). <ptr type=\"web\" target=\"https://doi.org/10.1038/sdata.2016.18\">https://doi.org/<idno type=\"DOI\">10.1038/sdata.2016.18</idno></ptr></bibl>",
+          "error": null,
+          "split_from": 9,
+          "retries": 0
+        }
+      ]
+    },
+    "B": {
+      "calls": 11,
+      "retries": 0,
+      "seconds": 1135.71,
+      "prompt_chars": 410861,
+      "response_chars": 32670,
+      "batches": [
+        {
+          "index": 0,
+          "unit_indices": [
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15
+          ],
+          "prompt_chars": 37820,
+          "response_chars": 3815,
+          "seconds": 54.641468625020934,
+          "raw_response": "### Unit 1\n<bibl><author>P. Organisciak</author>, <author>J. S. Downie</author>, <title level=\"a\">Research access to in-copyright texts in the humanities</title>, in: <title level=\"m\">Information and Knowledge Organisation in Digital Humanities</title>, <publisher>Routledge</publisher>, <date>2021</date>, pp. <biblScope unit=\"page\" from=\"157\" to=\"177\">157-177</biblScope>.</bibl>\n\n### Unit 2\n<bibl><author>J. Baudry</author> (<date>2023</date>), <title level=\"a\">Non-consumptive research use, an analysis of the legal situation</title>, on <title level=\"m\">Couperin.org</title>, <ptr type=\"web\" target=\"https://www.couperin.org/le-consortium/actus/non-consumptive-research-use/\">https://www.couperin.org/le-consortium/actus/non-consumptive-research-us e/</ptr>.</bibl>\n\n### Unit 3\n<bibl><seg type=\"citationContext\">Some authors distinguish between \"token-based\" and \"vector-based\" DTF, see</seg> <author>Schöch</author> et al. <date>2020</date>, <author>F. Barth</author>, <author>J. Calvo Tello</author>, <author>K. Du</author>, <author>P. Genêt</author>, <author>L. Keller</author>, <author>J. Knappen</author>, <title level=\"u\">Liste der Abgeleiteten Textformate</title> (<note>working title</note>), <note>forthcoming</note>, <date>2025</date>.</bibl>\n\n### Unit 4\n<bibl type=\"footnote\"><note>Note that for a number of kinds of statistical DTFs, a conversion into transformative DTFs with identical information content is possible, and vice versa, so that these two types are not necessarily fundamentally different</note>.</bibl>\n\n### Unit 5\n<bibl><ptr type=\"web\" target=\"https://textgridrep.org/search?query=&amp;order=relevance&amp;limit=20&amp;mode=list&amp;filter=format:application%2Fxml%3Bderived%3Dtrue&amp;filter=project.id%3ATGPR-8b44ca41-6fa1-9b49-67b7-6374d97e29eb\">https://textgridrep.org/search?query=&amp;order=relevance&amp;limit=20&amp;mode=list&amp;filter=format :application%2Fxml%3Bderived%3Dtrue&amp;filter=project.id%3ATGPR-8b44ca41-6fa1-9b49-67b7-6374d97e29eb</ptr>.</bibl>\n\n### Unit 6\n<bibl><seg type=\"citationContext\">See e.g.</seg> <author>C. Schöch</author>, <author>F. Döhl</author>, <author>A. Rettinger</author>, <author>E. Gius</author>, <author>P. Trilcke</author>, <author>P. Leinen</author>, <author>F. Jannidis</author>, <author>M. Hinzmann</author>, <author>J. Röpke</author>, <title level=\"a\">Abgeleitete Textformate: Text und Data Mining mit urheberrechtlich geschützten Textbeständen</title> (<date>2020</date>), <ptr type=\"web\" target=\"http://zfdg.de/2020_006\">http://zfdg.de/2020_006</ptr>,. doi:<idno type=\"DOI\">10.17175/2020_006</idno>;</bibl>\n\n### Unit 7\n<bibl><author>Hessel, J.</author>, &amp; <author>Schofield, A.</author> (<date when=\"2021-08\">2021, August</date>). <title level=\"a\">How effective is BERT without word ordering? implica tions for language understanding and data privacy</title>. In <title level=\"m\">Proceedings of the 59th Annual Meeting of the Association for Computational Linguistics and the 11th International Joint Conference on Natural Language Processing</title> (Volume <biblScope unit=\"volume\">2</biblScope>: <title level=\"m\">Short Papers</title>) (pp. <biblScope unit=\"page\" from=\"204\" to=\"211\">204-211</biblScope>);</bibl>\n\n### Unit 8\n<bibl><author>Keli Du</author> &amp; <author>Christof Schöch</author>: \"<title level=\"a\">Shifting Sentiments? What happens to BERT-based Sentiment Classification when derived text formats are used for fine-tuning</title>\" (<note>long presentation</note>). In: <editor>Karajgikar, J.</editor>, <editor>Janco, A.</editor>, &amp; <editor>Otis, J.</editor> (<date>2024</date>). DH2024 <title level=\"m\">Book of Abstracts</title>. <publisher>Zenodo</publisher>, <ptr type=\"web\" target=\"https://doi.org/10.5281/zenodo.13761079\">https://doi.org/<idno type=\"DOI\">10.5281/zenodo.13761 079</idno></ptr>.</bibl>",
+          "error": null,
+          "split_from": null,
+          "retries": 0
+        },
+        {
+          "index": 1,
+          "unit_indices": [
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23
+          ],
+          "prompt_chars": 37375,
+          "response_chars": 3776,
+          "seconds": 43.593762875010725,
+          "raw_response": "### Unit 1\n<bibl type=\"legislation\"><seg type=\"citationContext\">See</seg> <citedRange unit=\"section\" n=\"64\">§ 64</citedRange> <title level=\"m\" type=\"legislation\" key=\"UrhG\">Urheberrechtsgesetz (UrhG)</title> for the German legal framework, <ptr type=\"web\" target=\"https://www.gesetze -im-internet.de/englisch_urhg/\">https://www.gesetze -im-internet.de/englisch_urhg/</ptr>.</bibl>\n\n### Unit 2\n<bibl type=\"legislation\"><seg type=\"citationContext\">See</seg> <citedRange unit=\"section\" n=\"5\">§ 5</citedRange> <title level=\"m\" type=\"legislation\" key=\"UrhG\">UrhG</title>.</bibl>\n\n### Unit 3\n<bibl type=\"decision\"><seg type=\"citationContext\">The Court of Justice of the European Union ruled that texts as short as 11 consecutive words can be protected by copyright; however, very short texts (around 4 words and shorter) are generally regarded as too short to be protected by copyright, see</seg> <authority type=\"court\">CJEU</authority>, judgement of <date type=\"decision\" when=\"2009-07-16\">16 July 2009</date>, <title level=\"a\" type=\"caseName\">Infopaq</title>, Case <idno type=\"docket\">C-5/08</idno>, ECLI:<idno type=\"ECLI\">EU:C:2009:465</idno>, <ptr type=\"web\" target=\"https://curia.europa.eu/juris/docum ent/document.jsf?docid=72482&amp;doclang=EN\">https://curia.europa.eu/juris/docum ent/document.jsf?docid=72482&amp;doclang=EN</ptr>.</bibl>\n\n### Unit 4\n<bibl type=\"decision\"><seg type=\"citationContext\">See e.g.</seg> <authority type=\"court\">LG München I</authority>, Urteil vom <date type=\"decision\" when=\"2017-12-12\">12.12.2017</date>, <idno type=\"docket\">33 O 15792/16</idno>, <ptr type=\"web\" target=\"https://openjur.de/u/970910. html\">https://openjur.de/u/970910. html</ptr>.</bibl>\n\n### Unit 5\n<bibl type=\"legislation\"><title level=\"m\" type=\"legislation\" key=\"InfoSoc Directive\">Directive <idno type=\"actNumber\">2001/29/EC</idno> of <authority type=\"legislature\">the European Parliament and of the Council</authority> of <date type=\"enacted\" when=\"2001-05-22\">22 May 2001</date> on the harmonisation of certain aspects of copyright and related rights in the information society</title>, <title level=\"m\" type=\"legislation\" subtype=\"short\" key=\"InfoSoc Directive\">InfoSoc Directive</title>, <ptr type=\"web\" target=\"https://eur-lex.europa.eu/eli/dir/2001/29/oj\">https://eur-lex.europa.eu/eli/dir/2001/29/oj</ptr>.</bibl>\n\n### Unit 6\n<bibl type=\"decision\"><authority>WTO</authority>, <title level=\"a\">Report of the Panel</title>, <idno type=\"report\">WT/DS160/R</idno>, <date type=\"decision\" when=\"2000-06-15\">15 June 2000</date>, <citedRange unit=\"number\" n=\"6.229\">para 6.229</citedRange>.</bibl>\n\n### Unit 7\n<bibl><author>M. Senftleben</author>, <title level=\"a\">The International Three-Step Test: A Model Provision for EC Fair Use Legislation</title>, <biblScope unit=\"volume\">1</biblScope> (<date type=\"publication\">2010</date>) <title level=\"j\">JIPITEC</title> <biblScope unit=\"page\" from=\"67\">67</biblScope>, <citedRange unit=\"number\" n=\"1\">para. 1</citedRange>, <ptr type=\"web\" target=\"https://www.jipitec.eu/archive/issues/jipitec-1-2-2 010/2605/JIPITEC%202%20-%20Senftleben-Three%20Step%20Test.pdf\">https://www.jipitec.eu/archive/issues/jipitec-1-2-2 010/2605/JIPITEC%202%20-%20Senftleben-Three%20Step%20Test.pdf</ptr>.</bibl>\n\n### Unit 8\n<bibl><seg type=\"citationContext\">See esp.</seg> <author>M. Senftleben</author>, <title level=\"a\">The International Three-Step Test: A Model Provision for EC Fair Use Legislation</title>, <biblScope unit=\"volume\">1</biblScope> (<date type=\"publication\">2010</date>) <title level=\"j\">Journal of Intellectual Property, Information Technology and E-Commerce Law</title>, Vol. <biblScope unit=\"volume\">1</biblScope>, No. <biblScope unit=\"issue\">2</biblScope>, pp. <biblScope unit=\"page\" from=\"67\" to=\"82\">67-82</biblScope>;</bibl>",
+          "error": null,
+          "split_from": null,
+          "retries": 0
+        },
+        {
+          "index": 2,
+          "unit_indices": [
+            24,
+            25,
+            26,
+            27,
+            28,
+            29,
+            30,
+            31
+          ],
+          "prompt_chars": 37465,
+          "response_chars": 2997,
+          "seconds": 33.797896917007165,
+          "raw_response": "### Unit 1\n<bibl><seg type=\"citationContext\">see also</seg> <author>Gervais, Daniel J</author>., <title level=\"a\">Towards a New Core International Copyright Norm: The Reverse Three-Step Test</title>, <publisher>SRRN</publisher>, <ptr type=\"web\" target=\"https://ssrn.com/abstr act=499924\">https://ssrn.com/abstr act=499924</ptr>.</bibl>\n\n### Unit 2\n<bibl type=\"footnote\">The beneficiaries mentioned in the DSM directive are limited to research organisations (including universities and public research institutes) and cultural heritage institutions (libraries, museums, archives…). Going beyond the wording of the DSM Directive, the Ger man transposition adds to the list \"citizen scientists\", i.e. researchers without academic affili ation, as long as they are acting for non-commercial purposes. This addition was possible due to a creative fusion of Art. 3 of the DSM Directive with the \"general\" exception for non-commercial scientific research in Art. 5(3)(a) DSM DIrective.</bibl>\n\n### Unit 3\n<bibl><seg type=\"citationContext\">For a more detailed analysis of § 60 d UrhG,</seg> <author>G. Iacino</author>, <author>P. Kamocki</author>, <author>P. Leinen</author>, <title level=\"m\">Assessment of the Impact of the DSM-Directive on Text+</title>.</bibl>\n\n### Unit 4\n<bibl><title level=\"m\">BeckOK UrhR</title>/<author>Grübler</author>, <edition n=\"42\">42. Ed.</edition> <date type=\"publication\" when=\"2024-05-01\">1.5.2024</date>, <title level=\"a\">UrhG § 60c</title> <citedRange unit=\"margin\" n=\"5\">Rn. 5</citedRange>;</bibl>\n\n### Unit 5\n<bibl><title level=\"m\">Dreier/Schulze</title>/<author>Dreier</author>, <edition n=\"7\">7. Aufl.</edition> <date type=\"publication\">2022</date>, <title level=\"a\">UrhG § 60c</title> <citedRange unit=\"margin\" n=\"1\">Rn. 1</citedRange>.</bibl>\n\n### Unit 6\n<bibl><authority type=\"court\">LG Hamburg</authority>, Urteil vom <date type=\"decision\" when=\"2024-09-27\">27.9.2024</date>, Az.: <idno type=\"docket\">310 O 227/23</idno>, <citedRange unit=\"margin\" n=\"113\">Rz. 113</citedRange>, <ptr type=\"web\" target=\"https://openjur.de/u/24956 51.html\">https://openjur.de/u/24956 51.html</ptr>.</bibl>\n\n### Unit 7\n<bibl type=\"legislation\"><seg type=\"citationContext\">See</seg> <citedRange unit=\"recital\" n=\"9\">Recital 9</citedRange> <title level=\"m\" type=\"legislation\" key=\"DSM Directive\">DSM Directive</title>.</bibl>\n\n### Unit 8\n<bibl><authority type=\"court\">CJEU</authority>, judgement of <date type=\"decision\" when=\"2017-04-26\">26 April 2017</date>, <title level=\"a\" type=\"caseName\">Stichting Brein</title>, Case <idno type=\"docket\">C-527/15</idno>, ECLI:<idno type=\"ECLI\">EU:C:2017:300</idno>: <ptr type=\"web\" target=\"https://curia.europa.eu/juris/document/document.jsf?text=&amp;docid=190142&amp;pageIndex=0&amp; doclang=EN&amp;mode=lst&amp;dir=&amp;occ=first&amp;part=1&amp;cid=8019316\">https://curia.europa.eu/juris/document/document.jsf?text=&amp;docid=190142&amp;pageIndex=0&amp; doclang=EN&amp;mode=lst&amp;dir=&amp;occ=first&amp;part=1&amp;cid=8019316</ptr>.</bibl>",
+          "error": null,
+          "split_from": null,
+          "retries": 0
+        },
+        {
+          "index": 3,
+          "unit_indices": [
+            32,
+            33,
+            34,
+            35,
+            36,
+            37,
+            38,
+            39
+          ],
+          "prompt_chars": 36186,
+          "response_chars": 2267,
+          "seconds": 220.32427341700532,
+          "raw_response": "### Unit 1\n<bibl type=\"decision\"><authority type=\"court\">CJEU</authority>, <title level=\"a\" type=\"caseName\">Infopaq</title>, <citedRange unit=\"number\" n=\"64\">para 64</citedRange>.</bibl>\n\n### Unit 2\n<bibl type=\"decision\"><authority type=\"court\">CJEU</authority>, order of <date type=\"decision\" when=\"2012-01-17\">17 January 2012</date>, <title level=\"a\" type=\"caseName\">Infopaq II</title>, Case <idno type=\"docket\">C-302/10</idno>, <idno type=\"ECLI\">ECLI:EU:C:2012,16</idno>,<citedRange unit=\"number\" n=\"39\">para 39</citedRange>, <ptr type=\"web\" target=\"https://curia.europa.eu/juris/document/document.jsf?text=&amp;docid=118441&amp;pageIndex= 0&amp;doclang=EN&amp;mode=lst&amp;dir=&amp;occ=first&amp;part=1&amp;cid=8021836\">https://curia.europa.eu/juris/document/document.jsf?text=&amp;docid=118441&amp;pageIndex= 0&amp;doclang=EN&amp;mode=lst&amp;dir=&amp;occ=first&amp;part=1&amp;cid=8021836</ptr>.</bibl>\n\n### Unit 3\n<bibl type=\"decision\"><citedRange unit=\"recital\" n=\"33\">Recital 33</citedRange> of the <title level=\"m\" type=\"legislation\" key=\"InfoSoc Directive\">InfoSoc Directive</title>; <authority type=\"court\">CJEU</authority>, <title level=\"a\" type=\"caseName\">Infopaq II</title>, <citedRange unit=\"number\" n=\"42\">para 42</citedRange>.</bibl>\n\n### Unit 4\n<bibl type=\"decision\"><authority type=\"court\">CJEU</authority>, <title level=\"a\" type=\"caseName\">Infopaq II</title>, <citedRange unit=\"number\" n=\"54\">para 54</citedRange>.</bibl>\n\n### Unit 5\n<bibl type=\"decision\"><authority type=\"court\">CJEU</authority>, <title level=\"a\" type=\"caseName\">Infopaq</title>, <citedRange unit=\"number\" n=\"39\">para 39</citedRange>.</bibl>\n\n### Unit 6\n<bibl type=\"decision\"><authority type=\"court\">CJEU</authority>, <title level=\"a\" type=\"caseName\">Infopaq</title>, <citedRange unit=\"number\" n=\"50\">para 50</citedRange>.</bibl>\n\n### Unit 7\n<bibl type=\"decision\"><authority type=\"court\">CJEU</authority>, <title level=\"a\" type=\"caseName\">Pelham</title>, <date type=\"decision\" when=\"2019-07-29\">29 July 2019</date>, <citedRange unit=\"number\" n=\"39\">para 39</citedRange>.</bibl>\n\n### Unit 8\n<bibl type=\"decision\"><authority type=\"court\">CJEU</authority>, <title level=\"a\" type=\"caseName\">Infopaq</title>, <citedRange unit=\"number\" from=\"45\" to=\"46\">para 45-46</citedRange>.</bibl>",
+          "error": null,
+          "split_from": null,
+          "retries": 0
+        },
+        {
+          "index": 4,
+          "unit_indices": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "prompt_chars": 37553,
+          "response_chars": 0,
+          "seconds": 360.22018687499803,
+          "raw_response": "",
+          "error": "ConnectionError: HTTPSConnectionPool(host='chat-ai.academiccloud.de', port=443): Max retries exceeded with url: /v1/chat/completions (Caused by ReadTimeoutError(\"HTTPSConnectionPool(host='chat-ai.academiccloud.de', port=443): Read timed out. (read timeout=180)\"))",
+          "split_from": null,
+          "retries": 0
+        },
+        {
+          "index": 5,
+          "unit_indices": [
+            40,
+            41,
+            42,
+            43,
+            44,
+            45,
+            46,
+            47
+          ],
+          "prompt_chars": 36519,
+          "response_chars": 1662,
+          "seconds": 13.389300374983577,
+          "raw_response": "### Unit 1\n<bibl type=\"decision\"><authority type=\"court\">CJEU</authority>, <title level=\"a\" type=\"caseName\">Infopaq</title>, <citedRange unit=\"number\" from=\"47\" to=\"48\">para 47-48</citedRange>.</bibl>\n\n### Unit 2\n<bibl><seg type=\"citationContext\">First formulated in</seg> <editor>A. Elster</editor>, <title level=\"m\">Gewerblicher rechtsschutz, umfassend Urheber-und Verlags recht, Patent-und Musterschutzrecht, Warenzeichenrecht und Wettbewerbsrecht</title>, <publisher>De Gruy ter</publisher>, <date type=\"publication\">1921</date>.</bibl>\n\n### Unit 3\n<bibl type=\"decision\"><authority type=\"court\">OLG Düsseldorf</authority>, <date type=\"decision\" when=\"1964-02-28\">28.2.1964</date>, <idno type=\"docket\">2 U 76/63</idno>.</bibl>\n\n### Unit 4\n<bibl type=\"decision\"><authority type=\"court\">OLG Frankfurt</authority>, <date type=\"decision\" when=\"1986-08-04\">4.8.1986</date>, <idno type=\"docket\">6 W 134/8</idno>.</bibl>\n\n### Unit 5\n<bibl type=\"decision\"><authority type=\"court\">LG Mannheim</authority>, <date type=\"decision\" when=\"2009-12-11\">11.12.2009</date>, <idno type=\"docket\">7 O 343/08</idno>.</bibl>\n\n### Unit 6\n<bibl type=\"decision\"><authority type=\"court\">OLG Köln</authority>, <date type=\"decision\" when=\"2016-04-08\">8.4.2016</date>, <idno type=\"docket\">6 U 120/15</idno>.</bibl>\n\n### Unit 7\n<bibl type=\"decision\"><authority type=\"court\">OLG Köln</authority>, <date type=\"decision\" when=\"2011-09-30\">30.9.2011</date>, <idno type=\"docket\">I-6 U 82/11</idno>.</bibl>\n\n### Unit 8\n<bibl type=\"decision\"><authority type=\"court\">LG Frankenthal</authority>, <date type=\"decision\" when=\"2020-11-03\">3.11.2020</date>, <idno type=\"docket\">6 O 102/20</idno>.</bibl>",
+          "error": null,
+          "split_from": null,
+          "retries": 0
+        },
+        {
+          "index": 6,
+          "unit_indices": [
+            56,
+            57,
+            58,
+            59,
+            60,
+            61,
+            62,
+            63
+          ],
+          "prompt_chars": 37670,
+          "response_chars": 3929,
+          "seconds": 43.772752459015464,
+          "raw_response": "### Unit 1\n<bibl><ref type=\"precedingWork\">Ibid.</ref></bibl>\n\n### Unit 2\n<bibl><author>K. Chang</author>, <author>M. Cramer</author>, <author>S. Soni</author>, <author>D. Bamman</author>, (<date>2023</date>, <date when=\"2023-12\">December</date>). <title level=\"a\">Speak, Memory: An Archae ology of Books Known to ChatGPT/GPT-4</title> (<date>2023</date>), in: <title level=\"m\">Proceedings of the 2023 Conference on Empirical Methods in Natural Language Processing</title> (pp. <biblScope unit=\"page\" from=\"7312\" to=\"7327\">7312-7327</biblScope>).</bibl>\n\n### Unit 3\n<bibl>Bibliography <ptr type=\"web\" target=\"https://zfdg.de/2020_006\">https://zfdg.de/2020_006</ptr> <ptr type=\"web\" target=\"https://www.nomos-elibrary.de/10.5771/2699-1284-2020-2-118/zugang-zu-grossen-textkorpora-des-20-und-21-jahrhunderts-mit-hilfe-abgeleiteter-textformate-versoehnung-von-urheberrecht-und-textbasierter-forschung-jahrgang-1-2020-heft-2?page=1\">https://www.nomos-elibrary.de/<idno type=\"DOI\">10.5771/2699-1284-2020-2-118</idno>/zugang-zu-grossen-te xtkorpora-des-20-und-21-jahrhunderts-mit-hilfe-abgeleiteter-textformate-versoehnun g-von-urheberrecht-und-textbasierter-forschung-jahrgang-1-2020-heft-2?page=1</ptr> <ptr type=\"web\" target=\"https://www.nomos-elibrary.de/10.5771/2699-1284-2020-2-143.pdf\">https://www.nomos-elibrary.de/<idno type=\"DOI\">10.5771/2699-1284-2020-2-143</idno>.pdf</ptr> <ptr type=\"web\" target=\"https://www.nomos-elibrary.de/10.5771/2699-1284-2020-2-128\">https://www.nomos-elibrary.de/<idno type=\"DOI\">10.5771/2699-1284-2020-2-128</idno></ptr>.</bibl>\n\n### Unit 4\n<bibl>pdf</bibl>\n\n### Unit 5\n<bibl><author>Keli Du</author> &amp; <author>Christof Schöch</author>: \"<title level=\"a\">Shifting Sentiments? What happens to BERT-based Sentiment Classification when derived text formats are used for fine-tuning</title>\" (<note>long pre sentation</note>). In: <editor>Karajgikar, J.</editor>, <editor>Janco, A.</editor>, &amp; <editor>Otis, J.</editor> (<date>2024</date>). <title level=\"m\">DH2024 Book of Abstracts</title>. <publisher>Zenodo</publisher>. <ptr type=\"web\" target=\"https://doi.org/10.5281/zenodo.13761079\">https://doi.org/<idno type=\"DOI\">10.5281/zenodo.13761079</idno></ptr>.</bibl>\n\n### Unit 6\n<bibl><author>Kent Chang</author>, <author>Mackenzie Cramer</author>, <author>Sandeep Soni</author>, and <author>David Bamman</author>. <date>2023</date>. <title level=\"a\">Speak, Memory: An Archaeology of Books Known to ChatGPT/GPT-4</title>. In <title level=\"m\">Proceedings of the 2023 Conference on Empirical Methods in Natural Language Processing</title>, pages <biblScope unit=\"page\" from=\"7312\" to=\"7327\">7312-7327</biblScope>, <pubPlace>Singapore</pubPlace>. <publisher>Association for Computational Linguistics</publisher>. <ptr type=\"web\" target=\"https://doi.org/10.18653/v1/2023.emnlp-main.453\">https://doi.org/<idno type=\"DOI\">10.1 8653/v1/2023.emnlp-main.453</idno></ptr>.</bibl>\n\n### Unit 7\n<bibl><author>Karina Grisse</author>, \"<title level=\"a\">Nutzbarmachung urheberrechtlich geschützter Textbestände für die Forschung durch Dritte -Rechtliche Bedingungen und Möglichkeiten</title>\", <title level=\"j\">Recht und Zugang</title>, <date>2020</date>, <biblScope unit=\"volume\">2</biblScope>, pp. <biblScope unit=\"page\" from=\"143\" to=\"159\">143-159</biblScope>.</bibl>\n\n### Unit 8\n<bibl><author>Kai Kugler</author>, <author>Simon Münker</author>, <author>Johannes Höhmann</author>, &amp; <author>Achim Rettinger</author> (<date>2023</date>), \"<title level=\"a\">InvBERT: Reconstructing Text from Contextualized Word Embeddings by inverting the BERT pipeline</title>\", <title level=\"j\">Journal of Computational Literary Studies</title> <biblScope unit=\"volume\">2</biblScope>(<biblScope unit=\"issue\">1</biblScope>), <biblScope unit=\"page\" from=\"1\" to=\"18\">1-18</biblScope>. doi: <ptr type=\"web\" target=\"https://doi.org/10.48694/jcls.3572\">https:// doi.org/<idno type=\"DOI\">10.48694/jcls.3572</idno></ptr>.</bibl>",
+          "error": null,
+          "split_from": null,
+          "retries": 0
+        },
+        {
+          "index": 7,
+          "unit_indices": [
+            64,
+            65,
+            66,
+            67,
+            68,
+            69,
+            70,
+            71
+          ],
+          "prompt_chars": 37969,
+          "response_chars": 4346,
+          "seconds": 40.46346991698374,
+          "raw_response": "### Unit 1\n<bibl><author>Y. Lin</author>, <author>J.-B. Michel</author>, <author>E. Aiden Lieberman</author>, <author>J. Orwant</author>, <author>W. Brockman</author>, <author>S. Petrov</author>, <title level=\"a\">Syntac tic Annotations for the Google Books NGram Corpus</title>, in: <title level=\"m\">Proceedings of the ACL 2012 System Demonstrations</title>, <publisher>Association for Computational Linguistics</publisher>, <pubPlace>Jeju Island, Korea</pubPlace>, <date type=\"publication\">2012</date>, pp. <biblScope unit=\"page\" from=\"169\" to=\"174\">169-174</biblScope>. URL: <ptr type=\"web\" target=\"https://aclanthology.org/P12-3029\">https://aclanthology.org/P12-3029</ptr>.</bibl>\n\n### Unit 2\n<bibl><author>S. Bhattacharyya</author>, <author>P. Organisciak</author>, <author>J. S. Downie</author>, <title level=\"a\">A Fragmentizing Interface to a Large Corpus of Digitized Text: (Post)humanism and Non-consumptive Reading via Fea tures</title>, <title level=\"j\">Interdisciplinary Science Reviews</title> <biblScope unit=\"volume\">40</biblScope> (<date type=\"publication\">2015</date>) <biblScope unit=\"page\" from=\"61\" to=\"77\">61-77</biblScope>. URL: <ptr type=\"web\" target=\"http://www.tandfonli VI. ne.com/doi/full/10.1179/0308018814Z.000000000105\">http://www.tandfonli VI. ne.com/doi/full/10.1179/0308018814Z.000000000105</ptr>. doi:<idno type=\"DOI\">10.1179/0308018814Z.00000 0000105</idno></bibl>\n\n### Unit 3\n<bibl>.</bibl>\n\n### Unit 4\n<bibl><author>J. Jett</author>, <author>B. Capitanu</author>, <author>D. Kudeki</author>, <author>T. Cole</author>, <author>Y. Hu</author>, <author>P. Organisciak</author>, <author>T. Underwood</author>, <author>E. Dickson Koehl</author>, <author>R. Dubnicek</author>, <author>J. S. Downie</author>, <title level=\"m\">The HathiTrust Research Center Extracted Features Dataset</title> (<edition>2.0</edition>), <date type=\"publication\">2020</date>. URL: <ptr type=\"web\" target=\"https://wiki.htrc.illinois.edu/pages/viewp age.action?pageId=79069329\">https://wiki.htrc.illinois.edu/pages/viewp age.action?pageId=79069329</ptr>. doi:<idno type=\"DOI\">10.13012/R2TE-C227</idno>.</bibl>\n\n### Unit 5\n<bibl><author>C. Schöch</author>, <author>F. Döhl</author>, <author>A. Rettinger</author>, <author>E. Gius</author>, <author>P. Trilcke</author>, <author>P. Leinen</author>, <author>F. Jannidis</author>, <author>M. Hinz mann</author>, <author>J. Röpke</author>, <title level=\"a\">Abgeleitete Textformate: Text und Data Mining mit urheberrechtlich geschützten Textbeständen</title> (<date type=\"publication\">2020</date>). URL: <ptr type=\"web\" target=\"http://zfdg.de/2020_006\">http://zfdg.de/2020_006</ptr>. doi:<idno type=\"DOI\">10.17175/2020_ 006</idno>.</bibl>\n\n### Unit 6\n<bibl><author>P. Organisciak</author>, <author>J. S. Downie</author>, <title level=\"a\">Research access to in-copyright texts in the humanities</title>, in: <title level=\"m\">Information and Knowledge Organisation in Digital Humanities</title>, <publisher>Routledge</publisher>, <date type=\"publication\">2021</date>, pp. <biblScope unit=\"page\" from=\"157\" to=\"177\">157-177</biblScope>.</bibl>\n\n### Unit 7\n<bibl><author>P. Organisciak</author>, <author>B. Capitanu</author>, <author>T. Underwood</author>, <author>J. S. Downie</author>, <title level=\"a\">Access to Billions of Pages for Large-Scale Text Analysis</title>, <title level=\"m\">iConference 2017 Proceedings</title> Vol. <biblScope unit=\"volume\">2</biblScope> (<date type=\"publication\">2017</date>). URL: <ptr type=\"web\" target=\"https://hdl.handle.net/2142/98873\">https://hdl.handle.net/2142/98873</ptr>.</bibl>\n\n### Unit 8\n<bibl><author>N. N. Parulian</author>, <author>R. Dubnicek</author>, <author>G. Worthey</author>, <author>D. J. Evans</author>, <author>J. A. Walsh</author>, <author>J. S. Downie</author>, <title level=\"a\">Uncovering Black Fantastic: Piloting A Word Feature Analysis and Machine Learning Approach for Genre Classification</title>, <title level=\"j\">Proceedings of the Association for Information Science and Technology</title> <biblScope unit=\"volume\">59</biblScope> (<date type=\"publication\">2022</date>) <biblScope unit=\"page\" from=\"242\" to=\"250\">242-250</biblScope>. URL: <ptr type=\"web\" target=\"https://onlinelibrary.wiley.com/doi/ 10.1002/pra2.620\">https://onlinelibrary.wiley.com/doi/ 10.1002/pra2.620</ptr>. doi:<idno type=\"DOI\">10.1002/pra2.620</idno>.</bibl>",
+          "error": null,
+          "split_from": null,
+          "retries": 0
+        },
+        {
+          "index": 8,
+          "unit_indices": [
+            72,
+            73,
+            74,
+            75,
+            76,
+            77,
+            78,
+            79
+          ],
+          "prompt_chars": 38109,
+          "response_chars": 4347,
+          "seconds": 59.11542199997348,
+          "raw_response": "### Unit 1\n<bibl><author>Michel, J. B.</author>, <author>Shen, Y. K.</author>, <author>Aiden, A. P.</author>, <author>Veres, A.</author>, <author>Gray, M. K.</author>, <author>Google Books Team</author>,... &amp; <author>Aiden, E. L.</author> (<date>2011</date>). <title level=\"a\">Quantitative analysis of culture using millions of digitized books</title>. <title level=\"j\">science</title>, <biblScope unit=\"volume\">331</biblScope>(<biblScope unit=\"issue\">6014</biblScope>), <biblScope unit=\"page\" from=\"176\" to=\"182\">176-182</biblScope>.</bibl>\n\n### Unit 2\n<bibl><author>Richey, S.</author>, &amp; <author>Taylor, J. B.</author> (<date>2020</date>). <title level=\"a\">Google Books Ngrams and political science: Two validity tests for a novel data source</title>. <title level=\"j\">PS: Political Science &amp; Politics</title>, <biblScope unit=\"volume\">53</biblScope>(<biblScope unit=\"issue\">1</biblScope>), <biblScope unit=\"page\" from=\"72\" to=\"77\">72-77</biblScope>.</bibl>\n\n### Unit 3\n<bibl><author>El-Ebshihy, A.</author>, <author>El-Makky, N. M.</author>, &amp; <author>Nagi, K.</author> (<date>2018</date>). <title level=\"a\">Using Google Books Ngram in Detecting Linguistic Shifts over Time</title>. In <title level=\"m\">KDIR</title> (pp. <biblScope unit=\"page\" from=\"330\" to=\"337\">330-337</biblScope>).</bibl>\n\n### Unit 4\n<bibl><author>Hessel, J.</author>, &amp; <author>Schofield, A.</author> (<date type=\"publication\" when=\"2021-08\">2021, August</date>). <title level=\"a\">How effective is BERT without word ordering? implications for language understanding and data privacy</title>. In <title level=\"m\">Proceedings of the 59th Annual Meeting of the Association for Computational Linguistics and the 11 th International Joint Conference on Natural Language Processing</title> (Volume <biblScope unit=\"volume\">2</biblScope>: <title level=\"m\">Short Papers</title>) (pp. <biblScope unit=\"page\" from=\"204\" to=\"211\">204-211</biblScope>).</bibl>\n\n### Unit 5\n<bibl><author>G. Iacino</author>, <author>P. Kamocki</author>, <author>P. Leinen</author>, <title level=\"a\">Assessment of the Impact of the DSM-Directive on Text+</title> <editor>F. Barth</editor>, <editor>J. Calvo Tello</editor>, <editor>K. Du</editor>, <editor>P. Genêt</editor>, <editor>L. Keller</editor>, <editor>J. Knappen</editor>, <title level=\"u\">Liste der Abgeleiteten Textformate</title> <note>(working title)</note>, <note>forthcoming</note>, <date>2025</date>.</bibl>\n\n### Unit 6\n<bibl><author>J. Baudry</author> (<date>2023</date>). <title level=\"a\">Non-consumptive research use, an analysis of the legal situation, on Couperin.org</title>, <ptr type=\"web\" target=\"https://www.couperin.org/le-consortium/actus/non-consumptive-resea rch-use/\">https://www.couperin.org/le-consortium/actus/non-consumptive-resea rch-use/</ptr>. <authority type=\"court\">WTO</authority>, <title level=\"m\">Report of the Panel</title>, <idno type=\"report\">WT/DS160/R</idno>, <date type=\"decision\" when=\"2000-06-15\">15 June 2000</date>, <citedRange unit=\"number\" n=\"6.229\">para 6.229</citedRange>.</bibl>\n\n### Unit 7\n<bibl><author>Martin Senftleben</author>, <title level=\"a\">The International Three-Step Test: A Model Provision for EC Fair Use Legislation</title>, <biblScope unit=\"volume\">1</biblScope> (<date>2010</date>) <title level=\"j\">Journal of Intellectual Property, Information Technology and E-Commerce Law</title>, Vol. <biblScope unit=\"volume\">1</biblScope>, No. <biblScope unit=\"issue\">2</biblScope>, pp. <biblScope unit=\"page\" from=\"67\" to=\"82\">67-82</biblScope>.</bibl>\n\n### Unit 8\n<bibl><author>Gervais, Daniel J.</author>, <title level=\"a\">Towards a New Core International Copyright Norm: The Reverse Three-Step Test</title>. <seg type=\"citationContext\">Available at SSRN:</seg> <ptr type=\"web\" target=\"https://ssrn.com/abstract=499924\">https://ssrn.com/abstract=499924</ptr>. <title level=\"m\">BeckOK UrhR</title>/<author>Grübler</author>, <edition n=\"42\">42. Ed.</edition> <date type=\"publication\" when=\"2024-05-01\">1.5.2024</date>, <title level=\"a\" key=\"UrhG § 60c\">UrhG § 60c</title> <citedRange unit=\"margin\">Rn</citedRange> <title level=\"m\">Dreier/Schulze</title>/<author>Dreier</author>, <edition n=\"7\">7. Aufl.</edition> <date type=\"publication\">2022</date>, <title level=\"a\" subtype=\"short\" key=\"UrhG § 60c\">UrhG § 60c</title> <citedRange unit=\"margin\">Rn</citedRange>.</bibl>",
+          "error": null,
+          "split_from": null,
+          "retries": 0
+        },
+        {
+          "index": 9,
+          "unit_indices": [
+            80,
+            81,
+            82,
+            83,
+            84,
+            85
+          ],
+          "prompt_chars": 37218,
+          "response_chars": 2871,
+          "seconds": 40.05097700000624,
+          "raw_response": "### Unit 1\n<bibl><seg type=\"citationContext\">First formulated in</seg> <editor>A. Elster</editor>, <title level=\"m\">Gewerblicher rechtsschutz, umfassend Urheber-und Verlagsrecht, Patent-und Musterschutztrecht, Warenzeichenrecht und Wettbewerbs recht</title>, <publisher>De Gruyter</publisher>, <date>1921</date>.</bibl>\n\n### Unit 2\n<bibl><author>N. Carlini</author> et al., \"<title level=\"a\">Extracting Training Data from Large Language Models</title>\" in: <title level=\"m\">Pro ceedings of the 30th USENIX Security Symposium</title> (<date from=\"2021-08-11\" to=\"2021-08-13\">August 11-13, 2021</date>), <publisher>USENIX Association</publisher>, <date>2021</date>, pp. <biblScope unit=\"page\" from=\"2633\" to=\"2650\">2633-2650</biblScope>.</bibl>\n\n### Unit 3\n<bibl><author>Keli Du</author> (<date>2024</date>), \"<title level=\"a\">Rekonstruierbarkeit von abgeleiteten Textformaten</title>\", <ptr type=\"web\" target=\"https://events.gwdg.de/event/607/contributions/1408/\">https://events.g wdg.de/event/607/contributions/1408/</ptr>.</bibl>\n\n### Unit 4\n<bibl><author>M. Senftleben</author>, \"<title level=\"a\">Flexibility Grave -Partial Reproduction Focus and Closed System Fetishism in CJEU, Pelham</title>\", <title level=\"j\">IIC</title>, <date>2020</date>, <biblScope unit=\"volume\">51</biblScope>, pp.<biblScope unit=\"page\" from=\"751\" to=\"769\">751 -769</biblScope>.</bibl>\n\n### Unit 5\n<bibl><author>Calvo Tello, José</author>, <author>Mathias Göbel</author>, <author>Ubbo Veentjer</author>, <author>Stefan E. Funk</author>, <author>Nanette Rißler-Pipika</author>, and <author>Keli Du</author>. <date>2025</date> (accepted). '<title level=\"a\">FAIR Derived Data in TEI and Its Publication in the TextGrid Repository</title>'. <title level=\"j\">jTEI</title>. <author>Burnard, Lou</author>. <date>2004</date>. '<title level=\"a\">Metadata for Corpus Work</title>'. In <title level=\"m\">Developing Linguistic Corpora: A Guide to Good Practice</title>, edited by <editor>Martin Wynne</editor>. <pubPlace>Oxford</pubPlace>: <publisher>AHDS Literature, Lan guages and Linguistics</publisher>. <ptr type=\"web\" target=\"https://ota.ox.ac.uk/documents/creating/dlc/chapter3.htm\">https://ota.ox.ac.uk/documents/creating/dlc/chapter3.htm</ptr>.</bibl>\n\n### Unit 6\n<bibl><author>Wilkinson, Mark D.</author>, <author>Michel Dumontier</author>, <author>IJsbrand Jan Aalbersberg</author>, <author>Gabrielle Apple ton</author>, <author>Myles Axton</author>, <author>Arie Baak</author>, <author>Niklas Blomberg</author>, et al. <date>2016</date>. '<title level=\"a\">The FAIR Guiding Principles for Scientific Data Management and Stewardship</title>'. <title level=\"j\">Scientific Data</title> <biblScope unit=\"volume\">3</biblScope> (<date when=\"2016-03\">March</date>). <ptr type=\"web\" target=\"https://doi.org/10.1038/sdata.2016.18\">https://doi.org/<idno type=\"DOI\">10.1038/sdata.2016.18</idno></ptr></bibl>",
+          "error": null,
+          "split_from": null,
+          "retries": 0
+        },
+        {
+          "index": 10,
+          "unit_indices": [
+            48,
+            49,
+            50,
+            51,
+            52,
+            53,
+            54,
+            55
+          ],
+          "prompt_chars": 36977,
+          "response_chars": 2660,
+          "seconds": 226.34006633301033,
+          "raw_response": "### Unit 1\n<bibl type=\"decision\"><authority type=\"court\">OLG Köln</authority>, <date type=\"decision\" when=\"2016-04-08\">8.4.2016</date>, <idno type=\"docket\">6 U 120/15</idno>.</bibl>\n\n### Unit 2\n<bibl type=\"decision\"><authority type=\"court\">CJEU</authority>, <title level=\"a\" type=\"caseName\">Infopaq</title>, <citedRange unit=\"number\" n=\"50\">para 50</citedRange>.</bibl>\n\n### Unit 3\n<bibl><author>K. Du</author> (<date>2024</date>), <title level=\"m\">Rekonstruierbarkeit von abgeleiteten Textformaten</title>, <ptr type=\"web\" target=\"https://events.gwdg.de/event/607/contributions/1408/\">https://events.gwdg.de/ev ent/607/contributions/1408/</ptr>.</bibl>\n\n### Unit 4\n<bibl><author>K. Kugler</author>, <author>S. Münker</author>, <author>J. Höhmann</author>, <author>A. Rettinger</author> (<date>2023</date>), <title level=\"a\">InvBERT: Reconstructing Text from Contextualized Word Embeddings by inverting the BERT pipeline</title>, <title level=\"j\">Journal of Compu tational Literary Studies</title> <biblScope unit=\"volume\">2</biblScope>(<biblScope unit=\"issue\">1</biblScope>), <biblScope unit=\"page\" from=\"1\" to=\"18\">1-18</biblScope>, doi: <ptr type=\"web\" target=\"https://doi.org/10.48694/jcls.3572\">https://doi.org/<idno type=\"DOI\">10.48694/jcls.3572</idno></ptr>.</bibl>\n\n### Unit 5\n<bibl><author>B. Raue</author>, <author>C. Schöch</author>, <title level=\"a\">Zugang zu großen Textkorpora…</title>; <seg type=\"citationContext\">cf. in the context of anonymisation of personal data</seg> <citedRange unit=\"recital\" n=\"26\">Recital 26</citedRange> of the <title level=\"m\" type=\"legislation\" key=\"GDPR\">GDPR</title>.</bibl>\n\n### Unit 6\n<bibl type=\"decision\"><authority type=\"court\">CJEU</authority>, <idno type=\"docket\">C-476/17</idno>, <title level=\"a\" type=\"caseName\">Pelham</title>, <date type=\"decision\" when=\"2019-07-29\">29 July 2019</date>, <citedRange unit=\"number\" n=\"39\">para 39</citedRange>.</bibl>\n\n### Unit 7\n<bibl><author>M. Senftleben</author>, <title level=\"a\">Flexibility Grave -Partial Reproduction Focus and Closed System Fetishism in CJEU, Pelham</title>, <title level=\"j\">IIC</title>, <date>2020</date>, <biblScope unit=\"volume\">51</biblScope>, pp. <biblScope unit=\"page\" from=\"751\" to=\"769\">751 -769</biblScope>.</bibl>\n\n### Unit 8\n<bibl><seg type=\"citationContext\">See also</seg> <author>K. Grisse</author>, <title level=\"a\">Nutzbarmachung urheber rechtlich geschützter Textbestände für die Forschung durch Dritte -Rechtliche Bedingungen und Möglichkeiten</title>, <title level=\"j\">Recht und Zugang</title>, <date>2020</date>, <biblScope unit=\"volume\">2</biblScope>, pp. <biblScope unit=\"page\" from=\"143\" to=\"159\">143-159</biblScope>.</bibl>",
+          "error": null,
+          "split_from": null,
+          "retries": 0
+        }
+      ]
+    },
+    "arbiter": {
+      "calls": 10,
+      "retries": 0,
+      "seconds": 2755.46,
+      "prompt_chars": 435463,
+      "response_chars": 10913,
+      "batches": [
+        {
+          "index": 0,
+          "unit_indices": [
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16
+          ],
+          "prompt_chars": 44988,
+          "response_chars": 0,
+          "seconds": 360.20702174998587,
+          "raw_response": "",
+          "error": "ConnectionError: HTTPSConnectionPool(host='chat-ai.academiccloud.de', port=443): Max retries exceeded with url: /v1/chat/completions (Caused by ReadTimeoutError(\"HTTPSConnectionPool(host='chat-ai.academiccloud.de', port=443): Read timed out. (read timeout=180)\"))",
+          "split_from": null,
+          "retries": 0
+        },
+        {
+          "index": 1,
+          "unit_indices": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "prompt_chars": 41032,
+          "response_chars": 0,
+          "seconds": 360.2095147079963,
+          "raw_response": "",
+          "error": "ConnectionError: HTTPSConnectionPool(host='chat-ai.academiccloud.de', port=443): Max retries exceeded with url: /v1/chat/completions (Caused by ReadTimeoutError(\"HTTPSConnectionPool(host='chat-ai.academiccloud.de', port=443): Read timed out. (read timeout=180)\"))",
+          "split_from": null,
+          "retries": 0
+        },
+        {
+          "index": 2,
+          "unit_indices": [
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24
+          ],
+          "prompt_chars": 44479,
+          "response_chars": 3718,
+          "seconds": 102.49778641600278,
+          "raw_response": "### Unit 1\n<bibl type=\"legislation\"><seg type=\"citationContext\">See</seg> <citedRange unit=\"section\" n=\"5\">§ 5</citedRange> <title level=\"m\" type=\"legislation\" key=\"UrhG\">UrhG</title>.</bibl>\n\n### Unit 2\n<bibl type=\"decision\"><seg type=\"citationContext\">The Court of Justice of the European Union ruled that texts as short as 11 consecutive words can be protected by copyright; however, very short texts (around 4 words and shorter) are generally regarded as too short to be protected by copyright, see</seg> <authority type=\"court\">CJEU</authority>, judgement of <date type=\"decision\" when=\"2009-07-16\">16 July 2009</date>, <title level=\"a\" type=\"caseName\">Infopaq</title>, Case <idno type=\"docket\">C-5/08</idno>, ECLI:<idno type=\"ECLI\">EU:C:2009:465</idno>, <ptr type=\"web\" target=\"https://curia.europa.eu/juris/docum ent/document.jsf?docid=72482&amp;doclang=EN\">https://curia.europa.eu/juris/docum ent/document.jsf?docid=72482&amp;doclang=EN</ptr>.</bibl>\n\n### Unit 3\n<bibl type=\"decision\"><seg type=\"citationContext\">See e.g.</seg> <authority type=\"court\">LG München I</authority>, Urteil vom <date type=\"decision\" when=\"2017-12-12\">12.12.2017</date>, <idno type=\"docket\">33 O 15792/16</idno>, <ptr type=\"web\" target=\"https://openjur.de/u/970910. html\">https://openjur.de/u/970910. html</ptr>.</bibl>\n\n### Unit 4\n<bibl type=\"legislation\"><title level=\"m\" type=\"legislation\" key=\"InfoSoc Directive\">Directive <idno type=\"actNumber\">2001/29/EC</idno> of <authority type=\"legislature\">the European Parliament and of the Council</authority> of <date type=\"enacted\" when=\"2001-05-22\">22 May 2001</date> on the harmonisation of certain aspects of copyright and related rights in the information society</title>, <title level=\"m\" type=\"legislation\" subtype=\"short\" key=\"InfoSoc Directive\">InfoSoc Directive</title>, <ptr type=\"web\" target=\"https://eur-lex.europa.eu/eli/dir/2001/29/oj\">https://eur-lex.europa.eu/eli/dir/2001/29/oj</ptr>.</bibl>\n\n### Unit 5\n<bibl><authority>WTO</authority>, <title level=\"a\">Report of the Panel</title>, <idno type=\"report\">WT/DS160/R</idno>, <date type=\"publication\" when=\"2000-06-15\">15 June 2000</date>, <citedRange unit=\"number\" n=\"6.229\">para 6.229</citedRange>.</bibl>\n\n### Unit 6\n<bibl><author>M. Senftleben</author>, <title level=\"a\">The International Three-Step Test: A Model Provision for EC Fair Use Legislation</title>, <biblScope unit=\"volume\">1</biblScope> (<date type=\"publication\">2010</date>) <title level=\"j\">JIPITEC</title> <biblScope unit=\"page\" from=\"67\">67</biblScope>, <citedRange unit=\"number\" n=\"1\">para. 1</citedRange>, <ptr type=\"web\" target=\"https://www.jipitec.eu/archive/issues/jipitec-1-2-2 010/2605/JIPITEC%202%20-%20Senftleben-Three%20Step%20Test.pdf\">https://www.jipitec.eu/archive/issues/jipitec-1-2-2 010/2605/JIPITEC%202%20-%20Senftleben-Three%20Step%20Test.pdf</ptr>.</bibl>\n\n### Unit 7\n<bibl><seg type=\"citationContext\">See esp.</seg> <author>M. Senftleben</author>, <title level=\"a\">The International Three-Step Test: A Model Provision for EC Fair Use Legislation</title>, <biblScope unit=\"volume\">1</biblScope> (<date type=\"publication\">2010</date>) <title level=\"j\">Journal of Intellectual Property, Information Technology and E-Commerce Law</title>, Vol. <biblScope unit=\"volume\">1</biblScope>, No. <biblScope unit=\"issue\">2</biblScope>, pp. <biblScope unit=\"page\" from=\"67\" to=\"82\">67-82</biblScope>;</bibl>\n\n### Unit 8\n<bibl><seg type=\"citationContext\">see also</seg> <author>Gervais, Daniel J</author>., <title level=\"a\">Towards a New Core International Copyright Norm: The Reverse Three-Step Test</title>, <publisher>SRRN</publisher>, <ptr type=\"web\" target=\"https://ssrn.com/abstr act=499924\">https://ssrn.com/abstr act=499924</ptr>.</bibl>",
+          "error": null,
+          "split_from": null,
+          "retries": 0
+        },
+        {
+          "index": 3,
+          "unit_indices": [
+            33,
+            34,
+            35,
+            36,
+            37,
+            38,
+            39,
+            40
+          ],
+          "prompt_chars": 40635,
+          "response_chars": 2281,
+          "seconds": 125.79229466701508,
+          "raw_response": "### Unit 1\n<bibl type=\"decision\"><authority type=\"court\">CJEU</authority>, order of <date type=\"decision\" when=\"2012-01-17\">17 January 2012</date>, <title level=\"a\" type=\"caseName\">Infopaq II</title>, Case <idno type=\"docket\">C-302/10</idno>, <idno type=\"ECLI\">ECLI:EU:C:2012,16</idno>,<citedRange unit=\"number\" n=\"39\">para 39</citedRange>, <ptr type=\"web\" target=\"https://curia.europa.eu/juris/document/document.jsf?text=&amp;docid=118441&amp;pageIndex= 0&amp;doclang=EN&amp;mode=lst&amp;dir=&amp;occ=first&amp;part=1&amp;cid=8021836\">https://curia.europa.eu/juris/document/document.jsf?text=&amp;docid=118441&amp;pageIndex= 0&amp;doclang=EN&amp;mode=lst&amp;dir=&amp;occ=first&amp;part=1&amp;cid=8021836</ptr>.</bibl>\n\n### Unit 2\n<bibl type=\"decision\"><citedRange unit=\"recital\" n=\"33\">Recital 33</citedRange> of the <title level=\"m\" type=\"legislation\" key=\"InfoSoc Directive\">InfoSoc Directive</title>; <authority type=\"court\">CJEU</authority>, <title level=\"a\" type=\"caseName\">Infopaq II</title>, <citedRange unit=\"number\" n=\"42\">para 42</citedRange>.</bibl>\n\n### Unit 3\n<bibl type=\"decision\"><authority type=\"court\">CJEU</authority>, <title level=\"a\" type=\"caseName\">Infopaq II</title>, <citedRange unit=\"number\" n=\"54\">para 54</citedRange>.</bibl>\n\n### Unit 4\n<bibl type=\"decision\"><authority type=\"court\">CJEU</authority>, <title level=\"a\" type=\"caseName\">Infopaq</title>, <citedRange unit=\"number\" n=\"39\">para 39</citedRange>.</bibl>\n\n### Unit 5\n<bibl type=\"decision\"><authority type=\"court\">CJEU</authority>, <title level=\"a\" type=\"caseName\">Infopaq</title>, <citedRange unit=\"number\" n=\"50\">para 50</citedRange>.</bibl>\n\n### Unit 6\n<bibl type=\"decision\"><authority type=\"court\">CJEU</authority>, <title level=\"a\" type=\"caseName\">Pelham</title>, <date type=\"decision\" when=\"2019-07-29\">29 July 2019</date>, <citedRange unit=\"number\" n=\"39\">para 39</citedRange>.</bibl>\n\n### Unit 7\n<bibl type=\"decision\"><authority type=\"court\">CJEU</authority>, <title level=\"a\" type=\"caseName\">Infopaq</title>, <citedRange unit=\"number\" from=\"45\" to=\"46\">para 45-46</citedRange>.</bibl>\n\n### Unit 8\n<bibl type=\"decision\"><authority type=\"court\">CJEU</authority>, <title level=\"a\" type=\"caseName\">Infopaq</title>, <citedRange unit=\"number\" from=\"47\" to=\"48\">para 47-48</citedRange>.</bibl>",
+          "error": null,
+          "split_from": null,
+          "retries": 0
+        },
+        {
+          "index": 4,
+          "unit_indices": [
+            25,
+            26,
+            27,
+            28,
+            29,
+            30,
+            31,
+            32
+          ],
+          "prompt_chars": 42837,
+          "response_chars": 0,
+          "seconds": 360.21319212502567,
+          "raw_response": "",
+          "error": "ConnectionError: HTTPSConnectionPool(host='chat-ai.academiccloud.de', port=443): Max retries exceeded with url: /v1/chat/completions (Caused by ReadTimeoutError(\"HTTPSConnectionPool(host='chat-ai.academiccloud.de', port=443): Read timed out. (read timeout=180)\"))",
+          "split_from": null,
+          "retries": 0
+        },
+        {
+          "index": 5,
+          "unit_indices": [
+            41,
+            42,
+            43,
+            44,
+            45,
+            46,
+            47,
+            48
+          ],
+          "prompt_chars": 40330,
+          "response_chars": 1643,
+          "seconds": 219.00960341701284,
+          "raw_response": "### Unit 1\n<bibl><seg type=\"citationContext\">First formulated in</seg> <author>A. Elster</author>, <title level=\"m\">Gewerblicher rechtsschutz, umfassend Urheber-und Verlags recht, Patent-und Musterschutzrecht, Warenzeichenrecht und Wettbewerbsrecht</title>, <publisher>De Gruy ter</publisher>, <date type=\"publication\">1921</date>.</bibl>\n\n### Unit 2\n<bibl type=\"decision\"><authority type=\"court\">OLG Düsseldorf</authority>, <date type=\"decision\" when=\"1964-02-28\">28.2.1964</date>, <idno type=\"docket\">2 U 76/63</idno>.</bibl>\n\n### Unit 3\n<bibl type=\"decision\"><authority type=\"court\">OLG Frankfurt</authority>, <date type=\"decision\" when=\"1986-08-04\">4.8.1986</date>, <idno type=\"docket\">6 W 134/8</idno>.</bibl>\n\n### Unit 4\n<bibl type=\"decision\"><authority type=\"court\">LG Mannheim</authority>, <date type=\"decision\" when=\"2009-12-11\">11.12.2009</date>, <idno type=\"docket\">7 O 343/08</idno>.</bibl>\n\n### Unit 5\n<bibl type=\"decision\"><authority type=\"court\">OLG Köln</authority>, <date type=\"decision\" when=\"2016-04-08\">8.4.2016</date>, <idno type=\"docket\">6 U 120/15</idno>.</bibl>\n\n### Unit 6\n<bibl type=\"decision\"><authority type=\"court\">OLG Köln</authority>, <date type=\"decision\" when=\"2011-09-30\">30.9.2011</date>, <idno type=\"docket\">I-6 U 82/11</idno>.</bibl>\n\n### Unit 7\n<bibl type=\"decision\"><authority type=\"court\">LG Frankenthal</authority>, <date type=\"decision\" when=\"2020-11-03\">3.11.2020</date>, <idno type=\"docket\">6 O 102/20</idno>.</bibl>\n\n### Unit 8\n<bibl type=\"decision\"><authority type=\"court\">OLG Köln</authority>, <date type=\"decision\" when=\"2016-04-08\">8.4.2016</date>, <idno type=\"docket\">6 U 120/15</idno>.</bibl>",
+          "error": null,
+          "split_from": null,
+          "retries": 0
+        },
+        {
+          "index": 6,
+          "unit_indices": [
+            49,
+            50,
+            51,
+            52,
+            53,
+            54,
+            55,
+            57
+          ],
+          "prompt_chars": 42907,
+          "response_chars": 0,
+          "seconds": 360.2257214580022,
+          "raw_response": "",
+          "error": "ConnectionError: HTTPSConnectionPool(host='chat-ai.academiccloud.de', port=443): Max retries exceeded with url: /v1/chat/completions (Caused by ReadTimeoutError(\"HTTPSConnectionPool(host='chat-ai.academiccloud.de', port=443): Read timed out. (read timeout=180)\"))",
+          "split_from": null,
+          "retries": 0
+        },
+        {
+          "index": 7,
+          "unit_indices": [
+            58,
+            60,
+            61,
+            62,
+            63,
+            64,
+            65,
+            67
+          ],
+          "prompt_chars": 47734,
+          "response_chars": 0,
+          "seconds": 360.2553407919768,
+          "raw_response": "",
+          "error": "ConnectionError: HTTPSConnectionPool(host='chat-ai.academiccloud.de', port=443): Max retries exceeded with url: /v1/chat/completions (Caused by ReadTimeoutError(\"HTTPSConnectionPool(host='chat-ai.academiccloud.de', port=443): Read timed out. (read timeout=180)\"))",
+          "split_from": null,
+          "retries": 0
+        },
+        {
+          "index": 8,
+          "unit_indices": [
+            79,
+            80,
+            81,
+            82,
+            84,
+            85
+          ],
+          "prompt_chars": 43872,
+          "response_chars": 3271,
+          "seconds": 146.80682870800956,
+          "raw_response": "### Unit 1\n<bibl><author>Gervais, Daniel J.</author>, <title level=\"a\">Towards a New Core International Copyright Norm: The Reverse Three-Step Test</title>. Available at SSRN: <ptr type=\"web\" target=\"https://ssrn.com/abstract=499924\">https://ssrn.com/abstract=499924</ptr>. <title level=\"m\">BeckOK UrhR</title>/<author>Grübler</author>, <edition n=\"42\">42. Ed.</edition> <date type=\"publication\" when=\"2024-05-01\">1.5.2024</date>, <title level=\"a\">UrhG § 60c</title> <citedRange unit=\"margin\">Rn</citedRange> <title level=\"m\">Dreier/Schulze</title>/<author>Dreier</author>, <edition n=\"7\">7. Aufl.</edition> <date type=\"publication\">2022</date>, <title level=\"a\">UrhG § 60c</title> <citedRange unit=\"margin\">Rn</citedRange>.</bibl>\n\n### Unit 2\n<bibl><seg type=\"citationContext\">First formulated in</seg> <editor>A. Elster</editor>, <title level=\"m\">Gewerblicher rechtsschutz, umfassend Urheber-und Verlagsrecht, Patent-und Musterschutztrecht, Warenzeichenrecht und Wettbewerbs recht</title>, <publisher>De Gruyter</publisher>, <date>1921</date>.</bibl>\n\n### Unit 3\n<bibl><author>N. Carlini</author> et al., \"<title level=\"a\">Extracting Training Data from Large Language Models</title>\" in: <title level=\"m\">Pro ceedings of the 30th USENIX Security Symposium</title> (<date from=\"2021-08-11\" to=\"2021-08-13\">August 11-13, 2021</date>), <publisher>USENIX Association</publisher>, <date>2021</date>, pp. <biblScope unit=\"page\" from=\"2633\" to=\"2650\">2633-2650</biblScope>.</bibl>\n\n### Unit 4\n<bibl><author>Keli Du</author> (<date>2024</date>), \"<title level=\"a\">Rekonstruierbarkeit von abgeleiteten Textformaten</title>\", <ptr type=\"web\" target=\"https://events.gwdg.de/event/607/contributions/1408/\">https://events.g wdg.de/event/607/contributions/1408/</ptr>.</bibl>\n\n### Unit 5\n<bibl><author>Calvo Tello, José</author>, <author>Mathias Göbel</author>, <author>Ubbo Veentjer</author>, <author>Stefan E. Funk</author>, <author>Nanette Rißler-Pipika</author>, and <author>Keli Du</author>. <date>2025</date> (accepted). '<title level=\"a\">FAIR Derived Data in TEI and Its Publication in the TextGrid Repository</title>'. <title level=\"j\">jTEI</title>. <author>Burnard, Lou</author>. <date>2004</date>. '<title level=\"a\">Metadata for Corpus Work</title>'. In <title level=\"m\">Developing Linguistic Corpora: A Guide to Good Practice</title>, edited by <editor>Martin Wynne</editor>. <pubPlace>Oxford</pubPlace>: <publisher>AHDS Literature, Lan guages and Linguistics</publisher>. <ptr type=\"web\" target=\"https://ota.ox.ac.uk/documents/creating/dlc/chapter3.htm\">https://ota.ox.ac.uk/documents/creating/dlc/chapter3.htm</ptr>.</bibl>\n\n### Unit 6\n<bibl><author>Wilkinson, Mark D.</author>, <author>Michel Dumontier</author>, <author>IJsbrand Jan Aalbersberg</author>, <author>Gabrielle Apple ton</author>, <author>Myles Axton</author>, <author>Arie Baak</author>, <author>Niklas Blomberg</author>, et al. <date>2016</date>. '<title level=\"a\">The FAIR Guiding Principles for Scientific Data Management and Stewardship</title>'. <title level=\"j\">Scientific Data</title> <biblScope unit=\"volume\">3</biblScope> (<date when=\"2016-03\">March</date>). <ptr type=\"web\" target=\"https://doi.org/10.1038/sdata.2016.18\">https://doi.org/<idno type=\"DOI\">10.1038/sdata.2016.18</idno></ptr></bibl>",
+          "error": null,
+          "split_from": null,
+          "retries": 0
+        },
+        {
+          "index": 9,
+          "unit_indices": [
+            68,
+            69,
+            70,
+            71,
+            72,
+            75,
+            76,
+            77
+          ],
+          "prompt_chars": 46649,
+          "response_chars": 0,
+          "seconds": 360.2383862089773,
+          "raw_response": "",
+          "error": "ConnectionError: HTTPSConnectionPool(host='chat-ai.academiccloud.de', port=443): Max retries exceeded with url: /v1/chat/completions (Caused by ReadTimeoutError(\"HTTPSConnectionPool(host='chat-ai.academiccloud.de', port=443): Read timed out. (read timeout=180)\"))",
+          "split_from": null,
+          "retries": 0
+        }
+      ]
+    }
+  },
+  "saved_stable_id": null
+}
