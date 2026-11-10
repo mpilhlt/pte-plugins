@@ -251,7 +251,7 @@
       "description": "Starts and manages MPCDF-hosted LLM endpoints and offers them as free models",
       "requires": [],
       "dependencies": [
-        "mpcdf-llm[fastapi,testing] @ git+https://gitlab.mpcdf.mpg.de/cboul/llm-mpcdf.git@f46f18a03e47a16f1e8e7aa519104674ce4741a2"
+        "mpcdf-llm[fastapi,testing] @ git+https://gitlab.mpcdf.mpg.de/cboul/llm-mpcdf.git@7f4e561525d8bb9e82ab3bd1caccb24e24e4054a"
       ],
       "engines": {
         "pte": ">=0.82.0",
