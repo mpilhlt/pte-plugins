@@ -3,6 +3,7 @@ Routes of the MPCDF LLM plugin.
 
 - GET /api/plugins/mpcdf-llm/manage   management page (admin only)
 - GET /api/plugins/mpcdf-llm/managed  preset and until of managed endpoints (admin only)
+- POST /api/plugins/mpcdf-llm/presets/import  save imported presets without an MPCDF session (admin only)
 - /api/plugins/mpcdf-llm/admin/...    the library's admin router (admin only)
 
 The library's read router is deliberately not mounted: it returns API keys.
@@ -10,7 +11,9 @@ The library's read router is deliberately not mounted: it returns API keys.
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from fastapi.responses import HTMLResponse
+from mpcdf_llm.presets import Preset
 from mpcdf_llm.web import admin_router
+from pydantic import BaseModel, ValidationError
 
 from fastapi_app.lib.core.dependencies import get_auth_manager
 from fastapi_app.lib.permissions.acl_utils import user_is_admin
@@ -42,6 +45,47 @@ async def managed_endpoints() -> list[dict]:
         }
         for m in manager.state.managed().values()
     ]
+
+
+class PresetImportResult(BaseModel):
+    """Outcome of a preset import: the saved names and the rejected ones with the reason."""
+
+    saved: list[str]
+    errors: dict[str, str]
+
+
+def _validation_message(error: ValidationError) -> str:
+    """One line per invalid field, e.g. ``gpus: Input should be a valid integer``."""
+    return "; ".join(
+        f"{'.'.join(str(part) for part in e['loc']) or 'preset'}: {e['msg']}" for e in error.errors()
+    )
+
+
+@router.post("/presets/import", dependencies=[Depends(require_admin_user)])
+async def import_presets(presets: list[dict[str, object]]) -> PresetImportResult:
+    """Save presets from an export file.
+
+    Presets live in the plugin's data directory, so this needs no MPCDF session. Unlike
+    ``PUT /admin/presets/{name}``, it checks only the preset model, not the live options of the
+    service (machines, GPU types); a preset the service does not support fails when it is started.
+    Each preset is saved on its own; the invalid ones are reported in ``errors`` by name."""
+    try:
+        manager = get_manager()
+    except LookupError:
+        raise HTTPException(status_code=503, detail="MPCDF LLM is not initialized") from None
+    saved: list[str] = []
+    errors: dict[str, str] = {}
+    for index, data in enumerate(presets):
+        name = data.get("name")
+        key = name if isinstance(name, str) and name else f"#{index + 1}"
+        try:
+            preset = Preset.model_validate(data)
+        except ValidationError as e:
+            errors[key] = _validation_message(e)
+            continue
+        manager.presets.put(preset)
+        saved.append(preset.name)
+    return PresetImportResult(saved=saved, errors=errors)
 
 
 @router.get("/manage", response_class=HTMLResponse)

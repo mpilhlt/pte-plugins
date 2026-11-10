@@ -50,6 +50,22 @@ describe('MPCDF LLM plugin API', () => {
     assert.match(await page.text(), /MPCDF LLM/);
   });
 
+  test('admins can import presets without an MPCDF session', async () => {
+    const preset = { name: 'api-test-import', framework: 'vLLM', model: 'openai/gpt-oss-120b', machine: 'Viper', gpu_type: 'mi300a', gpus: 1 };
+    const result = await authenticatedApiCall(admin, `${BASE}/presets/import`, 'POST', [preset, { model: 'no name' }]);
+    assert.deepStrictEqual(result.saved, ['api-test-import']);
+    assert.deepStrictEqual(Object.keys(result.errors), ['#2']);
+    const listed = await authenticatedApiCall(admin, `${BASE}/admin/presets`, 'GET');
+    assert.ok(listed.some((p) => p.name === 'api-test-import'));
+    const deleted = await authenticatedRequest(admin, `${BASE}/admin/presets/api-test-import`, 'DELETE');
+    assert.strictEqual(deleted.status, 204);
+  });
+
+  test('non-admins get 403 on the preset import', async () => {
+    const response = await authenticatedRequest(user, `${BASE}/presets/import`, 'POST', []);
+    assert.strictEqual(response.status, 403);
+  });
+
   test('the session starts out as login_required', async () => {
     const session = await authenticatedApiCall(admin, `${BASE}/admin/session`, 'GET');
     assert.strictEqual(session.state, 'login_required');

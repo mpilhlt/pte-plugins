@@ -36,6 +36,9 @@
     #progress li.failed { color: #b71c1c; }
     progress { width: 200px; vertical-align: middle; }
     [hidden] { display: none !important; }
+    dialog { border: 1px solid #bbb; border-radius: 5px; padding: 16px 20px; max-width: 460px; }
+    dialog p { margin: 0 0 14px; }
+    dialog form { background: none; padding: 0; }
   </style>
 </head>
 <body>
@@ -74,7 +77,21 @@
     <thead><tr><th>Name</th><th>Model</th><th>Hardware</th><th></th></tr></thead>
     <tbody id="presets"><tr><td colspan="4" class="empty">Loading...</td></tr></tbody>
   </table>
-  <div class="buttons" style="margin-top:8px"><button type="button" class="secondary" id="new-preset">New preset</button></div>
+  <div class="buttons" style="margin-top:8px">
+    <button type="button" class="secondary" id="new-preset">New preset</button>
+    <button type="button" class="secondary" id="export-presets">Export</button>
+    <button type="button" class="secondary" id="import-presets">Import</button>
+    <input type="file" id="import-file" accept=".json,application/json" hidden>
+  </div>
+  <div id="presets-msg" class="msg"></div>
+  <dialog id="import-dialog">
+    <p id="import-question"></p>
+    <form method="dialog" class="buttons">
+      <button value="replace" class="danger" id="import-replace">Replace</button>
+      <button value="merge" class="primary" id="import-merge">Merge</button>
+      <button value="cancel" class="secondary">Cancel</button>
+    </form>
+  </dialog>
   <form id="preset-form" hidden style="margin-top:10px" autocomplete="off">
     <div class="row">
       <div class="field" data-field="name"><label for="f-name">Name</label><input type="text" id="f-name" pattern="[a-z0-9][a-z0-9._-]*" required><span class="err"></span></div>
@@ -122,16 +139,18 @@
   <script type="module">
     import {
       parseSseChunk, untilToIso, describeFrame, fieldErrors, parseDuration, toIsoDuration,
-      formatDuration, formatTimeLeft,
+      formatDuration, formatTimeLeft, exportPresets, parsePresetsImport, planImport, copyName,
     } from '/api/plugins/mpcdf-llm/static/manage-helpers.js';
 
-    const BASE = '/api/plugins/mpcdf-llm/admin';
+    const PLUGIN_BASE = '/api/plugins/mpcdf-llm';
+    const BASE = `${PLUGIN_BASE}/admin`;
     const sessionId = new URLSearchParams(window.location.search).get('session_id') || '';
     const $ = (id) => document.getElementById(id);
 
     let presets = [];
     let options = null;
     let editing = null; // preset being edited (keeps fields the form does not show, e.g. lead_time)
+    let creating = false; // the form makes a new preset (new or duplicate), so its name must be free
     let loggedIn = false;
 
     /** Notify through the editor, if the sandbox is there. */
@@ -146,13 +165,13 @@
     }
 
     /** Fetch an admin route as the sandbox does (X-Session-ID header). Returns {status, body}. */
-    async function api(path, method = 'GET', payload = null) {
+    async function api(path, method = 'GET', payload = null, base = BASE) {
       const init = { method, headers: { 'X-Session-ID': sessionId } };
       if (payload !== null) {
         init.headers['Content-Type'] = 'application/json';
         init.body = JSON.stringify(payload);
       }
-      const response = await fetch(BASE + path, init);
+      const response = await fetch(base + path, init);
       let body = null;
       if (response.status !== 204) body = await response.json().catch(() => null);
       return { status: response.status, ok: response.ok, body };
@@ -286,6 +305,8 @@
         const td = el('td', null, { class: 'actions' });
         const edit = el('button', 'Edit', { type: 'button', class: 'secondary' });
         edit.addEventListener('click', () => openForm(p));
+        const dup = el('button', 'Duplicate', { type: 'button', class: 'secondary' });
+        dup.addEventListener('click', () => openForm(p, { duplicate: true }));
         const del = el('button', 'Delete', { type: 'button', class: 'danger' });
         del.addEventListener('click', async () => {
           if (!confirm(`Delete preset "${p.name}"?`)) return;
@@ -293,7 +314,7 @@
           if (!r.ok) notify(errorText(r), 'danger', 'exclamation-triangle');
           await loadPresets();
         });
-        td.append(edit, ' ', del);
+        td.append(edit, ' ', dup, ' ', del);
         tr.append(td);
         return tr;
       });
@@ -333,10 +354,19 @@
       if (unplaced.length) showMsg('preset-msg', unplaced.join('\n'), 'error');
     }
 
-    async function openForm(preset) {
+    /**
+     * Open the preset form: empty for a new preset, filled for editing, or filled with a free name
+     * for a copy when `duplicate` is set.
+     */
+    async function openForm(preset, { duplicate = false } = {}) {
       const opts = await loadOptions();
       if (!opts) { showMsg('preset-msg', 'Log in to MPCDF to edit presets (the form options come from the provider).', 'error'); $('preset-form').hidden = false; return; }
       editing = preset;
+      creating = !preset || duplicate;
+      if (preset && duplicate) {
+        preset = { ...preset, name: copyName(preset.name, presets.map((x) => x.name)) };
+        editing = preset;
+      }
       clearErrors();
       setSelect('f-framework', opts.frameworks);
       setSelect('f-machine', opts.machines);
@@ -346,7 +376,7 @@
       setSelect('f-max_queue_time', opts.max_queue_times, (t) => formatDuration(parseDuration(t)));
       const p = preset || { framework: opts.frameworks[0], gpus: opts.gpus[0], time: 'PT1H', max_queue_time: 'PT1H', min_remaining: 'PT20M', idle_timeout: 'PT60M', extra_args: [], envs: {} };
       $('f-name').value = p.name || '';
-      $('f-name').readOnly = !!preset;
+      $('f-name').readOnly = !!preset && !duplicate;
       $('f-description').value = p.description || '';
       $('f-framework').value = p.framework;
       $('f-model').value = p.model || '';
@@ -362,6 +392,7 @@
       $('f-idle_timeout').value = parseDuration(p.idle_timeout);
       $('preset-form').hidden = false;
       $('f-name').focus();
+      if (duplicate) $('f-name').select();
     }
 
     function readForm() {
@@ -398,6 +429,10 @@
       ev.preventDefault();
       clearErrors();
       const preset = readForm();
+      if (creating && presets.some((p) => p.name === preset.name)) {
+        showErrors({ name: 'A preset with this name exists' });
+        return;
+      }
       const btn = $('save-preset');
       btn.disabled = true;
       try {
@@ -416,6 +451,86 @@
       } finally {
         btn.disabled = false;
       }
+    });
+
+    // Preset export and import
+    $('export-presets').addEventListener('click', () => {
+      if (!presets.length) { showMsg('presets-msg', 'There are no presets to export', 'error'); return; }
+      showMsg('presets-msg', '');
+      const blob = new Blob([exportPresets(presets)], { type: 'application/json' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `mpcdf-llm-presets-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.append(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+    });
+
+    /** Ask whether the import replaces or merges with the existing presets; resolves 'replace', 'merge' or 'cancel'. */
+    function askImportMode(count, existing) {
+      const dialog = $('import-dialog');
+      $('import-question').textContent =
+        `The file contains ${count} preset(s) and there are already ${existing} preset(s). ` +
+        'Replace the existing presets with the imported ones, or merge, which adds only the presets whose name does not exist yet?';
+      return new Promise((resolve) => {
+        dialog.addEventListener('close', () => resolve(dialog.returnValue || 'cancel'), { once: true });
+        dialog.returnValue = '';
+        dialog.showModal();
+      });
+    }
+
+    $('import-presets').addEventListener('click', () => { $('import-file').value = ''; $('import-file').click(); });
+    $('import-file').addEventListener('change', async () => {
+      const file = $('import-file').files[0];
+      if (!file) return;
+      showMsg('presets-msg', '');
+      let incoming;
+      try { incoming = parsePresetsImport(await file.text()); }
+      catch (e) { showMsg('presets-msg', e.message, 'error'); return; }
+      if (!incoming.length) { showMsg('presets-msg', 'The file contains no presets', 'error'); return; }
+      const mode = presets.length ? await askImportMode(incoming.length, presets.length) : 'merge';
+      if (mode === 'cancel') return;
+      const plan = planImport(presets, incoming, mode);
+      const buttons = [$('import-presets'), $('export-presets')];
+      buttons.forEach((b) => { b.disabled = true; });
+      const failed = [];
+      const notRemoved = [];
+      let imported = 0;
+      try {
+        if (plan.put.length) {
+          // the plugin's import route saves without an MPCDF session (the library's PUT needs one)
+          const res = await api('/presets/import', 'POST', plan.put, PLUGIN_BASE);
+          if (!res.ok) {
+            failed.push(errorText(res));
+          } else {
+            imported = res.body.saved.length;
+            failed.push(...Object.entries(res.body.errors).map(([name, msg]) => `${name}: ${msg}`));
+          }
+        }
+        // a replace with failed presets keeps the existing ones, so nothing is lost
+        if (!failed.length) {
+          for (const name of plan.remove) {
+            const res = await api(`/presets/${encodeURIComponent(name)}`, 'DELETE');
+            if (!res.ok) notRemoved.push(`${name}: ${errorText(res)}`);
+          }
+        }
+      } finally {
+        buttons.forEach((b) => { b.disabled = false; });
+        await loadPresets();
+      }
+      const parts = [`Imported ${imported} preset(s)`];
+      if (plan.skipped.length) parts.push(`skipped ${plan.skipped.length} existing: ${plan.skipped.join(', ')}`);
+      if (plan.remove.length && !failed.length) parts.push(`removed ${plan.remove.length - notRemoved.length}`);
+      let text = parts.join('; ') + '.';
+      if (failed.length) {
+        text += `\nNot imported:\n${failed.join('\n')}`;
+        if (plan.remove.length) text += '\nNo presets were removed.';
+      }
+      if (notRemoved.length) text += `\nNot removed:\n${notRemoved.join('\n')}`;
+      const ok = !failed.length && !notRemoved.length;
+      showMsg('presets-msg', text, ok ? 'ok' : 'error');
+      if (ok) notify(`Imported ${plan.put.length} preset(s)`, 'success', 'check-circle');
     });
 
     // 4. Start

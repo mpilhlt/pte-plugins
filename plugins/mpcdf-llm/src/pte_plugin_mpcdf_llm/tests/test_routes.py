@@ -125,6 +125,21 @@ class TestRoutes(_Base):
         self.assertEqual((await self.client.delete(f"{BASE}/admin/presets/p")).status_code, 204)
         self.assertEqual((await self.client.get(f"{BASE}/admin/presets")).json(), [])
 
+    async def test_import_presets_without_session(self):
+        body = [PRESET.model_dump(mode="json"), {"name": "bad", "gpus": "many"}, {"model": "x"}]
+        response = await self.client.post(f"{BASE}/presets/import", json=body)
+        self.assertEqual(response.status_code, 200)
+        result = response.json()
+        self.assertEqual(result["saved"], ["p"])
+        self.assertEqual(set(result["errors"]), {"bad", "#3"})
+        self.assertIn("gpus", result["errors"]["bad"])
+        self.assertEqual(self.manager.presets.get("p").model, PRESET.model)
+
+    async def test_import_presets_forbidden_for_non_admin(self):
+        self.user = USER
+        response = await self.client.post(f"{BASE}/presets/import", json=[PRESET.model_dump(mode="json")])
+        self.assertEqual(response.status_code, 403)
+
     async def test_start_stream_reaches_ready(self):
         frames = await self.start_ready()
         self.assertTrue(frames)

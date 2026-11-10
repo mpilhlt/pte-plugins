@@ -14,6 +14,10 @@ import {
   parseDuration,
   formatDuration,
   formatTimeLeft,
+  exportPresets,
+  parsePresetsImport,
+  planImport,
+  copyName,
 } from '../static/manage-helpers.js';
 
 describe('parseSseChunk', () => {
@@ -114,5 +118,44 @@ describe('durations', () => {
     assert.strictEqual(formatTimeLeft('2026-01-01T10:12:00Z', now), '12 min');
     assert.strictEqual(formatTimeLeft('2026-01-01T09:00:00Z', now), 'expired');
     assert.strictEqual(formatTimeLeft(null, now), '-');
+  });
+});
+
+describe('preset export and import', () => {
+  const a = { name: 'a', model: 'm1' };
+  const b = { name: 'b', model: 'm2' };
+  const b2 = { name: 'b', model: 'other' };
+  const c = { name: 'c', model: 'm3' };
+
+  it('round-trips an export', () => {
+    const text = exportPresets([a, b], new Date('2026-01-01T00:00:00Z'));
+    assert.strictEqual(JSON.parse(text).format, 'mpcdf-llm-presets');
+    assert.deepStrictEqual(parsePresetsImport(text), [a, b]);
+  });
+
+  it('accepts a bare array', () => {
+    assert.deepStrictEqual(parsePresetsImport(JSON.stringify([c])), [c]);
+  });
+
+  it('rejects invalid files', () => {
+    assert.throws(() => parsePresetsImport('{'), /not valid JSON/);
+    assert.throws(() => parsePresetsImport('{"presets": []}'), /not an MPCDF LLM preset export/);
+    assert.throws(() => parsePresetsImport('[{"model": "x"}]'), /Preset 1 has no name/);
+    assert.throws(() => parsePresetsImport(JSON.stringify([a, a])), /"a" occurs more than once/);
+  });
+
+  it('merge adds only presets with new names', () => {
+    assert.deepStrictEqual(planImport([a, b], [b2, c], 'merge'), { put: [c], remove: [], skipped: ['b'] });
+  });
+
+  it('replace saves all imported presets and removes the others', () => {
+    assert.deepStrictEqual(planImport([a, b], [b2, c], 'replace'), { put: [b2, c], remove: ['a'], skipped: [] });
+  });
+});
+
+describe('copyName', () => {
+  it('appends -copy and a free number', () => {
+    assert.strictEqual(copyName('a', ['a']), 'a-copy');
+    assert.strictEqual(copyName('a', ['a', 'a-copy', 'a-copy-2']), 'a-copy-3');
   });
 });
