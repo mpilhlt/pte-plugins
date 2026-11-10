@@ -16,7 +16,7 @@ import requests
 
 from fastapi_app.lib.extraction.http_utils import get_retry_session
 from fastapi_app.lib.secrets import SecretsError
-from fastapi_app.plugin_api import LLMImage, LLMModel, LLMProvider, LLMProviderError
+from fastapi_app.plugin_api import LLMImage, LLMModel, LLMProvider, LLMProviderError, get_completion_session, post_completion
 
 from .keys import get_shared_key
 from .store import Endpoint
@@ -51,14 +51,18 @@ class EndpointLLMProvider(LLMProvider):
     def with_api_key(self, api_key: str) -> "EndpointLLMProvider":
         return EndpointLLMProvider(self.endpoint, api_key)
 
-    def _headers(self) -> dict[str, str]:
-        headers = {"Accept": "application/json", "Content-Type": "application/json"}
-        api_key = self._api_key
+    def _key(self) -> str | None:
+        """The API key the requests send: the user's, or the endpoint's shared key."""
         if self.endpoint.key_mode == "shared":
             try:
-                api_key = get_shared_key(self.endpoint)
+                return get_shared_key(self.endpoint)
             except SecretsError as e:
                 raise LLMProviderError(f"{self.label}: {e}") from e
+        return self._api_key
+
+    def _headers(self, api_key: str | None = None) -> dict[str, str]:
+        headers = {"Accept": "application/json", "Content-Type": "application/json"}
+        api_key = api_key if api_key is not None else self._key()
         if api_key:
             headers["Authorization"] = f"Bearer {api_key}"
         return headers
@@ -148,8 +152,10 @@ class EndpointLLMProvider(LLMProvider):
         user_content: str | list[dict[str, object]],
         temperature: float,
     ) -> str:
-        # A read timeout is not retried: a local model that is too slow would only be asked again
-        session = get_retry_session(retries=2, backoff_factor=2.0, read_retries=0)
+        # A read timeout is not retried: a local model that is too slow would only be asked again.
+        # A 429 is handled by post_completion, which raises LLMRateLimitError.
+        session = get_completion_session(retries=2, backoff_factor=2.0, read_retries=0)
+        api_key = self._key()
         data = {
             "model": model_id,
             "messages": [
@@ -160,9 +166,9 @@ class EndpointLLMProvider(LLMProvider):
             "stream": False,
         }
         try:
-            response = session.post(
-                self._url("chat/completions"), headers=self._headers(), json=data,
-                timeout=(10, self.endpoint.timeout), allow_redirects=False,
+            response = post_completion(
+                session, self._url("chat/completions"), endpoint=self.endpoint.base_url, api_key=api_key, model_id=model_id,
+                headers=self._headers(api_key), json=data, timeout=(10, self.endpoint.timeout), allow_redirects=False,
             )
             self._check_redirect(response)
             response.raise_for_status()

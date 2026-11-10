@@ -40,6 +40,9 @@ class ProviderTestCase(unittest.TestCase):
         patcher = patch("pte_plugin_inference_endpoints.llm_provider.get_retry_session")
         self.session = patcher.start().return_value
         self.addCleanup(patcher.stop)
+        patcher = patch("pte_plugin_inference_endpoints.llm_provider.get_completion_session", return_value=self.session)
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
 
 class TestKeys(ProviderTestCase):
