@@ -1,13 +1,14 @@
 /**
  * Annotation Review frontend extension.
  *
- * Adds a "Review Annotations" item to the Tools menu (annotation category),
+ * Adds a "Review document annotations" item to the Tools menu (annotation category),
  * enabled only when the open document has machine-readable rules. Running it
  * calls the backend review endpoint and shows the findings as diagnostics
  * merged into the editor's diagnostic set, each with a "Propose fix" action
  * that opens the merge view and a `replacement` that the diagnostics drawer
  * applies directly. When node navigation is on (the `xpath` state is
- * set), only the navigated-to node is reviewed. While the editor's unit review mode is
+ * set), the "LLM Review" button of focus mode reviews only the navigated-to node; the
+ * menu item always reviews the whole document. While the editor's unit review mode is
  * on, the model also records its result as a reviewer: the review units of each chunk
  * are marked OK, or not OK with the rationale of the findings in them. See
  * docs/superpowers/specs/2026-09-24-llm-annotation-review-design.md
@@ -222,9 +223,9 @@ export default class AnnotationReviewExtension extends FrontendExtensionPlugin {
    */
   async start() {
     const item = document.createElement('sl-menu-item');
-    item.textContent = 'Review Annotations';
+    item.textContent = 'Review document annotations';
     item.disabled = true;
-    item.addEventListener('click', () => this.runReview());
+    item.addEventListener('click', () => this.runReview(undefined, { wholeDocument: true }));
     this._menuItem = item;
     this.getDependency('tools').addMenuItems([item], 'annotation');
     const xmleditor = this.getDependency('xmleditor');
@@ -415,11 +416,13 @@ export default class AnnotationReviewExtension extends FrontendExtensionPlugin {
    * far. review() notifies on its own failure paths (including "no default
    * model"), so a null result is silent.
    * @param {{providerId: string, modelId: string}} [override]
+   * @param {{wholeDocument?: boolean}} [options] wholeDocument reviews the whole
+   *   document even while node navigation has selected a node (the Tools menu item)
    * @returns {Promise<void>}
    */
-  async runReview(override) {
+  async runReview(override, options = {}) {
     const resolved = override ?? this.getDependency('inference-settings').getDefaultModel();
-    const xpath = this.state?.xpath || null;
+    const xpath = options.wholeDocument ? null : (this.state?.xpath || null);
     let label = '';
     if (resolved) {
       label = this.getDependency('inference-settings').getModelLabel(resolved.providerId, resolved.modelId);
@@ -427,7 +430,7 @@ export default class AnnotationReviewExtension extends FrontendExtensionPlugin {
     if (resolved && !xpath) {
       const confirmed = await this.getDependency('dialog').confirm(
         `Review the annotations in the current document using ${escapeHtml(label)}?`,
-        'Review Annotations'
+        'Review document annotations'
       );
       if (!confirmed) return;
     }
