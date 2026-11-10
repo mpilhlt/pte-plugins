@@ -48,7 +48,7 @@
       "package": "pte-plugin-anthropic-llm",
       "module": "pte_plugin_anthropic_llm",
       "path": "plugins/anthropic-llm",
-      "version": "1.0.1",
+      "version": "1.1.0",
       "description": "Registers Anthropic's Claude API as an LLM inference provider",
       "requires": [],
       "dependencies": [],
