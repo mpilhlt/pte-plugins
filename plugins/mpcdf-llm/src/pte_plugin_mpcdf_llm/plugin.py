@@ -6,15 +6,22 @@ per-worker ProvisioningManager (see manager.py); ``cleanup()`` closes it without
 cancelling any endpoint.
 """
 
+import asyncio
+from contextlib import suppress
 from typing import Any, Callable
 
 from fastapi_app.plugin_api import Plugin, PluginContext
 
+from . import providers
 from .manager import PLUGIN_ID, start_manager, stop_manager
 
 
 class MpcdfLlmPlugin(Plugin):
     """Plugin that manages MPCDF LLM endpoints."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._watch_task: asyncio.Task[None] | None = None
 
     @property
     def metadata(self) -> dict[str, Any]:
@@ -45,9 +52,16 @@ class MpcdfLlmPlugin(Plugin):
         return {"outputUrl": f"/api/plugins/{PLUGIN_ID}/manage"}
 
     async def initialize(self, context: PluginContext) -> None:
-        """Create the manager; it opens in the background."""
+        """Create the manager (it opens in the background) and start offering ready endpoints."""
         await start_manager()
+        self._watch_task = asyncio.create_task(providers.watch())
 
     async def cleanup(self) -> None:
-        """Close the manager. Endpoints keep running."""
+        """Stop offering endpoints, close the manager. Endpoints keep running."""
+        if self._watch_task is not None:
+            self._watch_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await self._watch_task
+            self._watch_task = None
+        providers.unregister_all()
         await stop_manager()
