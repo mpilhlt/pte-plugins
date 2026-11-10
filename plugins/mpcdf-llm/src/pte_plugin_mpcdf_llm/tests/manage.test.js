@@ -14,7 +14,6 @@ import {
   parseDuration,
   formatDuration,
   formatTimeLeft,
-  matchPreset,
 } from '../static/manage-helpers.js';
 
 describe('parseSseChunk', () => {
@@ -115,20 +114,5 @@ describe('durations', () => {
     assert.strictEqual(formatTimeLeft('2026-01-01T10:12:00Z', now), '12 min');
     assert.strictEqual(formatTimeLeft('2026-01-01T09:00:00Z', now), 'expired');
     assert.strictEqual(formatTimeLeft(null, now), '-');
-  });
-});
-
-describe('matchPreset', () => {
-  const presets = [
-    { name: 'a', framework: 'vLLM', model: 'org/m1', machine: 'M', gpu_type: 'G', gpus: 1 },
-    { name: 'b', framework: 'vLLM', model: 'org/m2', machine: 'M', gpu_type: 'G', gpus: 1 },
-  ];
-  it('matches vLLM endpoints by model in args', () => {
-    const ep = { framework: 'vLLM', args: 'org/m2 --tensor-parallel-size=1', machine: 'M', gpu_type: 'G', gpus: 1 };
-    assert.strictEqual(matchPreset(ep, presets).name, 'b');
-  });
-  it('returns null when nothing matches', () => {
-    const ep = { framework: 'vLLM', args: 'other', machine: 'M', gpu_type: 'G', gpus: 1 };
-    assert.strictEqual(matchPreset(ep, presets), null);
   });
 });

@@ -131,24 +131,3 @@ export function formatTimeLeft(expiresAt, now = new Date()) {
   const mm = minutes % 60;
   return h ? `${h} h ${String(mm).padStart(2, '0')} min` : `${mm} min`;
 }
-
-/**
- * Find the preset an endpoint most likely belongs to. The admin endpoints list carries no preset
- * name, so this compares framework, hardware and (vLLM) the model in the arguments.
- * @param {{framework: string, args?: string, machine: string, gpu_type: string, gpus: number}} ep
- * @param {Array<any>} presets
- * @returns {any|null}
- */
-export function matchPreset(ep, presets) {
-  const model = ep.framework === 'vLLM' ? (ep.args || '').split(/\s+/)[0] : null;
-  return (
-    presets.find(
-      (p) =>
-        p.framework === ep.framework &&
-        p.machine === ep.machine &&
-        p.gpu_type === ep.gpu_type &&
-        p.gpus === ep.gpus &&
-        (model === null || p.model === model),
-    ) || null
-  );
-}

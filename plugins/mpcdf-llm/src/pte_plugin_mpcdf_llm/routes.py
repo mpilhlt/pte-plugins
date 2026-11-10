@@ -2,6 +2,7 @@
 Routes of the MPCDF LLM plugin.
 
 - GET /api/plugins/mpcdf-llm/manage   management page (admin only)
+- GET /api/plugins/mpcdf-llm/managed  preset and until of managed endpoints (admin only)
 - /api/plugins/mpcdf-llm/admin/...    the library's admin router (admin only)
 
 The library's read router is deliberately not mounted: it returns API keys.
@@ -21,6 +22,26 @@ from .manager import PLUGIN_ID, get_manager
 router = APIRouter(prefix=f"/api/plugins/{PLUGIN_ID}", tags=[PLUGIN_ID])
 
 router.include_router(admin_router(get_manager), prefix="/admin", dependencies=[Depends(require_admin_user)])
+
+
+@router.get("/managed", dependencies=[Depends(require_admin_user)])
+async def managed_endpoints() -> list[dict]:
+    """Which preset each library-managed endpoint belongs to, and its keep-alive cutoff.
+
+    Only these fields: no follower ids, keys or tokens."""
+    try:
+        manager = get_manager()
+    except LookupError:
+        raise HTTPException(status_code=503, detail="MPCDF LLM is not initialized") from None
+    return [
+        {
+            "endpoint_id": m.endpoint_id,
+            "preset": m.preset,
+            "presets": sorted(m.served),
+            "until": m.until.isoformat() if m.until else None,
+        }
+        for m in manager.state.managed().values()
+    ]
 
 
 @router.get("/manage", response_class=HTMLResponse)

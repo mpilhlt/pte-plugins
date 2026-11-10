@@ -122,7 +122,7 @@
   <script type="module">
     import {
       parseSseChunk, untilToIso, describeFrame, fieldErrors, parseDuration, toIsoDuration,
-      formatDuration, formatTimeLeft, matchPreset,
+      formatDuration, formatTimeLeft,
     } from '/api/plugins/mpcdf-llm/static/manage-helpers.js';
 
     const BASE = '/api/plugins/mpcdf-llm/admin';
@@ -226,23 +226,34 @@
     });
 
     // 2. Endpoints
+    /** Preset and until per endpoint id, from the plugin's /managed route (empty on failure). */
+    async function fetchManaged() {
+      const out = new Map();
+      try {
+        const response = await fetch('/api/plugins/mpcdf-llm/managed', { headers: { 'X-Session-ID': sessionId } });
+        if (response.ok) (await response.json()).forEach((m) => out.set(m.endpoint_id, m));
+      } catch { /* the table then shows "unmanaged" */ }
+      return out;
+    }
+
     async function loadEndpoints() {
-      const res = await api('/endpoints');
+      const [res, managedRes] = await Promise.all([api('/endpoints'), fetchManaged()]);
       if (!res.ok) {
         fillRows($('endpoints'), [], 6, res.status === 409 ? 'Log in to MPCDF to see endpoints.' : errorText(res));
         return;
       }
       showMsg('endpoints-msg', '');
       const rows = res.body.map((ep) => {
-        const preset = matchPreset(ep, presets);
-        const model = ep.framework === 'vLLM' ? (ep.args || '').split(/\s+/)[0] : preset?.model;
+        const managed = managedRes.get(ep.id);
+        const served = managed ? managed.presets.map((n) => presets.find((p) => p.name === n)).filter(Boolean) : [];
+        const model = ep.framework === 'vLLM' ? (ep.args || '').split(/\s+/)[0] : served[0]?.model;
         const tr = el('tr');
         tr.append(
-          el('td', preset ? preset.name : 'unmanaged'),
+          el('td', managed ? (managed.presets.length ? managed.presets.join(', ') : managed.preset) : 'unmanaged'),
           el('td', model || '-'),
           el('td', ep.status),
           el('td', formatTimeLeft(ep.expires_at)),
-          el('td', '-'),
+          el('td', managed?.until ? new Date(managed.until).toLocaleString() : '-'),
         );
         const td = el('td', null, { class: 'actions' });
         const cancel = el('button', 'Cancel', { type: 'button', class: 'danger' });

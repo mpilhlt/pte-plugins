@@ -146,3 +146,25 @@ class TestRoutes(_Base):
 
     async def test_no_llm_available_route(self):
         self.assertEqual((await self.client.get(f"{BASE}/llm/available")).status_code, 404)
+
+    async def test_managed_forbidden_for_non_admin(self):
+        self.user = USER
+        self.assertEqual((await self.client.get(f"{BASE}/managed")).status_code, 403)
+
+    async def test_managed_lists_preset_and_until_only(self):
+        await self.start_ready()
+        response = await self.client.get(f"{BASE}/managed")
+        self.assertEqual(response.status_code, 200)
+        rows = response.json()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(set(rows[0]), {"endpoint_id", "preset", "presets", "until"})
+        self.assertEqual((rows[0]["endpoint_id"], rows[0]["preset"]), (1, "p"))
+        self.assertIn("p", rows[0]["presets"])
+        self.assertIsNone(rows[0]["until"])
+        ep = self.fake.endpoints[1]
+        for secret in (ep["key"], ep["token"]):
+            self.assertNotIn(secret, response.text)
+
+    async def test_managed_503_when_not_initialized(self):
+        with patch.object(manager_module, "_manager", None):
+            self.assertEqual((await self.client.get(f"{BASE}/managed")).status_code, 503)
