@@ -1,5 +1,5 @@
 {
-  "version": "2.0.2",
+  "version": "2.0.3",
   "readme": "https://github.com/mpilhlt/pte-plugins/tree/main/plugins/kisski#readme",
   "engines": {
     "pte": ">=0.82.0",
