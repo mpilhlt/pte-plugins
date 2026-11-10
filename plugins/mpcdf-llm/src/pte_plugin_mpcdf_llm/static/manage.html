@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>MPCDF LLM</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 16px 20px; margin: 0; color: #333; font-size: 14px; }
+    h2 { margin: 0 0 12px; border-bottom: 2px solid #2196F3; padding-bottom: 8px; font-size: 1.2em; }
+    h3 { margin: 24px 0 8px; font-size: 1.05em; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #e0e0e0; vertical-align: top; }
+    th { background: #f5f5f5; font-weight: 600; }
+    td.actions { white-space: nowrap; }
+    .empty, .hint { color: #666; font-size: 0.9em; }
+    .empty { font-style: italic; }
+    form, .box { background: #f5f5f5; border-radius: 5px; padding: 12px 15px; }
+    .row { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 10px; }
+    .field { display: flex; flex-direction: column; gap: 3px; flex: 1 1 200px; }
+    .field.narrow { flex: 0 1 130px; }
+    label { font-weight: 600; font-size: 0.9em; }
+    input[type=text], input[type=password], input[type=number], input[type=time], select, textarea { padding: 6px; border: 1px solid #bbb; border-radius: 3px; font-size: 1em; font-family: inherit; }
+    .field.invalid input, .field.invalid select, .field.invalid textarea { border-color: #b71c1c; }
+    .err { color: #b71c1c; font-size: 0.85em; }
+    button { padding: 6px 14px; border: none; border-radius: 4px; font-size: 0.95em; cursor: pointer; }
+    button.primary { background: #2196F3; color: white; }
+    button.primary:hover { background: #1976D2; }
+    button.secondary { background: #e0e0e0; color: #333; }
+    button.danger { background: #fdecea; color: #b71c1c; }
+    button:disabled { opacity: 0.6; cursor: wait; }
+    .buttons { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .msg { margin-top: 8px; padding: 6px 10px; border-radius: 4px; white-space: pre-wrap; display: none; }
+    .msg.error { display: block; background: #fdecea; color: #b71c1c; }
+    .msg.ok { display: block; background: #e8f5e9; color: #1b5e20; }
+    #progress { margin: 10px 0 0; padding: 0; list-style: none; }
+    #progress li { padding: 2px 0; }
+    #progress li.failed { color: #b71c1c; }
+    progress { width: 200px; vertical-align: middle; }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <h2>MPCDF LLM</h2>
+  <p class="hint">Manages the GPU endpoints on the MPCDF LLM service. Users reach ready endpoints through the model picker; nobody sees MPCDF credentials or API keys.</p>
+
+  <h3>1. MPCDF session</h3>
+  <div class="box">
+    <div id="session-ok" hidden>
+      <span id="session-text"></span>
+      <button type="button" class="secondary" id="logout">Log out</button>
+    </div>
+    <form id="login" autocomplete="on" hidden>
+      <div class="row">
+        <div class="field"><label for="username">Username</label>
+          <input type="text" id="username" name="username" autocomplete="username" required></div>
+        <div class="field"><label for="password">Password</label>
+          <input type="password" id="password" name="password" autocomplete="current-password" required></div>
+        <div class="field narrow"><label for="otp">One-time code</label>
+          <input type="text" id="otp" name="otp" autocomplete="one-time-code" inputmode="numeric" required></div>
+      </div>
+      <div class="buttons"><button type="submit" class="primary" id="login-btn">Log in</button></div>
+    </form>
+    <div id="session-msg" class="msg"></div>
+  </div>
+
+  <h3>2. Endpoints</h3>
+  <table>
+    <thead><tr><th>Preset</th><th>Model</th><th>Status</th><th>Time left</th><th>Until</th><th></th></tr></thead>
+    <tbody id="endpoints"><tr><td colspan="6" class="empty">Loading...</td></tr></tbody>
+  </table>
+  <div id="endpoints-msg" class="msg"></div>
+
+  <h3>3. Presets</h3>
+  <table>
+    <thead><tr><th>Name</th><th>Model</th><th>Hardware</th><th></th></tr></thead>
+    <tbody id="presets"><tr><td colspan="4" class="empty">Loading...</td></tr></tbody>
+  </table>
+  <div class="buttons" style="margin-top:8px"><button type="button" class="secondary" id="new-preset">New preset</button></div>
+  <form id="preset-form" hidden style="margin-top:10px" autocomplete="off">
+    <div class="row">
+      <div class="field" data-field="name"><label for="f-name">Name</label><input type="text" id="f-name" pattern="[a-z0-9][a-z0-9._-]*" required><span class="err"></span></div>
+      <div class="field" data-field="description"><label for="f-description">Description</label><input type="text" id="f-description"><span class="err"></span></div>
+    </div>
+    <div class="row">
+      <div class="field" data-field="framework"><label for="f-framework">Framework</label><select id="f-framework"></select><span class="err"></span></div>
+      <div class="field" data-field="model"><label for="f-model">Model</label><input type="text" id="f-model" required><span class="err"></span></div>
+      <div class="field" data-field="image"><label for="f-image">Image (optional)</label><input type="text" id="f-image"><span class="err"></span></div>
+    </div>
+    <div class="row">
+      <div class="field" data-field="machine"><label for="f-machine">Machine</label><select id="f-machine"></select><span class="err"></span></div>
+      <div class="field" data-field="gpu_type"><label for="f-gpu_type">GPU type</label><select id="f-gpu_type"></select><span class="err"></span></div>
+      <div class="field narrow" data-field="gpus"><label for="f-gpus">GPUs</label><select id="f-gpus"></select><span class="err"></span></div>
+      <div class="field narrow" data-field="time"><label for="f-time">Time</label><select id="f-time"></select><span class="err"></span></div>
+      <div class="field narrow" data-field="max_queue_time"><label for="f-max_queue_time">Queue time</label><select id="f-max_queue_time"></select><span class="err"></span></div>
+    </div>
+    <div class="row">
+      <div class="field" data-field="extra_args"><label for="f-extra_args">Extra args (one per line)</label><textarea id="f-extra_args" rows="3"></textarea><span class="err"></span></div>
+      <div class="field" data-field="envs"><label for="f-envs">Environment (KEY=VALUE per line)</label><textarea id="f-envs" rows="3"></textarea><span class="err"></span></div>
+    </div>
+    <div class="row">
+      <div class="field narrow" data-field="min_remaining"><label for="f-min_remaining">Min remaining (min)</label><input type="number" id="f-min_remaining" min="1"><span class="err"></span></div>
+      <div class="field narrow" data-field="idle_timeout"><label for="f-idle_timeout">Idle timeout (min)</label><input type="number" id="f-idle_timeout" min="1"><span class="err"></span></div>
+    </div>
+    <div class="buttons">
+      <button type="submit" class="primary" id="save-preset">Save preset</button>
+      <button type="button" class="secondary" id="cancel-preset">Cancel</button>
+    </div>
+    <div id="preset-msg" class="msg"></div>
+  </form>
+
+  <h3>4. Start</h3>
+  <div class="box">
+    <div class="row">
+      <div class="field"><label for="start-preset">Preset</label><select id="start-preset"></select></div>
+      <div class="field narrow"><label for="start-until">Keep alive until (optional)</label><input type="time" id="start-until"></div>
+    </div>
+    <div class="buttons"><button type="button" class="primary" id="start-btn">Start</button></div>
+    <ul id="progress"></ul>
+    <progress id="pull" max="100" value="0" hidden></progress>
+    <div id="start-msg" class="msg"></div>
+  </div>
+
+  <script type="module">
+    import {
+      parseSseChunk, untilToIso, describeFrame, fieldErrors, parseDuration, toIsoDuration,
+      formatDuration, formatTimeLeft,
+    } from '/api/plugins/mpcdf-llm/static/manage-helpers.js';
+
+    const BASE = '/api/plugins/mpcdf-llm/admin';
+    const sessionId = new URLSearchParams(window.location.search).get('session_id') || '';
+    const $ = (id) => document.getElementById(id);
+
+    let presets = [];
+    let options = null;
+    let editing = null; // preset being edited (keeps fields the form does not show, e.g. lead_time)
+    let loggedIn = false;
+
+    /** Notify through the editor, if the sandbox is there. */
+    function notify(message, kind = 'info', icon = 'info-circle') {
+      try { window.sandbox?.notify(message, kind, icon); } catch { /* not in the editor */ }
+    }
+
+    function showMsg(id, text, kind) {
+      const el = $(id);
+      el.textContent = text || '';
+      el.className = 'msg' + (text ? ' ' + kind : '');
+    }
+
+    /** Fetch an admin route as the sandbox does (X-Session-ID header). Returns {status, body}. */
+    async function api(path, method = 'GET', payload = null) {
+      const init = { method, headers: { 'X-Session-ID': sessionId } };
+      if (payload !== null) {
+        init.headers['Content-Type'] = 'application/json';
+        init.body = JSON.stringify(payload);
+      }
+      const response = await fetch(BASE + path, init);
+      let body = null;
+      if (response.status !== 204) body = await response.json().catch(() => null);
+      return { status: response.status, ok: response.ok, body };
+    }
+
+    function errorText(res) {
+      const b = res.body || {};
+      if (b.state === 'login_required') return 'MPCDF login required';
+      return b.message || (typeof b.detail === 'string' ? b.detail : '') || `Request failed (${res.status})`;
+    }
+
+    function el(tag, text, attrs = {}) {
+      const node = document.createElement(tag);
+      if (text !== undefined && text !== null) node.textContent = text;
+      for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
+      return node;
+    }
+
+    function fillRows(tbody, rows, cols, emptyText) {
+      tbody.replaceChildren();
+      if (!rows.length) {
+        const tr = el('tr');
+        tr.append(el('td', emptyText, { colspan: String(cols), class: 'empty' }));
+        tbody.append(tr);
+        return;
+      }
+      rows.forEach((r) => tbody.append(r));
+    }
+
+    // 1. Session
+    async function loadSession() {
+      const res = await api('/session');
+      if (!res.ok) { showMsg('session-msg', errorText(res), 'error'); return; }
+      loggedIn = res.body.state === 'ok';
+      $('session-ok').hidden = !loggedIn;
+      $('login').hidden = loggedIn;
+      if (loggedIn) {
+        const until = res.body.expires_at ? new Date(res.body.expires_at).toLocaleString() : 'unknown';
+        $('session-text').textContent = `Logged in as ${res.body.username}, session valid until ${until}. `;
+      }
+      showMsg('session-msg', '');
+    }
+
+    $('login').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const btn = $('login-btn');
+      btn.disabled = true;
+      const payload = { username: $('username').value.trim(), password: $('password').value, otp: $('otp').value.trim() };
+      $('password').value = '';
+      $('otp').value = '';
+      try {
+        const res = await api('/session/login', 'POST', payload);
+        if (res.ok) {
+          notify('Logged in to MPCDF', 'success', 'check-circle');
+          await refreshAll();
+        } else {
+          showMsg('session-msg', res.status === 401 ? (errorText(res) || 'Login failed') : errorText(res), 'error');
+        }
+      } catch {
+        showMsg('session-msg', 'Login request failed', 'error');
+      } finally {
+        payload.password = payload.otp = '';
+        btn.disabled = false;
+      }
+    });
+
+    $('logout').addEventListener('click', async () => {
+      const res = await api('/session/logout', 'POST');
+      if (!res.ok) showMsg('session-msg', errorText(res), 'error');
+      await refreshAll();
+    });
+
+    // 2. Endpoints
+    /** Preset and until per endpoint id, from the plugin's /managed route (empty on failure). */
+    async function fetchManaged() {
+      const out = new Map();
+      try {
+        const response = await fetch('/api/plugins/mpcdf-llm/managed', { headers: { 'X-Session-ID': sessionId } });
+        if (response.ok) (await response.json()).forEach((m) => out.set(m.endpoint_id, m));
+      } catch { /* the table then shows "unmanaged" */ }
+      return out;
+    }
+
+    async function loadEndpoints() {
+      const [res, managedRes] = await Promise.all([api('/endpoints'), fetchManaged()]);
+      if (!res.ok) {
+        fillRows($('endpoints'), [], 6, res.status === 409 ? 'Log in to MPCDF to see endpoints.' : errorText(res));
+        return;
+      }
+      showMsg('endpoints-msg', '');
+      const rows = res.body.map((ep) => {
+        const managed = managedRes.get(ep.id);
+        const served = managed ? managed.presets.map((n) => presets.find((p) => p.name === n)).filter(Boolean) : [];
+        const model = served[0]?.model || ep.model || (ep.framework === 'vLLM' ? (ep.args || '').split(/\s+/)[0] : '');
+        const tr = el('tr');
+        tr.append(
+          el('td', managed ? (managed.presets.length ? managed.presets.join(', ') : managed.preset) : 'unmanaged'),
+          el('td', model || '-'),
+          el('td', ep.status),
+          el('td', formatTimeLeft(ep.expires_at)),
+          el('td', managed?.until ? new Date(managed.until).toLocaleString() : '-'),
+        );
+        const td = el('td', null, { class: 'actions' });
+        const cancel = el('button', 'Cancel', { type: 'button', class: 'danger' });
+        cancel.addEventListener('click', async () => {
+          if (!confirm(`Cancel endpoint ${ep.id}?`)) return;
+          cancel.disabled = true;
+          const r = await api(`/endpoints/${encodeURIComponent(ep.id)}`, 'DELETE');
+          if (!r.ok) showMsg('endpoints-msg', errorText(r), 'error');
+          else notify(`Endpoint ${ep.id} canceled`, 'success', 'check-circle');
+          await loadEndpoints();
+        });
+        td.append(cancel);
+        tr.append(td);
+        return tr;
+      });
+      fillRows($('endpoints'), rows, 6, 'No endpoints.');
+    }
+
+    // 3. Presets
+    async function loadPresets() {
+      const res = await api('/presets');
+      presets = res.ok ? res.body : [];
+      if (!res.ok) {
+        fillRows($('presets'), [], 4, errorText(res));
+        return;
+      }
+      const rows = presets.map((p) => {
+        const tr = el('tr');
+        tr.append(el('td', p.name), el('td', p.model), el('td', `${p.gpus} x ${p.gpu_type} (${p.machine})`));
+        const td = el('td', null, { class: 'actions' });
+        const edit = el('button', 'Edit', { type: 'button', class: 'secondary' });
+        edit.addEventListener('click', () => openForm(p));
+        const del = el('button', 'Delete', { type: 'button', class: 'danger' });
+        del.addEventListener('click', async () => {
+          if (!confirm(`Delete preset "${p.name}"?`)) return;
+          const r = await api(`/presets/${encodeURIComponent(p.name)}`, 'DELETE');
+          if (!r.ok) notify(errorText(r), 'danger', 'exclamation-triangle');
+          await loadPresets();
+        });
+        td.append(edit, ' ', del);
+        tr.append(td);
+        return tr;
+      });
+      fillRows($('presets'), rows, 4, 'No presets yet.');
+      const select = $('start-preset');
+      const current = select.value;
+      select.replaceChildren(...presets.map((p) => el('option', p.name, { value: p.name })));
+      if (presets.some((p) => p.name === current)) select.value = current;
+    }
+
+    async function loadOptions() {
+      if (options) return options;
+      const res = await api('/options');
+      if (res.ok) options = res.body;
+      return options;
+    }
+
+    function setSelect(id, values, labelFn = String) {
+      $(id).replaceChildren(...values.map((v) => el('option', labelFn(v), { value: String(v) })));
+    }
+
+    function clearErrors() {
+      document.querySelectorAll('#preset-form .field').forEach((f) => {
+        f.classList.remove('invalid');
+        f.querySelector('.err').textContent = '';
+      });
+      showMsg('preset-msg', '');
+    }
+
+    function showErrors(errors) {
+      const unplaced = [];
+      for (const [field, msg] of Object.entries(errors)) {
+        const f = [...document.querySelectorAll('#preset-form .field[data-field]')].find((x) => x.dataset.field === field);
+        if (f) { f.classList.add('invalid'); f.querySelector('.err').textContent = msg; }
+        else unplaced.push(`${field}: ${msg}`);
+      }
+      if (unplaced.length) showMsg('preset-msg', unplaced.join('\n'), 'error');
+    }
+
+    async function openForm(preset) {
+      const opts = await loadOptions();
+      if (!opts) { showMsg('preset-msg', 'Log in to MPCDF to edit presets (the form options come from the provider).', 'error'); $('preset-form').hidden = false; return; }
+      editing = preset;
+      clearErrors();
+      setSelect('f-framework', opts.frameworks);
+      setSelect('f-machine', opts.machines);
+      setSelect('f-gpu_type', opts.gpu_types);
+      setSelect('f-gpus', opts.gpus);
+      setSelect('f-time', opts.times, (t) => formatDuration(parseDuration(t)));
+      setSelect('f-max_queue_time', opts.max_queue_times, (t) => formatDuration(parseDuration(t)));
+      const p = preset || { framework: opts.frameworks[0], gpus: opts.gpus[0], time: 'PT1H', max_queue_time: 'PT1H', min_remaining: 'PT20M', idle_timeout: 'PT60M', extra_args: [], envs: {} };
+      $('f-name').value = p.name || '';
+      $('f-name').readOnly = !!preset;
+      $('f-description').value = p.description || '';
+      $('f-framework').value = p.framework;
+      $('f-model').value = p.model || '';
+      $('f-image').value = p.image || '';
+      if (p.machine) $('f-machine').value = p.machine;
+      if (p.gpu_type) $('f-gpu_type').value = p.gpu_type;
+      $('f-gpus').value = String(p.gpus);
+      $('f-time').value = p.time;
+      $('f-max_queue_time').value = p.max_queue_time;
+      $('f-extra_args').value = (p.extra_args || []).join('\n');
+      $('f-envs').value = Object.entries(p.envs || {}).map(([k, v]) => `${k}=${v}`).join('\n');
+      $('f-min_remaining').value = parseDuration(p.min_remaining);
+      $('f-idle_timeout').value = parseDuration(p.idle_timeout);
+      $('preset-form').hidden = false;
+      $('f-name').focus();
+    }
+
+    function readForm() {
+      const envs = {};
+      for (const line of $('f-envs').value.split('\n')) {
+        if (!line.trim()) continue;
+        const i = line.indexOf('=');
+        if (i > 0) envs[line.slice(0, i).trim()] = line.slice(i + 1).trim();
+        else envs[line.trim()] = '';
+      }
+      const preset = {
+        name: $('f-name').value.trim(),
+        description: $('f-description').value.trim(),
+        framework: $('f-framework').value,
+        model: $('f-model').value.trim(),
+        image: $('f-image').value.trim() || null,
+        extra_args: $('f-extra_args').value.split('\n').map((s) => s.trim()).filter(Boolean),
+        envs,
+        machine: $('f-machine').value,
+        gpu_type: $('f-gpu_type').value,
+        gpus: Number($('f-gpus').value),
+        time: $('f-time').value,
+        max_queue_time: $('f-max_queue_time').value,
+        min_remaining: toIsoDuration(Number($('f-min_remaining').value) || 20),
+        idle_timeout: toIsoDuration(Number($('f-idle_timeout').value) || 60),
+      };
+      if (editing && editing.lead_time) preset.lead_time = editing.lead_time;
+      return preset;
+    }
+
+    $('new-preset').addEventListener('click', () => openForm(null));
+    $('cancel-preset').addEventListener('click', () => { $('preset-form').hidden = true; });
+    $('preset-form').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      clearErrors();
+      const preset = readForm();
+      const btn = $('save-preset');
+      btn.disabled = true;
+      try {
+        const res = await api(`/presets/${encodeURIComponent(preset.name)}`, 'PUT', preset);
+        if (res.ok) {
+          $('preset-form').hidden = true;
+          notify(`Preset "${preset.name}" saved`, 'success', 'check-circle');
+          await loadPresets();
+        } else if (res.status === 422) {
+          const errors = fieldErrors(res.body);
+          if (Object.keys(errors).length) showErrors(errors);
+          else showMsg('preset-msg', 'The preset is not valid', 'error');
+        } else {
+          showMsg('preset-msg', errorText(res), 'error');
+        }
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    // 4. Start
+    function addProgress(text, failed) {
+      const li = el('li', text, failed ? { class: 'failed' } : {});
+      $('progress').append(li);
+    }
+
+    $('start-btn').addEventListener('click', async () => {
+      const name = $('start-preset').value;
+      if (!name) { showMsg('start-msg', 'Create a preset first', 'error'); return; }
+      let until;
+      try { until = untilToIso($('start-until').value); }
+      catch (e) { showMsg('start-msg', e.message, 'error'); return; }
+      showMsg('start-msg', '');
+      $('progress').replaceChildren();
+      $('pull').hidden = true;
+      const btn = $('start-btn');
+      btn.disabled = true;
+      try {
+        const query = until ? `?until=${encodeURIComponent(until)}` : '';
+        const response = await fetch(`${BASE}/presets/${encodeURIComponent(name)}/start${query}`, {
+          method: 'POST',
+          headers: { 'X-Session-ID': sessionId },
+        });
+        if (!response.ok) {
+          const body = await response.json().catch(() => null);
+          const errors = fieldErrors(body);
+          const text = Object.keys(errors).length
+            ? Object.entries(errors).map(([k, v]) => `${k}: ${v}`).join('\n')
+            : errorText({ status: response.status, body });
+          showMsg('start-msg', text, 'error');
+          if (body && body.state === 'login_required') await loadSession();
+          return;
+        }
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let rest = '';
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const parsed = parseSseChunk(rest, decoder.decode(value, { stream: true }));
+          rest = parsed.rest;
+          for (const frame of parsed.frames) {
+            const phase = frame.data?.phase || frame.event;
+            addProgress(describeFrame(frame), phase === 'failed');
+            if (phase === 'pulling' && typeof frame.data?.progress === 'number') {
+              $('pull').hidden = false;
+              $('pull').value = Math.round(frame.data.progress * 100);
+            }
+            if (phase === 'ready') {
+              $('pull').hidden = true;
+              notify(`Endpoint for "${name}" is ready`, 'success', 'check-circle');
+            }
+            if (phase === 'login_required') await loadSession();
+          }
+        }
+      } catch {
+        showMsg('start-msg', 'The progress stream ended. The endpoints table shows the current state.', 'error');
+      } finally {
+        btn.disabled = false;
+        await loadEndpoints();
+      }
+    });
+
+    // Refresh
+    async function refreshAll() {
+      await loadSession();
+      options = null;
+      await loadPresets();
+      await loadEndpoints();
+    }
+
+    let polling = false;
+    setInterval(async () => {
+      if (polling || document.visibilityState !== 'visible') return;
+      polling = true;
+      try { await Promise.all([loadSession().catch(() => {}), loadEndpoints().catch(() => {})]); } finally { polling = false; }
+    }, 10000);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') loadEndpoints().catch(() => {});
+    });
+
+    refreshAll().catch(() => showMsg('session-msg', 'Could not reach the server', 'error'));
+  </script>
+</body>
+</html>

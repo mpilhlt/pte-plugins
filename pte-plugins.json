@@ -243,6 +243,22 @@
       }
     },
     {
+      "id": "mpcdf-llm",
+      "package": "pte-plugin-mpcdf-llm",
+      "module": "pte_plugin_mpcdf_llm",
+      "path": "plugins/mpcdf-llm",
+      "version": "1.0.0",
+      "description": "Starts and manages MPCDF-hosted LLM endpoints and offers them as free models",
+      "requires": [],
+      "dependencies": [
+        "mpcdf-llm[fastapi,testing] @ git+https://gitlab.mpcdf.mpg.de/cboul/llm-mpcdf.git@f46f18a03e47a16f1e8e7aa519104674ce4741a2"
+      ],
+      "engines": {
+        "pte": ">=0.82.0",
+        "pte-plugin-api": "^1.2"
+      }
+    },
+    {
       "id": "revision-feed",
       "package": "pte-plugin-revision-feed",
       "module": "pte_plugin_revision_feed",
