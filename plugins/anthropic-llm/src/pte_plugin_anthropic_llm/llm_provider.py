@@ -17,7 +17,7 @@ from pathlib import Path
 import requests
 
 from fastapi_app.lib.extraction.http_utils import get_retry_session
-from fastapi_app.plugin_api import LLMImage, LLMModel, LLMProvider, get_config
+from fastapi_app.plugin_api import LLMImage, LLMModel, LLMProvider, get_completion_session, get_config, post_completion
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +53,7 @@ class AnthropicLLMProvider(LLMProvider):
 
     def _headers(self) -> dict[str, str]:
         return {
-            "x-api-key": self._api_key,
+            "x-api-key": self._api_key or "",
             "anthropic-version": ANTHROPIC_API_VERSION,
             "content-type": "application/json",
         }
@@ -154,8 +154,13 @@ class AnthropicLLMProvider(LLMProvider):
         user_content: str | list[dict[str, object]],
         temperature: float,
     ) -> str:
-        session = get_retry_session(retries=3, backoff_factor=2.0, read_retries=0)
+        session = get_completion_session(retries=3, backoff_factor=2.0, read_retries=0)
         url = f"{self._base_url}/messages"
+
+        def post(body: dict[str, object]) -> requests.Response:
+            # A 429 is handled by post_completion (Retry-After, anthropic-ratelimit-* headers): raises LLMRateLimitError
+            return post_completion(session, url, endpoint=self._base_url, api_key=self._api_key, model_id=model_id, headers=self._headers(), json=body, timeout=REQUEST_TIMEOUT_SECONDS)
+
         data = {
             "model": model_id,
             "max_tokens": DEFAULT_MAX_TOKENS,
@@ -163,12 +168,12 @@ class AnthropicLLMProvider(LLMProvider):
             "messages": [{"role": "user", "content": user_content}],
             "temperature": temperature,
         }
-        response = session.post(url, headers=self._headers(), json=data, timeout=REQUEST_TIMEOUT_SECONDS)
+        response = post(data)
         if response.status_code == 400 and self._error_message(response).startswith("`temperature`"):
             # Newer Claude models reject `temperature` ("is deprecated for this model"), older ones
             # accept it: send it optimistically and retry once without it.
             data_without_temperature = {key: value for key, value in data.items() if key != "temperature"}
-            response = session.post(url, headers=self._headers(), json=data_without_temperature, timeout=REQUEST_TIMEOUT_SECONDS)
+            response = post(data_without_temperature)
         response.raise_for_status()
         for block in response.json().get("content", []):
             if block.get("type") == "text":

@@ -65,7 +65,7 @@ class TestAnthropicLLMProviderListModels(unittest.TestCase):
 class TestAnthropicLLMProviderChatCompletion(unittest.IsolatedAsyncioTestCase):
     """Test chat_completion() posts the Messages API's expected payload."""
 
-    @patch("pte_plugin_anthropic_llm.llm_provider.get_retry_session")
+    @patch("pte_plugin_anthropic_llm.llm_provider.get_completion_session")
     async def test_chat_completion_posts_expected_payload_and_returns_text(self, mock_get_session):
         mock_session = MagicMock()
         mock_response = MagicMock()
@@ -91,7 +91,7 @@ class TestAnthropicLLMProviderChatCompletion(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(call_args[1]["json"]["temperature"], 0.5)
         self.assertIn("max_tokens", call_args[1]["json"])
 
-    @patch("pte_plugin_anthropic_llm.llm_provider.get_retry_session")
+    @patch("pte_plugin_anthropic_llm.llm_provider.get_completion_session")
     async def test_chat_completion_returns_empty_string_when_no_text_block(self, mock_get_session):
         mock_session = MagicMock()
         mock_response = MagicMock()
@@ -117,7 +117,7 @@ class TestAnthropicLLMProviderTemperatureRejected(unittest.IsolatedAsyncioTestCa
             response.raise_for_status.side_effect = requests.HTTPError(f"{status_code} Client Error", response=response)
         return response
 
-    @patch("pte_plugin_anthropic_llm.llm_provider.get_retry_session")
+    @patch("pte_plugin_anthropic_llm.llm_provider.get_completion_session")
     async def test_retries_without_temperature_when_model_rejects_it(self, mock_get_session):
         rejected = self._response(400, {"error": {"type": "invalid_request_error", "message": "`temperature` is deprecated for this model."}})
         accepted = self._response(200, {"content": [{"type": "text", "text": "ok"}]})
@@ -133,7 +133,7 @@ class TestAnthropicLLMProviderTemperatureRejected(unittest.IsolatedAsyncioTestCa
         self.assertIn("temperature", mock_session.post.call_args_list[0][1]["json"])
         self.assertNotIn("temperature", mock_session.post.call_args_list[1][1]["json"])
 
-    @patch("pte_plugin_anthropic_llm.llm_provider.get_retry_session")
+    @patch("pte_plugin_anthropic_llm.llm_provider.get_completion_session")
     async def test_other_400_errors_are_not_retried(self, mock_get_session):
         rejected = self._response(400, {"error": {"type": "invalid_request_error", "message": "max_tokens: too large"}})
         mock_session = MagicMock()
@@ -150,7 +150,7 @@ class TestAnthropicLLMProviderTemperatureRejected(unittest.IsolatedAsyncioTestCa
 class TestAnthropicLLMProviderPdfInput(unittest.IsolatedAsyncioTestCase):
     """Test chat_completion_with_pdf() sends the PDF as a base64 document block."""
 
-    @patch("pte_plugin_anthropic_llm.llm_provider.get_retry_session")
+    @patch("pte_plugin_anthropic_llm.llm_provider.get_completion_session")
     async def test_sends_document_block_before_prompt(self, mock_get_session):
         mock_session = MagicMock()
         mock_session.post.return_value.json.return_value = {"content": [{"type": "text", "text": "refs"}]}
@@ -173,7 +173,7 @@ class TestAnthropicLLMProviderPdfInput(unittest.IsolatedAsyncioTestCase):
 class TestAnthropicLLMProviderImageInput(unittest.IsolatedAsyncioTestCase):
     """Test chat_completion_with_images() sends the images as base64 image blocks, in order."""
 
-    @patch("pte_plugin_anthropic_llm.llm_provider.get_retry_session")
+    @patch("pte_plugin_anthropic_llm.llm_provider.get_completion_session")
     async def test_sends_image_blocks_before_prompt(self, mock_get_session):
         mock_session = MagicMock()
         mock_session.post.return_value.json.return_value = {"content": [{"type": "text", "text": "transcript"}]}
