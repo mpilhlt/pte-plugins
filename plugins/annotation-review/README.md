@@ -6,7 +6,8 @@ Reviews the annotations in the open TEI document against the annotation rules th
 
 ### What it contributes
 
-- A **Review Annotations** item in the Tools menu (under "Annotation"). It is enabled only when the open document's `teiHeader/encodingDesc/editorialDecl` contains a rule reference with `subtype="machine"` (a link to a machine-readable rules file, usually raw Markdown). Otherwise it is disabled and a tooltip explains why.
+- A **Review document annotations** item in the Tools menu (under "Annotation"). It always reviews the whole document with the model selected in **Tools > Inference**, also while node navigation has selected a node. It is enabled only when the open document's `teiHeader/encodingDesc/editorialDecl` contains a rule reference with `subtype="machine"` (a link to a machine-readable rules file, usually raw Markdown). Otherwise it is disabled and a tooltip explains why.
+- An **LLM Review** button on the focused node in the XML editor's focus mode, which reviews only that node, without a confirmation dialog.
 - A confirmation dialog naming the provider/model that will be used, then a progress widget (minimizable, with a cancel button) that shows "part i of n" while the document is reviewed piece by piece.
 - Suggestions as info-level diagnostics in the diagnostics drawer and the editor gutter, merged with the TEI validation diagnostics. Each carries the model's rationale and a "Propose fix" button; checked suggestions can also be applied in one go with the drawer's **Apply** button, or dismissed.
 - A per-tab session cache of the suggestions (browser session storage, keyed by document): after a page reload or after switching documents and back, the suggestions of the document are shown again without a new review. Suggestions whose quoted text no longer occurs exactly once in the loaded document are dropped, so applied ones are removed from the cache; dismissed ones are removed too. The cache is gone when the tab is closed.
@@ -87,7 +88,7 @@ The design rationale is in `docs/superpowers/specs/2026-09-24-llm-annotation-rev
 ### Request flow
 
 ```text
-Tools > Review Annotations
+Tools > Review document annotations
   -> confirm dialog (model label)
   -> POST /plan {xml}                       -> {chunk_count}
   -> for i in 0..n-1:
