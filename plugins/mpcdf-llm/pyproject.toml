@@ -5,16 +5,15 @@ description = "Starts and manages MPCDF-hosted LLM endpoints and offers them as 
 readme = "README.md"
 requires-python = ">=3.13"
 license = "CC0-1.0"
-dependencies = ["mpcdf-llm[fastapi,testing]"]
+dependencies = [
+    "mpcdf-llm[fastapi,testing] @ git+https://gitlab.mpcdf.mpg.de/cboul/llm-mpcdf.git@334a40ade43e79e4d67a8f65601e16667e5ced8a",
+]
 
 [project.urls]
 Repository = "https://github.com/mpilhlt/pte-plugins"
 
 [project.entry-points."pte.plugins"]
 mpcdf-llm = "pte_plugin_mpcdf_llm"
-
-[tool.uv.sources]
-mpcdf-llm = { git = "https://gitlab.mpcdf.mpg.de/cboul/llm-mpcdf.git", rev = "334a40ade43e79e4d67a8f65601e16667e5ced8a" }
 
 [tool.hatch.metadata]
 allow-direct-references = true
