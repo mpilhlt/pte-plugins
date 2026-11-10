@@ -247,7 +247,7 @@
       "package": "pte-plugin-mpcdf-llm",
       "module": "pte_plugin_mpcdf_llm",
       "path": "plugins/mpcdf-llm",
-      "version": "1.1.0",
+      "version": "1.1.1",
       "description": "Starts and manages MPCDF-hosted LLM endpoints and offers them as free models",
       "requires": [],
       "dependencies": [
