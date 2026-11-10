@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.13"
 license = "CC0-1.0"
 dependencies = [
-    "mpcdf-llm[fastapi,testing] @ git+https://gitlab.mpcdf.mpg.de/cboul/llm-mpcdf.git@7f4e561525d8bb9e82ab3bd1caccb24e24e4054a",
+    "mpcdf-llm[fastapi,testing] @ git+https://gitlab.mpcdf.mpg.de/cboul/llm-mpcdf.git@bdcb9f576ababb69bdcad98b7442ae6671187178",
 ]
 
 [project.urls]
