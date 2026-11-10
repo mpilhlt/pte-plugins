@@ -11,12 +11,14 @@ the PDF itself rather than its text layer.
 
 import logging
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, time, timedelta, timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import httpx
 from google import genai
 from google.genai import errors as genai_errors, types
 
+from fastapi_app.lib.llm.rate_limit import DEFAULT_LIMITED_SECONDS, get_rate_limit_tracker
 from fastapi_app.plugin_api import LLMModel, LLMProvider, LLMProviderError, LLMRateLimitError, get_config
 
 logger = logging.getLogger(__name__)
@@ -38,25 +40,67 @@ _API_ERRORS = (genai_errors.APIError, httpx.HTTPError)
 
 _RETRY_DELAY_RE = re.compile(r"(\d+(?:\.\d+)?)s")
 
+#: The endpoint under which the editor's rate-limit tracker keeps the state of Gemini API keys
+GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com"
+
+# Daily quotas of the Gemini API are reset at midnight Pacific time
+try:
+    _QUOTA_TIMEZONE: timezone | ZoneInfo = ZoneInfo("America/Los_Angeles")
+except ZoneInfoNotFoundError:  # no time zone data installed: Pacific daylight time, so the limit ends at the latest at the reset
+    _QUOTA_TIMEZONE = timezone(timedelta(hours=-7))
+
+
+def _error_details(details: object) -> list[dict[str, object]]:
+    """The entries of `error.details` in an error response."""
+    error = details.get("error") if isinstance(details, dict) else None
+    entries = error.get("details") if isinstance(error, dict) else None
+    return [entry for entry in entries if isinstance(entry, dict)] if isinstance(entries, list) else []
+
 
 def _retry_delay_seconds(details: object) -> float | None:
     """The `retryDelay` of a google.rpc.RetryInfo in an error response ("34s"), or None."""
-    error = details.get("error") if isinstance(details, dict) else None
-    entries = error.get("details") if isinstance(error, dict) else None
-    for entry in entries if isinstance(entries, list) else []:
-        if isinstance(entry, dict) and str(entry.get("@type", "")).endswith("google.rpc.RetryInfo"):
+    for entry in _error_details(details):
+        if str(entry.get("@type", "")).endswith("google.rpc.RetryInfo"):
             match = _RETRY_DELAY_RE.fullmatch(str(entry.get("retryDelay", "")))
             if match:
                 return float(match.group(1))
     return None
 
 
-def _provider_error(error: genai_errors.APIError | httpx.HTTPError) -> LLMProviderError:
+def _exceeded_quota_ids(details: object) -> list[str]:
+    """The `quotaId`s of the violations of a google.rpc.QuotaFailure in an error response, such as "GenerateRequestsPerDayPerProjectPerModel-FreeTier"."""
+    quota_ids: list[str] = []
+    for entry in _error_details(details):
+        violations = entry.get("violations") if str(entry.get("@type", "")).endswith("google.rpc.QuotaFailure") else None
+        for violation in violations if isinstance(violations, list) else []:
+            if isinstance(violation, dict) and violation.get("quotaId"):
+                quota_ids.append(str(violation["quotaId"]))
+    return quota_ids
+
+
+def _next_daily_reset(now: datetime) -> datetime:
+    """The next midnight Pacific time, in UTC."""
+    local = now.astimezone(_QUOTA_TIMEZONE)
+    midnight = datetime.combine(local.date() + timedelta(days=1), time(), tzinfo=_QUOTA_TIMEZONE)
+    return midnight.astimezone(timezone.utc)
+
+
+def _limited_until(details: object, now: datetime) -> datetime:
+    """Until when a 429 limits the key and model.
+
+    The `retryDelay` of the error is used for limits per minute. When a daily quota is exhausted (a quota id with "PerDay"), the API may still give a short `retryDelay`, after which every request would fail again, so the key counts as limited until the daily reset. Without either, the key is limited for the editor's default period.
+    """
+    if any("PerDay" in quota_id for quota_id in _exceeded_quota_ids(details)):
+        return _next_daily_reset(now)
+    delay = _retry_delay_seconds(details)
+    return now + timedelta(seconds=delay if delay is not None else DEFAULT_LIMITED_SECONDS)
+
+
+def _provider_error(error: genai_errors.APIError | httpx.HTTPError, now: datetime | None = None) -> LLMProviderError:
     """A user-presentable LLMProviderError for a failed Gemini API call; a 429 (rate limit, exhausted quota) is an LLMRateLimitError."""
     if isinstance(error, genai_errors.APIError):
         if error.code == 429:
-            delay = _retry_delay_seconds(error.details)
-            available_at = datetime.now(timezone.utc) + timedelta(seconds=delay) if delay is not None else None
+            available_at = _limited_until(error.details, now or datetime.now(timezone.utc))
             return LLMRateLimitError(f"{error.code} {error.message}", available_at=available_at)
         return LLMProviderError(f"{error.code} {error.message}")
     return LLMProviderError(f"Could not reach the Gemini API: {error or type(error).__name__}")
@@ -121,6 +165,25 @@ class GoogleLLMProvider(LLMProvider):
     def with_api_key(self, api_key: str) -> "GoogleLLMProvider":
         return GoogleLLMProvider(self.id, self.label, api_key, self.secret_service)
 
+    def _raise_if_limited(self, model_id: str) -> None:
+        """Raise LLMRateLimitError without calling the API if the key is known to be limited for the model.
+
+        The SDK makes its own requests, so the limit state is kept in the editor's tracker here, as post_completion() does for the other providers.
+        """
+        until = get_rate_limit_tracker().limited_until(GEMINI_ENDPOINT, self._api_key, model_id)
+        if until is not None:
+            raise LLMRateLimitError(f"Rate limit or quota reached for model '{model_id}'; try again after {until:%Y-%m-%d %H:%M:%S} UTC", available_at=until)
+
+    def _call_error(self, model_id: str, error: genai_errors.APIError | httpx.HTTPError) -> LLMProviderError:
+        """The LLMProviderError for a failed call; a rate limit is remembered for the key and model."""
+        tracker = get_rate_limit_tracker()
+        provider_error = _provider_error(error, tracker.now())
+        if isinstance(provider_error, LLMRateLimitError) and provider_error.available_at is not None:
+            tracker.mark_limited(GEMINI_ENDPOINT, self._api_key, model_id, provider_error.available_at)
+            details = error.details if isinstance(error, genai_errors.APIError) else None
+            logger.info(f"Rate limit for model '{model_id}' at {GEMINI_ENDPOINT}: no requests until {provider_error.available_at.isoformat()}; quotas: {_exceeded_quota_ids(details) or 'not given'}, retry delay: {_retry_delay_seconds(details)}")
+        return provider_error
+
     def list_models(self) -> list[LLMModel]:
         if self._client is None:
             return []
@@ -157,6 +220,7 @@ class GoogleLLMProvider(LLMProvider):
     ) -> str:
         if self._client is None:
             raise RuntimeError("Google LLM provider not configured (missing API key)")
+        self._raise_if_limited(model_id)
         try:
             response = await self._client.aio.models.generate_content(
                 model=model_id,
@@ -164,7 +228,7 @@ class GoogleLLMProvider(LLMProvider):
                 config=_generation_config(model_id, system_prompt, temperature),
             )
         except _API_ERRORS as e:
-            raise _provider_error(e) from e
+            raise self._call_error(model_id, e) from e
         return _response_text(model_id, response)
 
     def supports_pdf_input(self, model_id: str) -> bool:
@@ -181,6 +245,7 @@ class GoogleLLMProvider(LLMProvider):
         """Upload the PDF via the Files API (no inline size limit), prompt with it, then delete it."""
         if self._client is None:
             raise RuntimeError("Google LLM provider not configured (missing API key)")
+        self._raise_if_limited(model_id)
         try:
             uploaded = await self._client.aio.files.upload(file=pdf_path, config={"mime_type": "application/pdf"})
             try:
@@ -196,7 +261,7 @@ class GoogleLLMProvider(LLMProvider):
                     except _API_ERRORS as e:
                         logger.warning(f"Could not delete uploaded file '{uploaded.name}': {_provider_error(e)}")
         except _API_ERRORS as e:
-            raise _provider_error(e) from e
+            raise self._call_error(model_id, e) from e
         return _response_text(model_id, response)
 
 
