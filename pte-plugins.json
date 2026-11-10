@@ -124,7 +124,7 @@
       "package": "pte-plugin-google-llm",
       "module": "pte_plugin_google_llm",
       "path": "plugins/google-llm",
-      "version": "1.1.0",
+      "version": "1.2.0",
       "description": "Registers Google's Gemini API as an LLM inference provider",
       "requires": [],
       "dependencies": [
