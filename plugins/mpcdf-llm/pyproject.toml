@@ -1,0 +1,31 @@
+[project]
+name = "pte-plugin-mpcdf-llm"
+dynamic = ["version"]
+description = "Starts and manages MPCDF-hosted LLM endpoints and offers them as free models"
+readme = "README.md"
+requires-python = ">=3.13"
+license = "CC0-1.0"
+dependencies = [
+    "mpcdf-llm[fastapi,testing] @ git+https://gitlab.mpcdf.mpg.de/cboul/llm-mpcdf.git@f46f18a03e47a16f1e8e7aa519104674ce4741a2",
+]
+
+[project.urls]
+Repository = "https://github.com/mpilhlt/pte-plugins"
+
+[project.entry-points."pte.plugins"]
+mpcdf-llm = "pte_plugin_mpcdf_llm"
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "src/pte_plugin_mpcdf_llm/pte-plugin.json"
+pattern = '"version":\s*"(?P<version>[^"]+)"'
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pte_plugin_mpcdf_llm"]
+exclude = ["src/pte_plugin_mpcdf_llm/tests"]

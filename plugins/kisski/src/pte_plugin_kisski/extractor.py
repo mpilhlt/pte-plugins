@@ -10,7 +10,7 @@ from typing import Any
 
 from fastapi_app.lib.extraction import LLMBaseExtractor, get_retry_session
 from fastapi_app.lib.llm.openai_compatible import chat_completion_sync
-from fastapi_app.plugin_api import get_config
+from fastapi_app.plugin_api import get_completion_session, get_config, post_completion
 
 logger = logging.getLogger(__name__)
 
@@ -136,9 +136,13 @@ class KisskiExtractor(LLMBaseExtractor):
         model: str,
         temperature: float = 0.1,
     ) -> str:
-        """Call the KISSKI API with multimodal content (text + images)."""
-        base_url = get_config().get("plugin.kisski.api.url")
-        url = f"{base_url}/chat/completions"
+        """Call the KISSKI API with multimodal content (text + images).
+
+        Raises:
+            LLMRateLimitError: if the rate limit or quota is reached, as in _call_llm.
+        """
+        endpoint = get_config().get("plugin.kisski.api.url").rstrip("/")
+        url = f"{endpoint}/chat/completions"
 
         if not model:
             raise RuntimeError("No model given")
@@ -158,8 +162,8 @@ class KisskiExtractor(LLMBaseExtractor):
             "temperature": temperature,
         }
 
-        session = get_retry_session(retries=3, backoff_factor=2.0)
-        response = session.post(url, headers=headers, json=data, timeout=300)
+        session = get_completion_session(retries=3, backoff_factor=2.0)
+        response = post_completion(session, url, endpoint=endpoint, api_key=self.client, model_id=model, headers=headers, json=data, timeout=300)
         response.raise_for_status()
 
         result = response.json()

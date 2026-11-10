@@ -171,6 +171,19 @@ class TestReviewRoute(unittest.TestCase):
         self.assertIn("503 high demand", result.json()["detail"])
 
     @mock.patch.object(routes_module, "run_review")
+    def test_rate_limit_returns_429_with_retry_after(self, mock_run_review):
+        from datetime import timedelta
+        from fastapi_app.lib.llm.rate_limit import LLMRateLimitError, utc_now
+        mock_run_review.side_effect = LLMRateLimitError("quota reached", available_at=utc_now() + timedelta(seconds=120))
+        result = self.client.post(
+            "/api/plugins/annotation-review/review",
+            json={"xml": TEI_DOC, "provider_id": "stub", "model_id": "m1"},
+        )
+        self.assertEqual(result.status_code, 429)
+        self.assertIn("quota reached", result.json()["detail"])
+        self.assertGreaterEqual(int(result.headers["Retry-After"]), 118)
+
+    @mock.patch.object(routes_module, "run_review")
     def test_upstream_connection_failure_returns_502(self, mock_run_review):
         mock_run_review.side_effect = requests.ConnectionError("no route to host")
         result = self.client.post(

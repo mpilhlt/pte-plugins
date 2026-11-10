@@ -34,13 +34,13 @@
       "package": "pte-plugin-annotation-review",
       "module": "pte_plugin_annotation_review",
       "path": "plugins/annotation-review",
-      "version": "1.2.0",
+      "version": "1.3.0",
       "description": "Reviews a document's annotations against its own editorialDecl-linked rules using an LLM",
       "requires": [],
       "dependencies": [],
       "engines": {
-        "pte": ">=0.76.0",
-        "pte-plugin-api": "^1.0"
+        "pte": ">=0.82.0",
+        "pte-plugin-api": "^1.2"
       }
     },
     {
@@ -48,13 +48,13 @@
       "package": "pte-plugin-anthropic-llm",
       "module": "pte_plugin_anthropic_llm",
       "path": "plugins/anthropic-llm",
-      "version": "1.0.1",
+      "version": "1.1.0",
       "description": "Registers Anthropic's Claude API as an LLM inference provider",
       "requires": [],
       "dependencies": [],
       "engines": {
-        "pte": ">=0.76.0",
-        "pte-plugin-api": "^1.0"
+        "pte": ">=0.82.0",
+        "pte-plugin-api": "^1.2"
       }
     },
     {
@@ -124,7 +124,7 @@
       "package": "pte-plugin-google-llm",
       "module": "pte_plugin_google_llm",
       "path": "plugins/google-llm",
-      "version": "1.0.1",
+      "version": "1.2.0",
       "description": "Registers Google's Gemini API as an LLM inference provider",
       "requires": [],
       "dependencies": [
@@ -132,8 +132,8 @@
         "httpx>=0.28.0"
       ],
       "engines": {
-        "pte": ">=0.76.0",
-        "pte-plugin-api": "^1.0"
+        "pte": ">=0.82.0",
+        "pte-plugin-api": "^1.2"
       }
     },
     {
@@ -169,13 +169,13 @@
       "package": "pte-plugin-inference-endpoints",
       "module": "pte_plugin_inference_endpoints",
       "path": "plugins/inference-endpoints",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "description": "Registers OpenAI-compatible inference endpoints (e.g. Ollama) as LLM providers",
       "requires": [],
       "dependencies": [],
       "engines": {
-        "pte": ">=0.76.0",
-        "pte-plugin-api": "^1.0"
+        "pte": ">=0.82.0",
+        "pte-plugin-api": "^1.2"
       }
     },
     {
@@ -183,7 +183,7 @@
       "package": "pte-plugin-kisski",
       "module": "pte_plugin_kisski",
       "path": "plugins/kisski",
-      "version": "2.0.2",
+      "version": "2.0.3",
       "description": "Text and PDF processing using KISSKI Academic Cloud API",
       "requires": [],
       "dependencies": [
@@ -191,8 +191,8 @@
         "pdf2image>=1.17.0"
       ],
       "engines": {
-        "pte": ">=0.76.0",
-        "pte-plugin-api": "^1.0"
+        "pte": ">=0.82.0",
+        "pte-plugin-api": "^1.2"
       }
     },
     {
@@ -240,6 +240,22 @@
       "engines": {
         "pte": ">=0.76.0",
         "pte-plugin-api": "^1.0"
+      }
+    },
+    {
+      "id": "mpcdf-llm",
+      "package": "pte-plugin-mpcdf-llm",
+      "module": "pte_plugin_mpcdf_llm",
+      "path": "plugins/mpcdf-llm",
+      "version": "1.0.0",
+      "description": "Starts and manages MPCDF-hosted LLM endpoints and offers them as free models",
+      "requires": [],
+      "dependencies": [
+        "mpcdf-llm[fastapi,testing] @ git+https://gitlab.mpcdf.mpg.de/cboul/llm-mpcdf.git@f46f18a03e47a16f1e8e7aa519104674ce4741a2"
+      ],
+      "engines": {
+        "pte": ">=0.82.0",
+        "pte-plugin-api": "^1.2"
       }
     },
     {

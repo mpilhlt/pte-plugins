@@ -426,12 +426,12 @@ describe('session cache', () => {
 });
 
 describe('menu item', () => {
-  it('adds a disabled "Review Annotations" item to the annotation category', async () => {
+  it('adds a disabled "Review document annotations" item to the annotation category', async () => {
     const { ext, menuAdds } = buildExtension({ xmlDoc: null });
     await ext.start();
     assert.strictEqual(menuAdds.length, 1);
     assert.strictEqual(menuAdds[0].category, 'annotation');
-    assert.strictEqual(menuAdds[0].items[0].textContent, 'Review Annotations');
+    assert.strictEqual(menuAdds[0].items[0].textContent, 'Review document annotations');
     assert.strictEqual(menuAdds[0].items[0].disabled, true);
   });
 
@@ -715,6 +715,23 @@ describe('node-scoped review', () => {
     ext.review = async (override, hooks) => { reviewArgs.push(hooks.xpath); return []; };
     await ext.runReview();
     assert.deepStrictEqual(reviewArgs, [null]);
+    assert.match(confirmCalls[0].message, /current document/);
+  });
+
+  it('the menu item reviews the whole document even when the xpath state is set', async () => {
+    const { ext, menuAdds, handlers, confirmCalls } = buildExtension({
+      getEditorialDeclGuides: () => rules,
+      defaultModel: { providerId: 'p', modelId: 'm' },
+      state: { xml: 'a', xpath: '//tei:bibl[1]' },
+    });
+    /** @type {any[]} */
+    const reviewArgs = [];
+    ext.review = async (override, hooks) => { reviewArgs.push([override, hooks.xpath]); return []; };
+    await ext.start();
+    handlers.editorReady();
+    menuAdds[0].items[0]._click();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.deepStrictEqual(reviewArgs, [[{ providerId: 'p', modelId: 'm' }, null]]);
     assert.match(confirmCalls[0].message, /current document/);
   });
 });

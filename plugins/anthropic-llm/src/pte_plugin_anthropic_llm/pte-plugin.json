@@ -1,8 +1,8 @@
 {
-  "version": "1.0.1",
+  "version": "1.1.0",
   "readme": "https://github.com/mpilhlt/pte-plugins/tree/main/plugins/anthropic-llm#readme",
   "engines": {
-    "pte": ">=0.76.0",
-    "pte-plugin-api": "^1.0"
+    "pte": ">=0.82.0",
+    "pte-plugin-api": "^1.2"
   }
 }
