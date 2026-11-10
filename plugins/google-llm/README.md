@@ -19,6 +19,7 @@ API keys: Each user enters their own key in the web interface (user menu > API K
 - Lists `gemini-*` models that support `generateContent`, excluding image, TTS, transcription and computer-use models
 - Supports PDF input: `chat_completion_with_pdf()` uploads the PDF via the Files API, prompts with it and deletes it afterwards
 - Sends `temperature` only to models before Gemini 3; Flash-Lite models of Gemini 3+ use a medium thinking level
+- Rate limits and exhausted quotas: a 429 raises `LLMRateLimitError`, and the key is remembered as limited for that model in the editor's rate-limit tracker (in memory, per process), so that further calls fail at once without calling the API. The key is limited for the `retryDelay` of the error, until midnight Pacific time when a daily quota is exhausted (a quota id with `PerDay`), and otherwise for the editor's default period (60 s). The SDK does not retry 429 itself, since no `HttpRetryOptions` are set
 
 ## Implementation
 
