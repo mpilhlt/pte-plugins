@@ -20,7 +20,7 @@ from .checks import ProposalStatus
 from .correction import BatchRecord, ChatClient, CorrectionRun, RetryPolicy, correct_units
 from .prompts import PROMPT_VERSION, OutputMode
 from .scoring import Alignment, UnitScore, align_documents, f1, ratio, score_unit
-from .segmentation import SegmentAlignment, align_segments, is_segmenting, proposal_fields, unit_scores
+from .segmentation import SegmentAlignment, align_segments, proposal_fields, unit_scores
 from .units import Unit
 
 
@@ -41,11 +41,9 @@ class EvalSource:
     # How the input was chosen: "given", "lineage" (the extraction the reference was derived from) or "earliest" (extraction)
     input_choice: str = "given"
     input_is_extraction: bool = True
-
-    @property
-    def segmenting(self) -> bool:
-        """Whether units may be split and merged (scored on text positions, see segmentation.py)."""
-        return is_segmenting(self.variant)
+    # Whether units may be split and merged (scored on text positions, see segmentation.py), as the
+    # variant's extractor declares
+    segmenting: bool = False
 
     @property
     def rules_hash(self) -> str:

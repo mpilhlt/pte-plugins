@@ -25,18 +25,10 @@ from .correction import CorrectionRun, UnitOutcome
 from .scoring import IGNORED_ATTRIBUTES, UnitScore, score_fields
 from .units import Unit, attributes, collapse, document_units, local_name, parse_unit
 
-# Variants whose units the model may split and merge (see correction.correct_units)
-SEGMENTING_VARIANTS = frozenset({"grobid.training.references.referenceSegmenter"})
-
 # (element path, attributes, start, end); positions in the whitespace-free text stream
 SpanField = tuple[str, tuple[tuple[str, str], ...], int, int]
 
 _WS_RE = re.compile(r"\s+")
-
-
-def is_segmenting(variant: str | None) -> bool:
-    """Whether the variant's units may be split and merged."""
-    return variant in SEGMENTING_VARIANTS
 
 
 def _squeeze(text: str | None) -> str:

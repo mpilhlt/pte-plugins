@@ -1,0 +1,9 @@
+model,reference_stable_id,batching,mode,repeat,unit_index,fingerprint,batch_index,position,batch_size,status,exact,needed,made,correct_edits,gold_fields,proposal_fields,correct_fields
+kisski/glm-5.3-flash,38cs7r,units:8,all,1,0,226e7fe3,0,0,8,ok,False,15,15,13,10,10,8
+kisski/glm-5.3-flash,38cs7r,units:8,all,1,3,0cafb300,0,1,8,ok,False,9,9,6,8,8,5
+kisski/glm-5.3-flash,38cs7r,units:8,all,1,4,9b63a5df,0,2,8,ok,False,8,17,8,14,15,10
+kisski/glm-5.3-flash,38cs7r,units:8,all,1,5,a921c823,0,3,8,ok,False,6,10,6,10,10,8
+kisski/glm-5.3-flash,38cs7r,units:8,all,1,6,efc3a332,0,4,8,ok,False,15,18,14,15,16,13
+kisski/glm-5.3-flash,38cs7r,units:8,all,1,8,fe34ce61,0,5,8,ok,False,3,7,3,6,6,4
+kisski/glm-5.3-flash,38cs7r,units:8,all,1,11,7255b2dc,0,6,8,ok,False,15,19,15,15,15,13
+kisski/glm-5.3-flash,38cs7r,units:8,all,1,12,7966f23c,0,7,8,ok,False,8,10,7,9,9,7

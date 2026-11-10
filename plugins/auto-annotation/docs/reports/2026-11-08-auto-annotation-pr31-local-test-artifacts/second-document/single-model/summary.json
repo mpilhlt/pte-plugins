@@ -1,0 +1,276 @@
+[
+  {
+    "meta": {
+      "model": "anthropic/claude-sonnet-5-5",
+      "doc_id": "10.12775__clr.2013.008",
+      "reference_stable_id": "ba7zek",
+      "reference_is_gold": true,
+      "input_stable_id": "qbb9sh",
+      "input_choice": "given",
+      "input_is_extraction": true,
+      "variant": "grobid.training.references",
+      "unit_path": ".//listBibl/bibl",
+      "rules_hash": "c8be2ca15650",
+      "rule_categories": [
+        "primary",
+        "data-correction",
+        "schema-fragment"
+      ],
+      "prompt_version": "1",
+      "planned_runs": 2,
+      "finished_runs": 2,
+      "segmenting": false,
+      "aligned_units": 56,
+      "unmatched_input_units": 8,
+      "unmatched_gold_units": 12
+    },
+    "baseline": {
+      "model": "baseline (input)",
+      "reference_stable_id": "ba7zek",
+      "batching": "-",
+      "mode": "-",
+      "repeats": 1,
+      "units": 56,
+      "calls": 0,
+      "retries": 0,
+      "error_rate": 0.0,
+      "failure_rate": 0.0,
+      "status_counts": {
+        "ok": 56
+      },
+      "exact_rate": 0.0,
+      "edit_precision": null,
+      "edit_recall": 0.0,
+      "edit_f1": null,
+      "field_precision": 0.47714285714285715,
+      "field_recall": 0.3874709976798144,
+      "field_f1": 0.42765685019206146,
+      "edit_recall_by_quarter": [
+        0.0,
+        null,
+        null,
+        null
+      ],
+      "seconds": 0,
+      "prompt_chars": 0,
+      "response_chars": 0
+    },
+    "summaries": [
+      {
+        "model": "anthropic/claude-sonnet-5-5",
+        "reference_stable_id": "ba7zek",
+        "batching": "units:8",
+        "mode": "all",
+        "repeats": 2,
+        "units": 112,
+        "calls": 14,
+        "retries": 0,
+        "error_rate": 0.0,
+        "failure_rate": 0.008928571428571428,
+        "status_counts": {
+          "ok": 111,
+          "text_changed": 1
+        },
+        "exact_rate": 0.3392857142857143,
+        "edit_precision": 0.8697788697788698,
+        "edit_recall": 0.7919463087248322,
+        "edit_f1": 0.82903981264637,
+        "field_precision": 0.8392857142857143,
+        "field_recall": 0.8178654292343387,
+        "field_f1": 0.8284371327849589,
+        "edit_recall_by_quarter": [
+          0.7663551401869159,
+          0.7909090909090909,
+          0.7871287128712872,
+          0.8178294573643411
+        ],
+        "seconds": 139.87564904399915,
+        "prompt_chars": 526502,
+        "response_chars": 45553
+      }
+    ]
+  },
+  {
+    "meta": {
+      "model": "kisski/deepseek-v4.1-flash-1017",
+      "doc_id": "10.12775__clr.2013.008",
+      "reference_stable_id": "ba7zek",
+      "reference_is_gold": true,
+      "input_stable_id": "qbb9sh",
+      "input_choice": "given",
+      "input_is_extraction": true,
+      "variant": "grobid.training.references",
+      "unit_path": ".//listBibl/bibl",
+      "rules_hash": "c8be2ca15650",
+      "rule_categories": [
+        "primary",
+        "data-correction",
+        "schema-fragment"
+      ],
+      "prompt_version": "1",
+      "planned_runs": 2,
+      "finished_runs": 2,
+      "segmenting": false,
+      "aligned_units": 56,
+      "unmatched_input_units": 8,
+      "unmatched_gold_units": 12
+    },
+    "baseline": {
+      "model": "baseline (input)",
+      "reference_stable_id": "ba7zek",
+      "batching": "-",
+      "mode": "-",
+      "repeats": 1,
+      "units": 56,
+      "calls": 0,
+      "retries": 0,
+      "error_rate": 0.0,
+      "failure_rate": 0.0,
+      "status_counts": {
+        "ok": 56
+      },
+      "exact_rate": 0.0,
+      "edit_precision": null,
+      "edit_recall": 0.0,
+      "edit_f1": null,
+      "field_precision": 0.47714285714285715,
+      "field_recall": 0.3874709976798144,
+      "field_f1": 0.42765685019206146,
+      "edit_recall_by_quarter": [
+        0.0,
+        null,
+        null,
+        null
+      ],
+      "seconds": 0,
+      "prompt_chars": 0,
+      "response_chars": 0
+    },
+    "summaries": [
+      {
+        "model": "kisski/deepseek-v4.1-flash-1017",
+        "reference_stable_id": "ba7zek",
+        "batching": "units:8",
+        "mode": "all",
+        "repeats": 2,
+        "units": 112,
+        "calls": 14,
+        "retries": 1,
+        "error_rate": 0.0,
+        "failure_rate": 0.008928571428571428,
+        "status_counts": {
+          "ok": 111,
+          "text_changed": 1
+        },
+        "exact_rate": 0.33035714285714285,
+        "edit_precision": 0.8185654008438819,
+        "edit_recall": 0.8680089485458613,
+        "edit_f1": 0.8425624321389793,
+        "field_precision": 0.8220720720720721,
+        "field_recall": 0.8468677494199536,
+        "field_f1": 0.8342857142857143,
+        "edit_recall_by_quarter": [
+          0.8738317757009346,
+          0.8909090909090909,
+          0.8613861386138614,
+          0.8488372093023255
+        ],
+        "seconds": 1592.7556322489982,
+        "prompt_chars": 526502,
+        "response_chars": 47870
+      }
+    ]
+  },
+  {
+    "meta": {
+      "model": "google/gemini-3.5-flash-lite",
+      "doc_id": "10.12775__clr.2013.008",
+      "reference_stable_id": "ba7zek",
+      "reference_is_gold": true,
+      "input_stable_id": "qbb9sh",
+      "input_choice": "given",
+      "input_is_extraction": true,
+      "variant": "grobid.training.references",
+      "unit_path": ".//listBibl/bibl",
+      "rules_hash": "c8be2ca15650",
+      "rule_categories": [
+        "primary",
+        "data-correction",
+        "schema-fragment"
+      ],
+      "prompt_version": "1",
+      "planned_runs": 2,
+      "finished_runs": 2,
+      "segmenting": false,
+      "aligned_units": 56,
+      "unmatched_input_units": 8,
+      "unmatched_gold_units": 12
+    },
+    "baseline": {
+      "model": "baseline (input)",
+      "reference_stable_id": "ba7zek",
+      "batching": "-",
+      "mode": "-",
+      "repeats": 1,
+      "units": 56,
+      "calls": 0,
+      "retries": 0,
+      "error_rate": 0.0,
+      "failure_rate": 0.0,
+      "status_counts": {
+        "ok": 56
+      },
+      "exact_rate": 0.0,
+      "edit_precision": null,
+      "edit_recall": 0.0,
+      "edit_f1": null,
+      "field_precision": 0.47714285714285715,
+      "field_recall": 0.3874709976798144,
+      "field_f1": 0.42765685019206146,
+      "edit_recall_by_quarter": [
+        0.0,
+        null,
+        null,
+        null
+      ],
+      "seconds": 0,
+      "prompt_chars": 0,
+      "response_chars": 0
+    },
+    "summaries": [
+      {
+        "model": "google/gemini-3.5-flash-lite",
+        "reference_stable_id": "ba7zek",
+        "batching": "units:8",
+        "mode": "all",
+        "repeats": 2,
+        "units": 112,
+        "calls": 14,
+        "retries": 4,
+        "error_rate": 0.0,
+        "failure_rate": 0.0625,
+        "status_counts": {
+          "ok": 105,
+          "text_changed": 6,
+          "malformed": 1
+        },
+        "exact_rate": 0.16071428571428573,
+        "edit_precision": 0.7165841584158416,
+        "edit_recall": 0.6476510067114094,
+        "edit_f1": 0.6803760282021152,
+        "field_precision": 0.6831797235023042,
+        "field_recall": 0.6879350348027842,
+        "field_f1": 0.6855491329479768,
+        "edit_recall_by_quarter": [
+          0.6214953271028038,
+          0.5772727272727273,
+          0.7277227722772277,
+          0.6666666666666666
+        ],
+        "seconds": 87.41078879105044,
+        "prompt_chars": 526502,
+        "response_chars": 46835
+      }
+    ]
+  }
+]

@@ -85,8 +85,8 @@
       "requires": [],
       "dependencies": [],
       "engines": {
-        "pte": ">=0.81.0",
-        "pte-plugin-api": "^1.0"
+        "pte": ">=0.82.0",
+        "pte-plugin-api": "^1.2"
       }
     },
     {

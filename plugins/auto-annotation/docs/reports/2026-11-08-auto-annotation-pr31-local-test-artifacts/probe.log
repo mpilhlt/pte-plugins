@@ -1,0 +1,35 @@
+[kisski/deepseek-v4-flash-0731 | 10.5771__2699-1284-2024-3-149] run 1/1: units:8, all, #1
+[kisski/deepseek-v4.1-flash-1017 | 10.5771__2699-1284-2024-3-149] run 1/1: units:8, all, #1
+[kisski/glm-5.3-flash | 10.5771__2699-1284-2024-3-149] run 1/1: units:8, all, #1
+Written: /private/tmp/claude-501/-Volumes-Hub-Users-christianboulanger-Code-pdf-tei-editor/123de310-b6fc-4e77-9ef9-564cd95e0dbd/scratchpad/run/probe/units.csv, /private/tmp/claude-501/-Volumes-Hub-Users-christianboulanger-Code-pdf-tei-editor/123de310-b6fc-4e77-9ef9-564cd95e0dbd/scratchpad/run/probe/batches.jsonl, /private/tmp/claude-501/-Volumes-Hub-Users-christianboulanger-Code-pdf-tei-editor/123de310-b6fc-4e77-9ef9-564cd95e0dbd/scratchpad/run/probe/summary.json, /private/tmp/claude-501/-Volumes-Hub-Users-christianboulanger-Code-pdf-tei-editor/123de310-b6fc-4e77-9ef9-564cd95e0dbd/scratchpad/run/probe/report.md
+# Model probe report
+
+## kisski/deepseek-v4-flash-0731 on 10.5771__2699-1284-2024-3-149
+
+Reference version `38cs7r` (not the gold version), input version `bfn4g7` (the extraction the reference was derived from), variant `grobid.training.references`, unit path `.//listBibl/bibl`, rules `33154192a7d2` (primary, data-correction, schema-fragment), prompt v1. 8 units aligned, 18 input and 43 reference units unmatched.
+
+| Batching | Mode | Runs | Calls | Retries | Errors % | Failures % | Exact % | Edit P | Edit R | Edit F1 | Field F1 | Edit R by quarter | Seconds | Prompt chars | Answer chars |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| - | - | 1 | 0 | 0 | 0.0 | 0.0 | 0.0 | – | 0.0 | – | 43.2 | – | 0.0 | 0 | 0 |
+| units:8 | all | 1 | 1 | 0 | 0.0 | 25.0 | 0.0 | 54.9 | 57.0 | 55.9 | 57.0 | 70.8 / 100.0 / 77.8 / 0.0 | 12.6 | 37734 | 4963 |
+
+## kisski/deepseek-v4.1-flash-1017 on 10.5771__2699-1284-2024-3-149
+
+Reference version `38cs7r` (not the gold version), input version `bfn4g7` (the extraction the reference was derived from), variant `grobid.training.references`, unit path `.//listBibl/bibl`, rules `33154192a7d2` (primary, data-correction, schema-fragment), prompt v1. 8 units aligned, 18 input and 43 reference units unmatched.
+
+| Batching | Mode | Runs | Calls | Retries | Errors % | Failures % | Exact % | Edit P | Edit R | Edit F1 | Field F1 | Edit R by quarter | Seconds | Prompt chars | Answer chars |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| - | - | 1 | 0 | 0 | 0.0 | 0.0 | 0.0 | – | 0.0 | – | 43.2 | – | 0.0 | 0 | 0 |
+| units:8 | all | 1 | 1 | 0 | 0.0 | 0.0 | 12.5 | 77.9 | 93.7 | 85.1 | 85.2 | 91.7 / 100.0 / 94.4 / 91.3 | 169.1 | 37734 | 4850 |
+
+## kisski/glm-5.3-flash on 10.5771__2699-1284-2024-3-149
+
+Reference version `38cs7r` (not the gold version), input version `bfn4g7` (the extraction the reference was derived from), variant `grobid.training.references`, unit path `.//listBibl/bibl`, rules `33154192a7d2` (primary, data-correction, schema-fragment), prompt v1. 8 units aligned, 18 input and 43 reference units unmatched.
+
+| Batching | Mode | Runs | Calls | Retries | Errors % | Failures % | Exact % | Edit P | Edit R | Edit F1 | Field F1 | Edit R by quarter | Seconds | Prompt chars | Answer chars |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| - | - | 1 | 0 | 0 | 0.0 | 0.0 | 0.0 | – | 0.0 | – | 43.2 | – | 0.0 | 0 | 0 |
+| units:8 | all | 1 | 1 | 4 | 100.0 | 0.0 | 0.0 | – | – | – | – | – / – / – / – | 2464.4 | 37734 | 0 |
+
+Edit P/R: precision and recall of the changes made to the input, against the changes the reference version needs. Retries: requests repeated after a provider overload or rate limit. Errors: units whose request still failed; they say nothing about the model and are left out of all other columns. Failures: units the model answered without a usable proposal (missing, malformed, other outermost element, text changed); they are scored as unchanged input. The baseline row scores the input itself.
+

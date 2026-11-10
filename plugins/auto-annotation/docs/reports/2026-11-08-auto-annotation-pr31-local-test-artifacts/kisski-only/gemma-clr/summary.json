@@ -1,0 +1,93 @@
+[
+  {
+    "meta": {
+      "model": "kisski/gemma-4-31b-it",
+      "doc_id": "10.12775__clr.2013.008",
+      "reference_stable_id": "ba7zek",
+      "reference_is_gold": true,
+      "input_stable_id": "qbb9sh",
+      "input_choice": "given",
+      "input_is_extraction": true,
+      "variant": "grobid.training.references",
+      "unit_path": ".//listBibl/bibl",
+      "rules_hash": "c8be2ca15650",
+      "rule_categories": [
+        "primary",
+        "data-correction",
+        "schema-fragment"
+      ],
+      "prompt_version": "1",
+      "planned_runs": 2,
+      "finished_runs": 2,
+      "segmenting": false,
+      "aligned_units": 56,
+      "unmatched_input_units": 8,
+      "unmatched_gold_units": 12
+    },
+    "baseline": {
+      "model": "baseline (input)",
+      "reference_stable_id": "ba7zek",
+      "batching": "-",
+      "mode": "-",
+      "repeats": 1,
+      "units": 56,
+      "calls": 0,
+      "retries": 0,
+      "error_rate": 0.0,
+      "failure_rate": 0.0,
+      "status_counts": {
+        "ok": 56
+      },
+      "exact_rate": 0.0,
+      "edit_precision": null,
+      "edit_recall": 0.0,
+      "edit_f1": null,
+      "field_precision": 0.47714285714285715,
+      "field_recall": 0.3874709976798144,
+      "field_f1": 0.42765685019206146,
+      "edit_recall_by_quarter": [
+        0.0,
+        null,
+        null,
+        null
+      ],
+      "seconds": 0,
+      "prompt_chars": 0,
+      "response_chars": 0
+    },
+    "summaries": [
+      {
+        "model": "kisski/gemma-4-31b-it",
+        "reference_stable_id": "ba7zek",
+        "batching": "units:8",
+        "mode": "all",
+        "repeats": 2,
+        "units": 112,
+        "calls": 14,
+        "retries": 0,
+        "error_rate": 0.0,
+        "failure_rate": 0.19642857142857142,
+        "status_counts": {
+          "text_changed": 22,
+          "ok": 90
+        },
+        "exact_rate": 0.21428571428571427,
+        "edit_precision": 0.7947368421052632,
+        "edit_recall": 0.6756152125279642,
+        "edit_f1": 0.7303506650544136,
+        "field_precision": 0.7524271844660194,
+        "field_recall": 0.7192575406032483,
+        "field_f1": 0.7354685646500593,
+        "edit_recall_by_quarter": [
+          0.6261682242990654,
+          0.5909090909090909,
+          0.6831683168316832,
+          0.7829457364341085
+        ],
+        "seconds": 326.41431933510466,
+        "prompt_chars": 526502,
+        "response_chars": 48110
+      }
+    ]
+  }
+]

@@ -100,6 +100,11 @@ class TestAllProjectsHistory(unittest.TestCase):
 
         self.assertEqual([e["description"] for e in self._recent()], ["Other project", "Third", "Second", "First"])
 
+    def test_description_with_child_elements_is_read_completely(self):
+        self._add("doc-a", "c1", ("2026-10-01T10:00:00", "alice", 'Annotated. Completed in <time dur="PT3S">3 s</time>.'))
+
+        self.assertEqual([e["description"] for e in self._recent()], ["Annotated. Completed in 3 s."])
+
     def test_recent_limits_the_number_of_changes(self):
         self._add("doc-a", "c1", *[(f"2026-10-0{i}T10:00:00", "alice", f"Change {i}") for i in range(1, 6)])
 

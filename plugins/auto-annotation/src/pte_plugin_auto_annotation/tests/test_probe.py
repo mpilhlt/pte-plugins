@@ -11,6 +11,8 @@ from pathlib import Path
 from unittest import mock
 
 from pte_plugin_auto_annotation import probe
+from pte_plugin_auto_annotation.api_client import ApiSession, ModelsBusyError
+from pte_plugin_auto_annotation.cli_common import load_env
 from pte_plugin_auto_annotation.evaluation import EvalSource
 from pte_plugin_auto_annotation.units import document_units
 
@@ -34,23 +36,68 @@ class FakeSession:
     def resolve_model(self, spec):
         return "endpoint-local", spec.split("/")[-1]
 
+    busy = False
+
+    def ensure_models_not_busy(self, specs):
+        if self.busy:
+            raise ModelsBusyError("these models are busy: kisski/m")
+
     def complete(self, provider_id, model_id, system_prompt, user_prompt, temperature):
         self.completions.append((model_id, user_prompt))
         return "\n\n".join(f"### Unit {uid}\n{self.mapping[xml]}" for uid, xml in prompt_units(user_prompt).items())
+
+
+class TestBusyModels(unittest.TestCase):
+    PROVIDERS = [
+        {"id": "kisski", "models": [
+            {"id": "free", "status": {"availability": "available", "detail": "demand: 0"}},
+            {"id": "busy", "status": {"availability": "busy", "detail": "demand: 5"}},
+            {"id": "full", "status": {"availability": "very_busy", "detail": "demand: 9"}},
+        ]},
+        {"id": "anthropic", "models": [{"id": "sonnet", "status": None}]},
+        {"id": "other", "models": [], "error": "Could not list models"},
+    ]
+
+    def setUp(self):
+        self.session = ApiSession("http://server", "sid")
+        patcher = mock.patch("pte_plugin_auto_annotation.api_client.requests.get")
+        get = patcher.start()
+        self.addCleanup(patcher.stop)
+        get.return_value.ok = True
+        get.return_value.json.return_value = self.PROVIDERS
+
+    def test_reports_busy_and_very_busy_with_their_detail(self):
+        busy = self.session.busy_models([("kisski", "free"), ("kisski", "busy"), ("kisski", "full")])
+        self.assertEqual(busy, ["kisski/busy (busy, demand: 5)", "kisski/full (very_busy, demand: 9)"])
+
+    def test_no_status_or_unknown_model_counts_as_free(self):
+        self.assertEqual(self.session.busy_models([("anthropic", "sonnet"), ("other", "x"), ("kisski", "unknown")]), [])
+
+    def test_model_used_twice_is_reported_once(self):
+        self.assertEqual(len(self.session.busy_models([("kisski", "busy"), ("kisski", "busy")])), 1)
+
+    def test_ensure_raises_and_names_the_option(self):
+        with mock.patch.object(self.session, "resolve_model", return_value=("kisski", "busy")):
+            with self.assertRaisesRegex(ModelsBusyError, "kisski/busy.*--force-busy"):
+                self.session.ensure_models_not_busy(["kisski/busy"])
+
+    def test_ensure_passes_for_free_models(self):
+        with mock.patch.object(self.session, "resolve_model", return_value=("kisski", "free")):
+            self.session.ensure_models_not_busy(["kisski/free"])
 
 
 class TestProbeCli(unittest.TestCase):
     def run_main(self, *args: str) -> tuple[int, str, FakeSession]:
         session = FakeSession()
         out, err = io.StringIO(), io.StringIO()
-        with mock.patch.object(probe.ApiSession, "login", return_value=session), redirect_stdout(out), redirect_stderr(err):
+        with mock.patch.object(probe.ApiSession, "connect", return_value=session), redirect_stdout(out), redirect_stderr(err):
             code = probe.main(["--user", "u", "--password", "p", "--env", "/nonexistent", *args])
         return code, out.getvalue(), session
 
     def test_runs_and_writes_report(self):
         with tempfile.TemporaryDirectory() as tmp:
             code, out, session = self.run_main(
-                "--model", "local/qwen", "--model", "local/llama", "--doc", "doc1",
+                "--model", "local/qwen", "--model", "local/llama", "--doc", "doc1", "--variant", "grobid.training.references",
                 "--batches", "units:1,units:4", "--modes", "all,changed", "--out", tmp,
             )
             self.assertEqual(code, 0)
@@ -61,13 +108,25 @@ class TestProbeCli(unittest.TestCase):
         # 2 models x (4 + 1 calls) x 2 modes
         self.assertEqual(len(session.completions), 20)
 
+    def test_busy_model_stops_the_run(self):
+        with mock.patch.object(FakeSession, "busy", True), tempfile.TemporaryDirectory() as tmp:
+            code, _, session = self.run_main("--model", "m", "--doc", "doc1", "--variant", "v", "--batches", "units:4", "--out", tmp)
+        self.assertEqual(code, 1)
+        self.assertEqual(session.completions, [])
+
+    def test_force_busy_starts_anyway(self):
+        with mock.patch.object(FakeSession, "busy", True), tempfile.TemporaryDirectory() as tmp:
+            code, _, session = self.run_main("--model", "m", "--doc", "doc1", "--variant", "v", "--batches", "units:4", "--force-busy", "--out", tmp)
+        self.assertEqual(code, 0)
+        self.assertGreater(len(session.completions), 0)
+
     def test_rules_file_pins_the_rules(self):
         with tempfile.TemporaryDirectory() as tmp:
             rules = Path(tmp) / "rules.md"
             rules.write_text("PINNED RULES")
-            code, out, session = self.run_main("--model", "m", "--doc", "doc1", "--batches", "units:4", "--rules-file", str(rules), "--out", tmp)
+            code, out, session = self.run_main("--model", "m", "--doc", "doc1", "--variant", "v", "--batches", "units:4", "--rules-file", str(rules), "--out", tmp)
         self.assertEqual(code, 0)
-        self.assertEqual(session.sources, [("doc1", None, None, None, False)])
+        self.assertEqual(session.sources, [("doc1", "v", None, None, False)])
         self.assertIn("PINNED RULES", session.completions[0][1])
         self.assertIn("## endpoint-local/m on doc1", out)  # the pinned source keeps the document id
 
@@ -92,8 +151,8 @@ class TestProbeCli(unittest.TestCase):
         session.complete = interrupting  # type: ignore[method-assign]
         out, err = io.StringIO(), io.StringIO()
         with tempfile.TemporaryDirectory() as tmp, \
-                mock.patch.object(probe.ApiSession, "login", return_value=session), redirect_stdout(out), redirect_stderr(err):
-            code = probe.main(["--user", "u", "--password", "p", "--env", "/nonexistent", "--model", "m", "--doc", "doc1", "--doc", "doc2",
+                mock.patch.object(probe.ApiSession, "connect", return_value=session), redirect_stdout(out), redirect_stderr(err):
+            code = probe.main(["--user", "u", "--password", "p", "--env", "/nonexistent", "--model", "m", "--doc", "doc1", "--doc", "doc2", "--variant", "grobid.training.references",
                                "--batches", "units:4", "--repeats", "2", "--out", tmp])
             report = (Path(tmp) / "report.md").read_text()
             self.assertFalse(any(p.name.endswith(".tmp") for p in Path(tmp).iterdir()))
@@ -106,7 +165,7 @@ class TestProbeCli(unittest.TestCase):
     def test_argument_errors(self):
         for args in (["--model", "m"], ["--model", "m", "--doc", "a", "--doc", "b", "--input", "x"],
                      ["--model", "m", "--doc", "a", "--doc", "b", "--reference", "x"],
-                     ["--model", "m", "--doc", "a", "--modes", "diff"], ["--model", "m", "--doc", "a", "--batches", "8"]):
+                     ["--model", "m", "--doc", "a"], ["--model", "m", "--doc", "a", "--variant", "v", "--modes", "diff"], ["--model", "m", "--doc", "a", "--variant", "v", "--batches", "8"]):
             with self.subTest(args=args), self.assertRaises(SystemExit):
                 self.run_main(*args)
 
@@ -114,7 +173,7 @@ class TestProbeCli(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             env = Path(tmp) / ".env"
             env.write_text("# comment\nexport API_USER=alice\nAPI_PASSWORD='s3cret'\n")
-            self.assertEqual(probe._load_env(env), {"API_USER": "alice", "API_PASSWORD": "s3cret"})
+            self.assertEqual(load_env(env), {"API_USER": "alice", "API_PASSWORD": "s3cret"})
 
 
 if __name__ == "__main__":

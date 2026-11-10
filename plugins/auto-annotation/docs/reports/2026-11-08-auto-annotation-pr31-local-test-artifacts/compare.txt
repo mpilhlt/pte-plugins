@@ -1,0 +1,25 @@
+input units 86, annotated 86, reference 95; aligned by text 70; unmatched input 16, unmatched reference 25
+| Version | Units | Exact | Edit P | Edit R | Edit F1 | Field F1 | Edits made/needed |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| extraction (baseline) | 70 | 2 (2.9%) | - | 0.0 | - | 40.9 | 0/580 |
+| auto-annotation | 70 | 15 (21.4%) | 79.1 | 83.4 | 81.2 | 79.4 | 612/580 |
+
+By decision:
+| Decision | Units | Exact | Edit P | Edit R |
+| --- | --- | --- | --- | --- |
+| agreed | 15 | 9 | 94.6 | 94.6 |
+| arbitrated:A | 3 | 1 | 91.7 | 91.7 |
+| arbitrated:B | 31 | 4 | 72.8 | 85.5 |
+| arbitrated:original | 2 | 0 | - | 0.0 |
+| arbitrated:own | 19 | 1 | 76.1 | 74.4 |
+
+all decisions: Counter({'arbitrated': 69, 'agreed': 17}) Counter({'B': 39, 'own': 23, 'A': 5, 'original': 2})
+statuses A: Counter({'ok': 79, 'text_changed': 7}) B: Counter({'ok': 86}) arbiter: Counter({'ok': 69, None: 17})
+groups spanning >1 unit: 0
+runs keys: {'A': ['calls', 'retries', 'seconds', 'prompt_chars', 'response_chars', 'batches'], 'B': ['calls', 'retries', 'seconds', 'prompt_chars', 'response_chars', 'batches'], 'arbiter': ['calls', 'retries', 'seconds', 'prompt_chars', 'response_chars', 'batches']}
+A {'calls': 13, 'retries': 0, 'seconds': 69.3, 'prompt_chars': 482242, 'response_chars': 35812}
+  batches 13 {'index': 0, 'unit_indices': [8, 9, 10, 11, 12, 13, 14, 15], 'prompt_chars': 37820, 'response_chars': 3307, 'seconds': 3.56693070899928, 'raw_response': '### Unit 1\n<bibl><author>P. Organisciak, J. S. Downie</author>, <title level="a">Research access to in-copyright texts in the
+B {'calls': 11, 'retries': 0, 'seconds': 573.9, 'prompt_chars': 410861, 'response_chars': 36786}
+  batches 11 {'index': 0, 'unit_indices': [0, 1, 2, 3, 4, 5, 6, 7], 'prompt_chars': 37553, 'response_chars': 4069, 'seconds': 35.25222754200513, 'raw_response': '### Unit 1\n<bibl type="legislation"><title level="m" type="legislation" key="DSM Directive">Directive (EU) <idno type="actNumber">
+arbiter {'calls': 9, 'retries': 0, 'seconds': 112.98, 'prompt_chars': 400887, 'response_chars': 32505}
+  batches 9 {'index': 0, 'unit_indices': [0, 1, 2, 3, 4, 5, 6, 7], 'prompt_chars': 45582, 'response_chars': 4050, 'seconds': 19.536248040996725, 'raw_response': '### Unit 1\n<bibl type="legislation"><title level="m" type="legislation" key="DSM Directive">Directive (EU) <idno type="actNumber"

@@ -1,0 +1,23 @@
+◇ injected env (9) from .env
+Base URL: http://localhost:8000
+Collection: grobid-batch-2
+Extractor(s): grobid
+Mode: extract-only (no upload)
+Options: {
+  "collection": "grobid-batch-2",
+  "variant_id": "grobid.training.references",
+  "flavor": "article/footnotes-refs"
+}
+
+Logging in...
+Login successful
+Fetching files from collection...
+Found 1 file(s) in collection
+
+[░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 0/1 (0.0%) Extracting (grobid): 10.5771__2699-1284-2024-3-149.pdf (DOI: 10.5771/2699-1284-2024-3-149)
+[████████████████████████████████████████] 1/1 (100.0%) Completed: 10.5771__2699-1284-2024-3-149.pdf
+
+=== Summary ===
+Total: 1
+Success: 1
+Failed: 0

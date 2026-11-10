@@ -1,0 +1,273 @@
+[
+  {
+    "meta": {
+      "model": "kisski/deepseek-v4-flash-0731",
+      "doc_id": "10.5771__2699-1284-2024-3-149",
+      "reference_stable_id": "38cs7r",
+      "reference_is_gold": false,
+      "input_stable_id": "bfn4g7",
+      "input_choice": "lineage",
+      "input_is_extraction": true,
+      "variant": "grobid.training.references",
+      "unit_path": ".//listBibl/bibl",
+      "rules_hash": "33154192a7d2",
+      "rule_categories": [
+        "primary",
+        "data-correction",
+        "schema-fragment"
+      ],
+      "prompt_version": "1",
+      "planned_runs": 1,
+      "finished_runs": 1,
+      "segmenting": false,
+      "aligned_units": 8,
+      "unmatched_input_units": 18,
+      "unmatched_gold_units": 43
+    },
+    "baseline": {
+      "model": "baseline (input)",
+      "reference_stable_id": "38cs7r",
+      "batching": "-",
+      "mode": "-",
+      "repeats": 1,
+      "units": 8,
+      "calls": 0,
+      "retries": 0,
+      "error_rate": 0.0,
+      "failure_rate": 0.0,
+      "status_counts": {
+        "ok": 8
+      },
+      "exact_rate": 0.0,
+      "edit_precision": null,
+      "edit_recall": 0.0,
+      "edit_f1": null,
+      "field_precision": 0.5769230769230769,
+      "field_recall": 0.3448275862068966,
+      "field_f1": 0.4316546762589928,
+      "edit_recall_by_quarter": [
+        0.0,
+        null,
+        null,
+        null
+      ],
+      "seconds": 0,
+      "prompt_chars": 0,
+      "response_chars": 0
+    },
+    "summaries": [
+      {
+        "model": "kisski/deepseek-v4-flash-0731",
+        "reference_stable_id": "38cs7r",
+        "batching": "units:8",
+        "mode": "all",
+        "repeats": 1,
+        "units": 8,
+        "calls": 1,
+        "retries": 0,
+        "error_rate": 0.0,
+        "failure_rate": 0.25,
+        "status_counts": {
+          "ok": 6,
+          "text_changed": 2
+        },
+        "exact_rate": 0.0,
+        "edit_precision": 0.5487804878048781,
+        "edit_recall": 0.569620253164557,
+        "edit_f1": 0.5590062111801243,
+        "field_precision": 0.6025641025641025,
+        "field_recall": 0.5402298850574713,
+        "field_f1": 0.5696969696969697,
+        "edit_recall_by_quarter": [
+          0.7083333333333334,
+          1.0,
+          0.7777777777777778,
+          0.0
+        ],
+        "seconds": 12.610684915998718,
+        "prompt_chars": 37734,
+        "response_chars": 4963
+      }
+    ]
+  },
+  {
+    "meta": {
+      "model": "kisski/deepseek-v4.1-flash-1017",
+      "doc_id": "10.5771__2699-1284-2024-3-149",
+      "reference_stable_id": "38cs7r",
+      "reference_is_gold": false,
+      "input_stable_id": "bfn4g7",
+      "input_choice": "lineage",
+      "input_is_extraction": true,
+      "variant": "grobid.training.references",
+      "unit_path": ".//listBibl/bibl",
+      "rules_hash": "33154192a7d2",
+      "rule_categories": [
+        "primary",
+        "data-correction",
+        "schema-fragment"
+      ],
+      "prompt_version": "1",
+      "planned_runs": 1,
+      "finished_runs": 1,
+      "segmenting": false,
+      "aligned_units": 8,
+      "unmatched_input_units": 18,
+      "unmatched_gold_units": 43
+    },
+    "baseline": {
+      "model": "baseline (input)",
+      "reference_stable_id": "38cs7r",
+      "batching": "-",
+      "mode": "-",
+      "repeats": 1,
+      "units": 8,
+      "calls": 0,
+      "retries": 0,
+      "error_rate": 0.0,
+      "failure_rate": 0.0,
+      "status_counts": {
+        "ok": 8
+      },
+      "exact_rate": 0.0,
+      "edit_precision": null,
+      "edit_recall": 0.0,
+      "edit_f1": null,
+      "field_precision": 0.5769230769230769,
+      "field_recall": 0.3448275862068966,
+      "field_f1": 0.4316546762589928,
+      "edit_recall_by_quarter": [
+        0.0,
+        null,
+        null,
+        null
+      ],
+      "seconds": 0,
+      "prompt_chars": 0,
+      "response_chars": 0
+    },
+    "summaries": [
+      {
+        "model": "kisski/deepseek-v4.1-flash-1017",
+        "reference_stable_id": "38cs7r",
+        "batching": "units:8",
+        "mode": "all",
+        "repeats": 1,
+        "units": 8,
+        "calls": 1,
+        "retries": 0,
+        "error_rate": 0.0,
+        "failure_rate": 0.0,
+        "status_counts": {
+          "ok": 8
+        },
+        "exact_rate": 0.125,
+        "edit_precision": 0.7789473684210526,
+        "edit_recall": 0.9367088607594937,
+        "edit_f1": 0.8505747126436782,
+        "field_precision": 0.8426966292134831,
+        "field_recall": 0.8620689655172413,
+        "field_f1": 0.8522727272727273,
+        "edit_recall_by_quarter": [
+          0.9166666666666666,
+          1.0,
+          0.9444444444444444,
+          0.9130434782608695
+        ],
+        "seconds": 169.09475920899422,
+        "prompt_chars": 37734,
+        "response_chars": 4850
+      }
+    ]
+  },
+  {
+    "meta": {
+      "model": "kisski/glm-5.3-flash",
+      "doc_id": "10.5771__2699-1284-2024-3-149",
+      "reference_stable_id": "38cs7r",
+      "reference_is_gold": false,
+      "input_stable_id": "bfn4g7",
+      "input_choice": "lineage",
+      "input_is_extraction": true,
+      "variant": "grobid.training.references",
+      "unit_path": ".//listBibl/bibl",
+      "rules_hash": "33154192a7d2",
+      "rule_categories": [
+        "primary",
+        "data-correction",
+        "schema-fragment"
+      ],
+      "prompt_version": "1",
+      "planned_runs": 1,
+      "finished_runs": 1,
+      "segmenting": false,
+      "aligned_units": 8,
+      "unmatched_input_units": 18,
+      "unmatched_gold_units": 43
+    },
+    "baseline": {
+      "model": "baseline (input)",
+      "reference_stable_id": "38cs7r",
+      "batching": "-",
+      "mode": "-",
+      "repeats": 1,
+      "units": 8,
+      "calls": 0,
+      "retries": 0,
+      "error_rate": 0.0,
+      "failure_rate": 0.0,
+      "status_counts": {
+        "ok": 8
+      },
+      "exact_rate": 0.0,
+      "edit_precision": null,
+      "edit_recall": 0.0,
+      "edit_f1": null,
+      "field_precision": 0.5769230769230769,
+      "field_recall": 0.3448275862068966,
+      "field_f1": 0.4316546762589928,
+      "edit_recall_by_quarter": [
+        0.0,
+        null,
+        null,
+        null
+      ],
+      "seconds": 0,
+      "prompt_chars": 0,
+      "response_chars": 0
+    },
+    "summaries": [
+      {
+        "model": "kisski/glm-5.3-flash",
+        "reference_stable_id": "38cs7r",
+        "batching": "units:8",
+        "mode": "all",
+        "repeats": 1,
+        "units": 8,
+        "calls": 1,
+        "retries": 4,
+        "error_rate": 1.0,
+        "failure_rate": 0.0,
+        "status_counts": {
+          "error": 8
+        },
+        "exact_rate": 0.0,
+        "edit_precision": null,
+        "edit_recall": null,
+        "edit_f1": null,
+        "field_precision": null,
+        "field_recall": null,
+        "field_f1": null,
+        "edit_recall_by_quarter": [
+          null,
+          null,
+          null,
+          null
+        ],
+        "seconds": 2464.3701912919933,
+        "prompt_chars": 37734,
+        "response_chars": 0
+      }
+    ]
+  }
+]

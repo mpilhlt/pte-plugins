@@ -1,7 +1,7 @@
 """
-HTTP client for a running PDF-TEI-Editor: login, the evaluation inputs, and a ChatClient that
-sends completions through the server, so the CLI uses the providers, keys and access rules
-configured in the app.
+HTTP client for a running PDF-TEI-Editor: login, the evaluation inputs, a ChatClient that
+sends completions through the server (so the CLIs use the providers, keys and access rules
+configured in the app), and the annotation, target and save calls of the annotation CLI.
 
 No imports from fastapi_app.
 """
@@ -10,11 +10,16 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 import requests
 
+from .cli_common import Connection
 from .correction import TransientError
+
+# Values of a flat JSON request body
+JsonScalar = str | int | float | bool | None
 from .evaluation import EvalSource
 
 # Completions of large batches on slow models take minutes
@@ -29,10 +34,22 @@ class TransientApiError(ApiError, TransientError):
     """The server answered 429 or 503: retrying may help."""
 
 
-TRANSIENT_STATUSES = frozenset({429, 503})
+class ModelsBusyError(ApiError):
+    """A model of the run is reported as busy, so the run was not started."""
+
+
+# A 429 is not among them: the editor waits out short rate limits itself, so a 429 means a long wait or an exhausted quota
+TRANSIENT_STATUSES = frozenset({503})
 
 
 def _check(response: requests.Response) -> dict[str, object]:
+    data = _check_any(response)
+    if not isinstance(data, dict):
+        raise ApiError(f"{response.request.method} {response.url}: expected a JSON object")
+    return data
+
+
+def _check_any(response: requests.Response) -> object:
     if not response.ok:
         try:
             detail = response.json().get("detail", response.text)
@@ -68,6 +85,22 @@ class ApiSession:
         data = _check(response)
         return cls(base, str(data["sessionId"]), timeout)
 
+    @classmethod
+    def login_with_token(cls, base_url: str, token: str, timeout: float = DEFAULT_TIMEOUT) -> "ApiSession":
+        """Exchange a personal access token for a session."""
+        base = base_url.rstrip("/")
+        data = _check(requests.post(f"{base}/api/v1/auth/token-login", headers={"Authorization": f"Bearer {token}"}, timeout=60))
+        return cls(base, str(data["sessionId"]), timeout)
+
+    @classmethod
+    def connect(cls, connection: Connection, timeout: float = DEFAULT_TIMEOUT) -> "ApiSession":
+        """Log in with the connection's token if it has one, otherwise with its username and password."""
+        if connection.token:
+            return cls.login_with_token(connection.base_url, connection.token, timeout)
+        if not connection.user or not connection.password:
+            raise ApiError("No credentials: a token, or a username and password, are needed")
+        return cls.login(connection.base_url, connection.user, connection.password, timeout)
+
     @property
     def headers(self) -> dict[str, str]:
         return {"X-Session-ID": self.session_id}
@@ -91,12 +124,32 @@ class ApiSession:
             gold_xml=str(data["gold_xml"]), input_xml=str(data["input_xml"]),
             rules=[(str(r["category"]), str(r["text"])) for r in rules],
             doc_id=str(data["doc_id"]), reference_is_gold=bool(data["reference_is_gold"]), input_choice=str(data["input_choice"]), input_is_extraction=bool(data["input_is_extraction"]),
+            segmenting=bool(data.get("segmenting", False)),
         )
 
     def resolve_model(self, spec: str) -> tuple[str, str]:
         """(provider id, model id) for a model name."""
         data = _check(requests.post(f"{self.base_url}/api/plugins/auto-annotation/resolve-model", json={"model": spec}, headers=self.headers, timeout=120))
         return str(data["provider_id"]), str(data["model_id"])
+
+    def busy_models(self, models: Sequence[tuple[str, str]]) -> list[str]:
+        """Descriptions of those (provider id, model id) that their provider reports as busy; models without a status count as free."""
+        data = _check_any(requests.get(f"{self.base_url}/api/v1/llm/providers", headers=self.headers, timeout=120))
+        if not isinstance(data, list):
+            raise ApiError("providers: expected a JSON list")
+        statuses = {(provider["id"], model["id"]): model.get("status") for provider in data for model in provider.get("models", [])}
+        busy = []
+        for provider_id, model_id in dict.fromkeys(models):
+            status = statuses.get((provider_id, model_id))
+            if status and status["availability"] != "available":
+                busy.append(f"{provider_id}/{model_id} ({status['availability']}, {status['detail']})")
+        return busy
+
+    def ensure_models_not_busy(self, specs: Sequence[str]) -> None:
+        """Raise ModelsBusyError if a model is busy: most requests to a busy model time out, which costs hours and loses units."""
+        busy = self.busy_models([self.resolve_model(spec) for spec in specs])
+        if busy:
+            raise ModelsBusyError(f"Nothing was started, these models are busy: {', '.join(busy)}. Try again later, or start anyway with --force-busy.")
 
     def complete(self, provider_id: str, model_id: str, system_prompt: str, user_prompt: str, temperature: float) -> str:
         """One completion through the server; raises TransientError when retrying may help."""
@@ -109,6 +162,33 @@ class ApiSession:
         except (requests.ConnectionError, requests.Timeout) as e:
             raise TransientError(f"{type(e).__name__}: {e}") from e
         return str(_check(response)["text"])
+
+    def targets(self, variant: str, collection: str | None = None, doc_ids: list[str] | None = None) -> list[dict[str, object]]:
+        """The version of each document the pipeline would annotate (see annotation.find_targets)."""
+        params: list[tuple[str, str]] = [("variant", variant)]
+        if collection:
+            params.append(("collection", collection))
+        params.extend(("doc", d) for d in doc_ids or [])
+        data = _check_any(requests.get(f"{self.base_url}/api/plugins/auto-annotation/targets", params=params, headers=self.headers, timeout=300))
+        if not isinstance(data, list):
+            raise ApiError("targets: expected a JSON list")
+        return [t for t in data if isinstance(t, dict)]
+
+    def annotate(self, payload: dict[str, JsonScalar]) -> dict[str, object]:
+        """Annotate a version on the server (see routes.AnnotateRequest); the result is not saved."""
+        return _check(requests.post(f"{self.base_url}/api/plugins/auto-annotation/annotate", json=payload, headers=self.headers, timeout=self.timeout))
+
+    def save_version(self, xml: str, source_stable_id: str) -> str:
+        """Save xml as a new version of the source version; returns the new stable id."""
+        data = _check(requests.post(
+            f"{self.base_url}/api/v1/files/save", json={"xml_string": xml, "file_id": source_stable_id, "new_version": True},
+            headers=self.headers, timeout=120,
+        ))
+        return str(data["file_id"])
+
+    def release_lock(self, stable_id: str) -> None:
+        """Release the lock that saving acquired."""
+        _check(requests.post(f"{self.base_url}/api/v1/files/release_lock", json={"file_id": stable_id}, headers=self.headers, timeout=60))
 
 
 @dataclass

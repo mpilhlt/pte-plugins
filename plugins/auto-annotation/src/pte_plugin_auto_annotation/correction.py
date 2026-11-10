@@ -20,7 +20,7 @@ from typing import Protocol, Sequence
 
 from .batching import BatchSpec, make_batches
 from .checks import ProposalStatus, check_proposal, check_segments, unit_text
-from .prompts import OutputMode, build_system_prompt, build_user_prompt, parse_unit_answer
+from .prompts import OutputMode, UnitRenderer, build_system_prompt, build_user_prompt, parse_unit_answer
 from .units import Unit
 
 
@@ -28,9 +28,9 @@ class TransientError(RuntimeError):
     """A request failed for a reason unrelated to the prompt (overload, rate limit); retrying may help."""
 
 
-# HTTP statuses and wordings with which providers report overload and rate limits
+# HTTP statuses and wordings with which providers report overload, rate limits and timeouts
 _TRANSIENT = re.compile(
-    r"\b(429|500|502|503|504)\b|overload|high demand|rate.?limit|too many requests|resource.?exhausted|temporarily unavailable|try again",
+    r"\b(429|500|502|503|504)\b|overload|high demand|rate.?limit|too many requests|resource.?exhausted|temporarily unavailable|try again|timed out",
     re.IGNORECASE,
 )
 
@@ -77,8 +77,14 @@ class ProviderChatClient:
     temperature: float = 0.0
 
     async def complete(self, system_prompt: str, user_prompt: str) -> str:
+        # Imported here: this client runs on the server only, and the module stays importable without the editor
+        from fastapi_app.plugin_api import LLMRateLimitError
+
         try:
             return await self.provider.chat_completion(self.model_id, system_prompt, user_prompt, self.temperature)
+        except LLMRateLimitError:
+            # Not transient: short waits were waited out already, and until the given time every request fails at once
+            raise
         except Exception as e:
             if is_transient_message(str(e)):
                 raise TransientError(str(e)) from e
@@ -157,6 +163,11 @@ async def correct_units(
     retry: RetryPolicy | None = None,
     sleep: Sleep = asyncio.sleep,
     segmenting: bool = False,
+    system_prompt: str | None = None,
+    render: UnitRenderer | None = None,
+    move_text: bool = True,
+    time_budget: float | None = None,
+    clock: Callable[[], float] = time.monotonic,
 ) -> CorrectionRun:
     """
     Send the units to the model in batches and check every proposed unit.
@@ -171,22 +182,39 @@ async def correct_units(
     between 0 and 1), a batch of more than one unit whose share of failed units exceeds it is split
     in half and each half is retried, recursively; the experiment leaves it off to measure the raw
     behaviour, the pipeline turns it on.
+
+    system_prompt and render replace the correction prompt and the text shown for each unit; the
+    arbiter uses them to show the candidates. Answers are always checked against the unit's XML.
+    move_text=False keeps segmenting units from passing on their batch's text (the arbiter's units
+    are not neighbours).
+
+    time_budget limits the seconds of this run, so that a stalling model cannot cost hours: once it
+    is used up, requests are neither repeated nor sent, and the units of those not sent are ERROR.
+    A request already under way is not interrupted.
     """
     run = CorrectionRun()
+    deadline = None if time_budget is None else clock() + time_budget
+
+    def out_of_time() -> bool:
+        return deadline is not None and clock() >= deadline
+
     semaphore = asyncio.Semaphore(max(1, concurrency))
-    system_prompt = build_system_prompt(mode, segmenting)
+    system_prompt = system_prompt if system_prompt is not None else build_system_prompt(mode, segmenting)
     by_index: dict[int, UnitOutcome] = {}
     lock = asyncio.Lock()
 
     async def process(batch: list[Unit], split_from: int | None) -> None:
         ids = list(range(1, len(batch) + 1))
-        user_prompt = build_user_prompt(rules, batch, ids)
+        user_prompt = build_user_prompt(rules, batch, ids, render) if render else build_user_prompt(rules, batch, ids)
         error: str | None = None
         raw = ""
         retries = 0
         seconds = 0.0
         async with semaphore:
             while True:
+                if out_of_time() and retries == 0:
+                    error = f"TimeBudgetExceeded: the time budget of {time_budget:.0f} s is used up, the request was not sent"
+                    break
                 started = time.monotonic()
                 try:
                     raw = await client.complete(system_prompt, user_prompt)
@@ -197,7 +225,7 @@ async def correct_units(
                 else:
                     transient = False
                 seconds += time.monotonic() - started
-                if not (transient and retry is not None and retries < retry.retries):
+                if not (transient and retry is not None and retries < retry.retries and not out_of_time()):
                     break
                 retries += 1
                 await sleep(retry.delay(retries))
@@ -220,7 +248,7 @@ async def correct_units(
             else:
                 status = check(unit.xml, proposal)
             outcomes.append(UnitOutcome(unit, status, proposal, batch_index, position, len(batch)))
-        if segmenting:
+        if segmenting and move_text:
             outcomes = _accept_moved_text(outcomes)
         for outcome in outcomes:
             if outcome.status.is_failure:
