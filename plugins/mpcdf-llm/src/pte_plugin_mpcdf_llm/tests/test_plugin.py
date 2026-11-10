@@ -6,6 +6,7 @@ Unit tests for the manager lifecycle of the MPCDF LLM plugin.
 """
 
 import asyncio
+import logging
 import os
 import tempfile
 import unittest
@@ -54,6 +55,22 @@ class TestManagerLifecycle(_Base):
                 get_manager()
 
         asyncio.run(run())
+
+    def test_initialize_quiets_filelock_debug_logging(self):
+        # the state file is read under a file lock every few seconds; filelock logs each
+        # acquire and release at DEBUG, which floods a debug-level host log
+        filelock_logger = logging.getLogger("filelock")
+        previous = filelock_logger.level
+        self.addCleanup(filelock_logger.setLevel, previous)
+        filelock_logger.setLevel(logging.NOTSET)
+
+        async def run():
+            plugin = MpcdfLlmPlugin()
+            await plugin.initialize(None)
+            await plugin.cleanup()
+
+        asyncio.run(run())
+        self.assertEqual(filelock_logger.level, logging.WARNING)
 
     def test_reinitialize_in_new_event_loop_gets_fresh_manager(self):
         managers = []
