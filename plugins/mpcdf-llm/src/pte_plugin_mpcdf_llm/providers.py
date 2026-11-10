@@ -10,7 +10,6 @@ manager. Error messages never contain the endpoint URL or key.
 import asyncio
 import logging
 import time
-from contextlib import suppress
 from typing import Any
 
 import httpx
@@ -83,6 +82,9 @@ class MpcdfLLMProvider(LLMProvider):
             available = await get_manager().available()
         except (MpcdfError, LookupError) as e:
             raise self._gone() from e
+        except Exception as e:  # raw httpx/socketio/OSError errors may name the URL
+            logger.warning("Could not fetch MPCDF credentials: %s", type(e).__name__)
+            raise LLMProviderError(f"Could not reach {self.label}") from None
         found = next((a for a in available if a.preset == self.preset), None)
         if found is None:
             raise self._gone()
@@ -111,12 +113,12 @@ class MpcdfLLMProvider(LLMProvider):
             available = await self._credentials(refresh=attempt == 1)
             try:
                 response = await self._post(available, model_id, messages, temperature)
-            except httpx.ConnectError as e:
+            except httpx.TimeoutException as e:
+                raise LLMProviderError(f"{self.label} did not answer in time") from e
+            except httpx.TransportError as e:
                 if attempt == 0:
                     continue
                 raise LLMProviderError(f"Could not reach {self.label}") from e
-            except httpx.TimeoutException as e:
-                raise LLMProviderError(f"{self.label} did not answer in time") from e
             except httpx.HTTPError as e:
                 raise LLMProviderError(f"Request to {self.label} failed: {type(e).__name__}") from e
             # Stale credentials (401) or an endpoint that just ended (503): look again once
@@ -131,8 +133,10 @@ class MpcdfLLMProvider(LLMProvider):
         except ValueError as e:
             raise LLMProviderError(f"{self.label} returned an invalid response") from e
         # Activity keeps the endpoint from idling out
-        with suppress(MpcdfError):  # NotFound: the endpoint just ended; the reply is still good
+        try:
             await get_manager().touch(preset=self.preset)
+        except Exception as e:  # a transient failure must not discard a reply that already succeeded
+            logger.debug("Could not record MPCDF activity: %s", type(e).__name__)
         choices = result.get("choices") or []
         if not choices:
             return ""

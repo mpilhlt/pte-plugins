@@ -235,6 +235,62 @@ class TestChat(_Base):
                 await provider.chat_completion("m", "s", "u")
         self.assertEqual(str(ctx.exception), "MPCDF: p returned 429")
 
+    async def test_503_triggers_one_refresh_then_reports_status(self):
+        await self.start_ready()
+        await providers.sync_providers(self.manager)
+        provider = self.registry.get_provider("mpcdf-llm-p")
+        seen = []
+
+        def handler(request):
+            seen.append(request)
+            return httpx.Response(503)
+
+        with patch.object(providers, "new_http_client", lambda: httpx.AsyncClient(transport=httpx.MockTransport(handler))):
+            with self.assertRaises(LLMProviderError) as ctx:
+                await provider.chat_completion("m", "s", "u")
+        self.assertEqual(len(seen), 2)
+        self.assertEqual(str(ctx.exception), "MPCDF: p returned 503")
+
+    async def test_transport_error_retried_once(self):
+        await self.start_ready()
+        await providers.sync_providers(self.manager)
+        provider = self.registry.get_provider("mpcdf-llm-p")
+        seen = []
+
+        def handler(request):
+            seen.append(request)
+            if len(seen) == 1:
+                raise httpx.RemoteProtocolError("boom http://fake.llmis/x")
+            return httpx.Response(200, json={"choices": [{"message": {"content": "ok"}}]})
+
+        with patch.object(providers, "new_http_client", lambda: httpx.AsyncClient(transport=httpx.MockTransport(handler))):
+            self.assertEqual(await provider.chat_completion("m", "s", "u"), "ok")
+        self.assertEqual(len(seen), 2)
+
+    async def test_raw_error_from_available_is_sanitized(self):
+        provider = providers.MpcdfLLMProvider("p", "m")
+
+        async def boom():
+            raise httpx.ConnectError("cannot reach http://secret.example/v1")
+
+        with patch.object(self.manager, "available", boom):
+            with self.assertRaises(LLMProviderError) as ctx:
+                await provider.chat_completion("m", "s", "u")
+        self.assertEqual(str(ctx.exception), "Could not reach MPCDF: p")
+        self.assertIsNone(ctx.exception.__cause__)
+        self.assertTrue(ctx.exception.__suppress_context__)
+
+    async def test_touch_failure_does_not_discard_reply(self):
+        await self.start_ready()
+        await providers.sync_providers(self.manager)
+        provider = self.registry.get_provider("mpcdf-llm-p")
+
+        async def boom(**kw):
+            raise RuntimeError("transient")
+
+        with patch.object(self.manager, "touch", boom):
+            self.assertEqual(await provider.chat_completion("m", "s", "u"), "hello")
+
 
 class TestPluginLifecycle(_Base):
     async def test_cleanup_unregisters_all(self):
