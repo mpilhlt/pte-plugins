@@ -11,12 +11,13 @@ the PDF itself rather than its text layer.
 
 import logging
 import re
+from datetime import datetime, timedelta, timezone
 
 import httpx
 from google import genai
 from google.genai import errors as genai_errors, types
 
-from fastapi_app.plugin_api import LLMModel, LLMProvider, LLMProviderError, get_config
+from fastapi_app.plugin_api import LLMModel, LLMProvider, LLMProviderError, LLMRateLimitError, get_config
 
 logger = logging.getLogger(__name__)
 
@@ -35,9 +36,28 @@ _MAJOR_VERSION_RE = re.compile(r"^gemini-(\d+)")
 _API_ERRORS = (genai_errors.APIError, httpx.HTTPError)
 
 
+_RETRY_DELAY_RE = re.compile(r"(\d+(?:\.\d+)?)s")
+
+
+def _retry_delay_seconds(details: object) -> float | None:
+    """The `retryDelay` of a google.rpc.RetryInfo in an error response ("34s"), or None."""
+    error = details.get("error") if isinstance(details, dict) else None
+    entries = error.get("details") if isinstance(error, dict) else None
+    for entry in entries if isinstance(entries, list) else []:
+        if isinstance(entry, dict) and str(entry.get("@type", "")).endswith("google.rpc.RetryInfo"):
+            match = _RETRY_DELAY_RE.fullmatch(str(entry.get("retryDelay", "")))
+            if match:
+                return float(match.group(1))
+    return None
+
+
 def _provider_error(error: genai_errors.APIError | httpx.HTTPError) -> LLMProviderError:
-    """A user-presentable LLMProviderError for a failed Gemini API call."""
+    """A user-presentable LLMProviderError for a failed Gemini API call; a 429 (rate limit, exhausted quota) is an LLMRateLimitError."""
     if isinstance(error, genai_errors.APIError):
+        if error.code == 429:
+            delay = _retry_delay_seconds(error.details)
+            available_at = datetime.now(timezone.utc) + timedelta(seconds=delay) if delay is not None else None
+            return LLMRateLimitError(f"{error.code} {error.message}", available_at=available_at)
         return LLMProviderError(f"{error.code} {error.message}")
     return LLMProviderError(f"Could not reach the Gemini API: {error or type(error).__name__}")
 
