@@ -246,7 +246,7 @@
       const rows = res.body.map((ep) => {
         const managed = managedRes.get(ep.id);
         const served = managed ? managed.presets.map((n) => presets.find((p) => p.name === n)).filter(Boolean) : [];
-        const model = ep.framework === 'vLLM' ? (ep.args || '').split(/\s+/)[0] : served[0]?.model;
+        const model = served[0]?.model || ep.model || (ep.framework === 'vLLM' ? (ep.args || '').split(/\s+/)[0] : '');
         const tr = el('tr');
         tr.append(
           el('td', managed ? (managed.presets.length ? managed.presets.join(', ') : managed.preset) : 'unmanaged'),
@@ -276,6 +276,10 @@
     async function loadPresets() {
       const res = await api('/presets');
       presets = res.ok ? res.body : [];
+      if (!res.ok) {
+        fillRows($('presets'), [], 4, errorText(res));
+        return;
+      }
       const rows = presets.map((p) => {
         const tr = el('tr');
         tr.append(el('td', p.name), el('td', p.model), el('td', `${p.gpus} x ${p.gpu_type} (${p.machine})`));
@@ -322,7 +326,7 @@
     function showErrors(errors) {
       const unplaced = [];
       for (const [field, msg] of Object.entries(errors)) {
-        const f = document.querySelector(`#preset-form .field[data-field="${field}"]`);
+        const f = [...document.querySelectorAll('#preset-form .field[data-field]')].find((x) => x.dataset.field === field);
         if (f) { f.classList.add('invalid'); f.querySelector('.err').textContent = msg; }
         else unplaced.push(`${field}: ${msg}`);
       }
@@ -485,8 +489,11 @@
       await loadEndpoints();
     }
 
-    setInterval(() => {
-      if (document.visibilityState === 'visible') { loadSession().catch(() => {}); loadEndpoints().catch(() => {}); }
+    let polling = false;
+    setInterval(async () => {
+      if (polling || document.visibilityState !== 'visible') return;
+      polling = true;
+      try { await Promise.all([loadSession().catch(() => {}), loadEndpoints().catch(() => {})]); } finally { polling = false; }
     }, 10000);
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') loadEndpoints().catch(() => {});
