@@ -9,7 +9,7 @@ The plugin is a thin wrapper around the [mpcdf-llm](https://gitlab.mpcdf.mpg.de/
 Administrators open the management page from the plugin menu (Inference > MPCDF LLM endpoints). The dialog has these parts:
 
 - **Session.** Log in with the MPCDF user name, password and one-time code. The session is stored on the server, so every worker uses it, and it is renewed as long as the login stays valid. When it is lost, the dialog asks for a login again.
-- **Presets.** A preset describes one endpoint: framework (vLLM or Ollama), model, machine, GPU type and count, run time, queue time, extra arguments, environment, and the supervisor rules below. Presets are created and edited in the dialog. **Export** downloads all presets as a JSON file and **Import** reads such a file (see below).
+- **Presets.** A preset describes one endpoint: framework (vLLM or Ollama), model, machine, GPU type and count, run time, queue time, extra arguments, environment, and the supervisor rules below. Presets are created, edited and duplicated in the dialog (**Duplicate** opens the form with a copy under a free name such as `<name>-copy`). **Export** downloads all presets as a JSON file and **Import** reads such a file (see below).
 - **Start.** Choose a preset and start it, optionally with a "keep alive until" time of day. The dialog shows the progress (queued, building, pulling the model, ready). Closing the dialog does not stop the start.
 - **Endpoints.** Lists the endpoints with their preset, status, remaining time and "until"; they can be cancelled here.
 
@@ -22,7 +22,7 @@ When presets already exist, the import asks how to combine them. Presets are ide
 - **Merge** adds only the presets whose name does not exist yet. Existing presets stay unchanged, and the imported presets of the same name are skipped.
 - **Replace** saves all imported presets, overwriting those of the same name, and then deletes the existing presets that are not in the file. If an imported preset is rejected, nothing is deleted.
 
-Importing needs an MPCDF login, because saving a preset checks it against the options of the service (machines, GPU types and so on). The dialog lists the presets it could not import with the reason.
+Importing needs no MPCDF login, because presets are stored in the plugin's data directory. The import therefore checks only the preset's fields and types, not whether the service offers its machine, GPU type and so on (which saving in the form does, and which needs a login). A preset the service does not support fails when it is started. The dialog lists the presets it could not import with the reason.
 
 Per preset, the supervisor (one per installation) applies these rules:
 
@@ -83,6 +83,7 @@ Each server worker owns a manager on that shared directory. The library's file l
 | --- | --- | --- |
 | `GET /api/plugins/mpcdf-llm/manage` | admin | The management page |
 | `GET /api/plugins/mpcdf-llm/managed` | admin | Preset and "until" of managed endpoints |
+| `POST /api/plugins/mpcdf-llm/presets/import` | admin | Save a list of presets without an MPCDF session; returns `{saved: [names], errors: {name: reason}}` |
 | `/api/plugins/mpcdf-llm/admin/...` | admin | The library's admin router: session, presets, start (event stream), endpoints, stop |
 
 ## Manual live check

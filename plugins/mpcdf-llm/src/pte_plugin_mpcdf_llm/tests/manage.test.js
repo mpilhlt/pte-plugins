@@ -17,6 +17,7 @@ import {
   exportPresets,
   parsePresetsImport,
   planImport,
+  copyName,
 } from '../static/manage-helpers.js';
 
 describe('parseSseChunk', () => {
@@ -149,5 +150,12 @@ describe('preset export and import', () => {
 
   it('replace saves all imported presets and removes the others', () => {
     assert.deepStrictEqual(planImport([a, b], [b2, c], 'replace'), { put: [b2, c], remove: ['a'], skipped: [] });
+  });
+});
+
+describe('copyName', () => {
+  it('appends -copy and a free number', () => {
+    assert.strictEqual(copyName('a', ['a']), 'a-copy');
+    assert.strictEqual(copyName('a', ['a', 'a-copy', 'a-copy-2']), 'a-copy-3');
   });
 });

@@ -208,3 +208,16 @@ export function planImport(existing, incoming, mode) {
     skipped: incoming.filter((p) => existingNames.has(p.name)).map((p) => p.name),
   };
 }
+
+/**
+ * A name for a copy of a preset that is not taken yet: `<name>-copy`, then `<name>-copy-2`, ...
+ * @param {string} name
+ * @param {string[]} taken
+ * @returns {string}
+ */
+export function copyName(name, taken) {
+  const used = new Set(taken);
+  let candidate = `${name}-copy`;
+  for (let i = 2; used.has(candidate); i++) candidate = `${name}-copy-${i}`;
+  return candidate;
+}

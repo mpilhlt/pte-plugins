@@ -139,16 +139,18 @@
   <script type="module">
     import {
       parseSseChunk, untilToIso, describeFrame, fieldErrors, parseDuration, toIsoDuration,
-      formatDuration, formatTimeLeft, exportPresets, parsePresetsImport, planImport,
+      formatDuration, formatTimeLeft, exportPresets, parsePresetsImport, planImport, copyName,
     } from '/api/plugins/mpcdf-llm/static/manage-helpers.js';
 
-    const BASE = '/api/plugins/mpcdf-llm/admin';
+    const PLUGIN_BASE = '/api/plugins/mpcdf-llm';
+    const BASE = `${PLUGIN_BASE}/admin`;
     const sessionId = new URLSearchParams(window.location.search).get('session_id') || '';
     const $ = (id) => document.getElementById(id);
 
     let presets = [];
     let options = null;
     let editing = null; // preset being edited (keeps fields the form does not show, e.g. lead_time)
+    let creating = false; // the form makes a new preset (new or duplicate), so its name must be free
     let loggedIn = false;
 
     /** Notify through the editor, if the sandbox is there. */
@@ -163,13 +165,13 @@
     }
 
     /** Fetch an admin route as the sandbox does (X-Session-ID header). Returns {status, body}. */
-    async function api(path, method = 'GET', payload = null) {
+    async function api(path, method = 'GET', payload = null, base = BASE) {
       const init = { method, headers: { 'X-Session-ID': sessionId } };
       if (payload !== null) {
         init.headers['Content-Type'] = 'application/json';
         init.body = JSON.stringify(payload);
       }
-      const response = await fetch(BASE + path, init);
+      const response = await fetch(base + path, init);
       let body = null;
       if (response.status !== 204) body = await response.json().catch(() => null);
       return { status: response.status, ok: response.ok, body };
@@ -303,6 +305,8 @@
         const td = el('td', null, { class: 'actions' });
         const edit = el('button', 'Edit', { type: 'button', class: 'secondary' });
         edit.addEventListener('click', () => openForm(p));
+        const dup = el('button', 'Duplicate', { type: 'button', class: 'secondary' });
+        dup.addEventListener('click', () => openForm(p, { duplicate: true }));
         const del = el('button', 'Delete', { type: 'button', class: 'danger' });
         del.addEventListener('click', async () => {
           if (!confirm(`Delete preset "${p.name}"?`)) return;
@@ -310,7 +314,7 @@
           if (!r.ok) notify(errorText(r), 'danger', 'exclamation-triangle');
           await loadPresets();
         });
-        td.append(edit, ' ', del);
+        td.append(edit, ' ', dup, ' ', del);
         tr.append(td);
         return tr;
       });
@@ -350,10 +354,19 @@
       if (unplaced.length) showMsg('preset-msg', unplaced.join('\n'), 'error');
     }
 
-    async function openForm(preset) {
+    /**
+     * Open the preset form: empty for a new preset, filled for editing, or filled with a free name
+     * for a copy when `duplicate` is set.
+     */
+    async function openForm(preset, { duplicate = false } = {}) {
       const opts = await loadOptions();
       if (!opts) { showMsg('preset-msg', 'Log in to MPCDF to edit presets (the form options come from the provider).', 'error'); $('preset-form').hidden = false; return; }
       editing = preset;
+      creating = !preset || duplicate;
+      if (preset && duplicate) {
+        preset = { ...preset, name: copyName(preset.name, presets.map((x) => x.name)) };
+        editing = preset;
+      }
       clearErrors();
       setSelect('f-framework', opts.frameworks);
       setSelect('f-machine', opts.machines);
@@ -363,7 +376,7 @@
       setSelect('f-max_queue_time', opts.max_queue_times, (t) => formatDuration(parseDuration(t)));
       const p = preset || { framework: opts.frameworks[0], gpus: opts.gpus[0], time: 'PT1H', max_queue_time: 'PT1H', min_remaining: 'PT20M', idle_timeout: 'PT60M', extra_args: [], envs: {} };
       $('f-name').value = p.name || '';
-      $('f-name').readOnly = !!preset;
+      $('f-name').readOnly = !!preset && !duplicate;
       $('f-description').value = p.description || '';
       $('f-framework').value = p.framework;
       $('f-model').value = p.model || '';
@@ -379,6 +392,7 @@
       $('f-idle_timeout').value = parseDuration(p.idle_timeout);
       $('preset-form').hidden = false;
       $('f-name').focus();
+      if (duplicate) $('f-name').select();
     }
 
     function readForm() {
@@ -415,6 +429,10 @@
       ev.preventDefault();
       clearErrors();
       const preset = readForm();
+      if (creating && presets.some((p) => p.name === preset.name)) {
+        showErrors({ name: 'A preset with this name exists' });
+        return;
+      }
       const btn = $('save-preset');
       btn.disabled = true;
       try {
@@ -474,23 +492,21 @@
       const mode = presets.length ? await askImportMode(incoming.length, presets.length) : 'merge';
       if (mode === 'cancel') return;
       const plan = planImport(presets, incoming, mode);
-      if (plan.put.length && !loggedIn) {
-        showMsg('presets-msg', 'Log in to MPCDF to import presets (they are checked against the options of the provider).', 'error');
-        return;
-      }
       const buttons = [$('import-presets'), $('export-presets')];
       buttons.forEach((b) => { b.disabled = true; });
       const failed = [];
       const notRemoved = [];
+      let imported = 0;
       try {
-        for (const preset of plan.put) {
-          const res = await api(`/presets/${encodeURIComponent(preset.name)}`, 'PUT', preset);
-          if (res.ok) continue;
-          const errors = res.status === 422 ? fieldErrors(res.body) : {};
-          const detail = Object.keys(errors).length
-            ? Object.entries(errors).map(([k, v]) => `${k}: ${v}`).join(', ')
-            : errorText(res);
-          failed.push(`${preset.name}: ${detail}`);
+        if (plan.put.length) {
+          // the plugin's import route saves without an MPCDF session (the library's PUT needs one)
+          const res = await api('/presets/import', 'POST', plan.put, PLUGIN_BASE);
+          if (!res.ok) {
+            failed.push(errorText(res));
+          } else {
+            imported = res.body.saved.length;
+            failed.push(...Object.entries(res.body.errors).map(([name, msg]) => `${name}: ${msg}`));
+          }
         }
         // a replace with failed presets keeps the existing ones, so nothing is lost
         if (!failed.length) {
@@ -503,7 +519,7 @@
         buttons.forEach((b) => { b.disabled = false; });
         await loadPresets();
       }
-      const parts = [`Imported ${plan.put.length - failed.length} preset(s)`];
+      const parts = [`Imported ${imported} preset(s)`];
       if (plan.skipped.length) parts.push(`skipped ${plan.skipped.length} existing: ${plan.skipped.join(', ')}`);
       if (plan.remove.length && !failed.length) parts.push(`removed ${plan.remove.length - notRemoved.length}`);
       let text = parts.join('; ') + '.';
