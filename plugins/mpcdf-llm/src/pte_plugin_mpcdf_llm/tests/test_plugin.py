@@ -56,13 +56,14 @@ class TestManagerLifecycle(_Base):
 
         asyncio.run(run())
 
-    def test_initialize_quiets_filelock_debug_logging(self):
+    def test_initialize_quiets_debug_logging(self):
         # the state file is read under a file lock every few seconds; filelock logs each
         # acquire and release at DEBUG, which floods a debug-level host log
         filelock_logger = logging.getLogger("filelock")
-        previous = filelock_logger.level
-        self.addCleanup(filelock_logger.setLevel, previous)
-        filelock_logger.setLevel(logging.NOTSET)
+        protocol_logger = logging.getLogger("mpcdf_llm.protocol")
+        for lg in (filelock_logger, protocol_logger):
+            self.addCleanup(lg.setLevel, lg.level)
+            lg.setLevel(logging.NOTSET)
 
         async def run():
             plugin = MpcdfLlmPlugin()
@@ -71,6 +72,7 @@ class TestManagerLifecycle(_Base):
 
         asyncio.run(run())
         self.assertEqual(filelock_logger.level, logging.WARNING)
+        self.assertEqual(protocol_logger.level, logging.INFO)
 
     def test_reinitialize_in_new_event_loop_gets_fresh_manager(self):
         managers = []

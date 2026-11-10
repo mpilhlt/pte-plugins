@@ -54,9 +54,10 @@ class MpcdfLlmPlugin(Plugin):
 
     async def initialize(self, context: PluginContext) -> None:
         """Create the manager (it opens in the background) and start offering ready endpoints."""
-        # The library reads its state file under a file lock every few seconds; filelock
-        # logs every acquire and release at DEBUG, which floods a debug-level log.
+        # The library reads its state file under a file lock every few seconds, and its
+        # protocol module logs every websocket message; both flood a debug-level log.
         logging.getLogger("filelock").setLevel(logging.WARNING)
+        logging.getLogger("mpcdf_llm.protocol").setLevel(logging.INFO)
         await start_manager()
         if self._watch_task is not None:
             self._watch_task.cancel()
