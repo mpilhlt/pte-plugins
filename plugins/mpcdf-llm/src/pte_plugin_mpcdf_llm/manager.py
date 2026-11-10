@@ -60,14 +60,19 @@ def get_manager() -> ProvisioningManager:
 
 
 async def _run(manager: ProvisioningManager) -> None:
-    """Restore a stored session (may use the network), then start the supervisor."""
+    """Restore a stored session (may use the network), then start the supervisor.
+
+    The supervisor starts even if open() fails: the library restores lazily.
+    Only the exception type is logged, as messages and tracebacks may carry secrets.
+    """
     try:
         await manager.open()
+    except Exception as e:
+        logger.warning("Could not open the MPCDF LLM manager: %s", type(e).__name__)
+    try:
         manager.start_supervisor()
-    except asyncio.CancelledError:
-        raise
-    except Exception:
-        logger.exception("Could not open the MPCDF LLM manager")
+    except Exception as e:
+        logger.warning("Could not start the MPCDF LLM supervisor: %s", type(e).__name__)
 
 
 async def start_manager() -> ProvisioningManager:
@@ -90,11 +95,13 @@ async def stop_manager() -> None:
     """Cancel the open task, close the manager and clear it. Never stops endpoints."""
     global _manager, _task
     task, manager = _task, _manager
-    _task = None
-    _manager = None
-    if task is not None:
-        task.cancel()
-        with suppress(asyncio.CancelledError):
-            await task
-    if manager is not None:
-        await manager.close()
+    try:
+        if task is not None:
+            task.cancel()
+            # gather (not suppress(CancelledError)) so cancellation of this coroutine propagates
+            await asyncio.gather(task, return_exceptions=True)
+        if manager is not None:
+            await manager.close()
+    finally:
+        _task = None
+        _manager = None

@@ -9,11 +9,13 @@ import asyncio
 import os
 import tempfile
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
 from mpcdf_llm.manager import ProvisioningManager
+from mpcdf_llm.storage import ManagedEndpoint
 from pte_plugin_mpcdf_llm import manager as manager_module
 from pte_plugin_mpcdf_llm.manager import DEFAULT_BASE_URL, base_url, data_dir, get_manager
 from pte_plugin_mpcdf_llm.plugin import MpcdfLlmPlugin
@@ -26,6 +28,12 @@ class _Base(unittest.TestCase):
         self.root = Path(self.temp_dir.name)
         settings = SimpleNamespace(plugins_data_dir=self.root)
         patcher = patch.object(manager_module, "get_settings", return_value=settings)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        # never call the real config writer
+        patcher = patch.object(
+            manager_module, "get_plugin_config", lambda k, e, default=None, **kw: os.environ.get(e, default)
+        )
         patcher.start()
         self.addCleanup(patcher.stop)
 
@@ -72,17 +80,57 @@ class TestManagerLifecycle(_Base):
         asyncio.run(run())
 
     def test_cleanup_does_not_cancel_endpoints(self):
-        async def fail(*args, **kwargs):
-            raise AssertionError("stop() must not be called on cleanup")
+        calls = []
+
+        async def fail_stop(*args, **kwargs):
+            calls.append("stop")
+
+        async def fail_cancel(*args, **kwargs):
+            calls.append("cancel")
+
+        now = datetime.now(timezone.utc)
+        entry = ManagedEndpoint(
+            endpoint_id=42, preset="p", served={"p": "m"}, until=None, submitted_at=now, last_activity=now
+        )
 
         async def run():
             plugin = MpcdfLlmPlugin()
             await plugin.initialize(None)
+            manager = get_manager()
+            manager.client.cancel = fail_cancel
+            manager.state.upsert(entry)
             await asyncio.sleep(0.05)
             await plugin.cleanup()
+            return manager
 
-        with patch.object(ProvisioningManager, "stop", fail):
-            asyncio.run(run())
+        with patch.object(ProvisioningManager, "stop", fail_stop):
+            manager = asyncio.run(run())
+        self.assertEqual(calls, [])
+        self.assertIn(42, manager.state.managed())
+
+    def test_supervisor_starts_even_if_open_fails(self):
+        started = []
+
+        async def bad_open(self):
+            raise RuntimeError("secret-token-123")
+
+        def fake_start(self, *a, **kw):
+            started.append(True)
+
+        async def run():
+            with self.assertLogs(manager_module.logger, "WARNING") as logs:
+                await manager_module.start_manager()
+                await asyncio.sleep(0.05)
+            await manager_module.stop_manager()
+            return logs
+
+        with patch.object(ProvisioningManager, "open", bad_open), patch.object(
+            ProvisioningManager, "start_supervisor", fake_start
+        ):
+            logs = asyncio.run(run())
+        self.assertEqual(started, [True])
+        self.assertIn("RuntimeError", "\n".join(logs.output))
+        self.assertNotIn("secret-token-123", "\n".join(logs.output))
 
     def test_metadata_and_manage_endpoint(self):
         plugin = MpcdfLlmPlugin()
@@ -99,13 +147,11 @@ class TestConfig(_Base):
     def test_base_url_default(self):
         with patch.dict(os.environ, {}, clear=False):
             os.environ.pop("MPCDF_LLM_BASE_URL", None)
-            with patch.object(manager_module, "get_plugin_config", lambda k, e, default=None, **kw: os.environ.get(e, default)):
-                self.assertEqual(base_url(), DEFAULT_BASE_URL)
+            self.assertEqual(base_url(), DEFAULT_BASE_URL)
 
     def test_base_url_from_env(self):
         with patch.dict(os.environ, {"MPCDF_LLM_BASE_URL": "http://example.test"}):
-            with patch.object(manager_module, "get_plugin_config", lambda k, e, default=None, **kw: os.environ.get(e, default)):
-                self.assertEqual(base_url(), "http://example.test")
+            self.assertEqual(base_url(), "http://example.test")
 
     def test_data_dir_under_plugins_data_dir(self):
         self.assertEqual(data_dir(), self.root / "mpcdf-llm")
