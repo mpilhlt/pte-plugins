@@ -29,12 +29,14 @@ Every worker checks the endpoints every 10 seconds. For each preset with a ready
 
 - Provider ID `mpcdf-llm-<preset>`, label `MPCDF: <preset>`, one model (the preset's model), chat only (no image or PDF input).
 - The model is **free**: all users may use it, not only administrators. Starting endpoints is admin only; using them is not.
-- The provider never stores the API key. For each request it takes the current credentials from the library, tries once more with fresh ones after a 401 or a connection error, and reports activity to the library afterwards.
+- The provider never stores the API key. For each request it takes the current credentials from the library, refreshes the credentials once after a 401, a 503 or a failed connection and tries again, and reports activity to the library afterwards.
 - When the endpoint ends (expired, cancelled, replaced), the provider disappears at the next check; a request that arrives in between fails with "MPCDF endpoint for <preset> is no longer running".
 
 ## Installation
 
-The library is a git dependency (`mpcdf-llm[fastapi,testing]`, from `gitlab.mpcdf.mpg.de/cboul/llm-mpcdf`), which pip cannot install at runtime. **The plugin must therefore be installed when the editor is built; the runtime Plugin Manager cannot install it.** The library is pinned by commit (`rev` in `[tool.uv.sources]` of [pyproject.toml](pyproject.toml)); update the `rev` deliberately to take over library changes.
+The library is not on PyPI, so the plugin depends on it by a direct git reference (`mpcdf-llm[fastapi,testing] @ git+https://gitlab.mpcdf.mpg.de/cboul/llm-mpcdf.git@<commit>` in [pyproject.toml](pyproject.toml)). A plain name would resolve to whatever package carries that name on PyPI (dependency confusion); the direct reference is part of the wheel metadata, so every installer fetches the library from the MPCDF GitLab at the pinned commit. Update the commit deliberately to take over library changes.
+
+Installing the plugin therefore needs access to that git repository, and the editor's Plugin Manager can install it only if it permits direct references; otherwise install the plugin when the editor is built.
 
 `mpcdf-llm[testing]` is a runtime dependency on purpose: the extra only adds the library's fake provider (`mpcdf_llm.testing`), which the plugin's own tests and the editor's API tests point `MPCDF_LLM_BASE_URL` at. It needs no extra packages.
 
