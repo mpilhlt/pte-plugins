@@ -31,6 +31,7 @@ Per preset, the supervisor (one per installation) applies these rules:
 | Run time | An endpoint stops when its run time at MPCDF ends |
 | Renewal | While an endpoint's "until" time is not reached, a replacement is started before the old one expires (`min_remaining`), and the models switch over without interruption |
 | Idle timeout | An endpoint nobody uses for the idle time is cancelled |
+| Build timeout | An endpoint that does not serve its model within this time after it starts running (download and load) is cancelled and the start fails. Empty: 30 min. Large models need more on their first start, when the weights are not yet cached at MPCDF (a 155 GiB model took about 45 min) |
 
 Using an endpoint counts as activity, so it stays alive while people use it.
 
