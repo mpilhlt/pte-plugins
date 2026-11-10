@@ -13,7 +13,7 @@ import time
 from typing import Any
 
 import httpx
-from mpcdf_llm.errors import MpcdfError
+from mpcdf_llm.errors import LoginRequired, MpcdfError
 from mpcdf_llm.manager import ProvisioningManager
 
 from fastapi_app.plugin_api import LLMModel, LLMProvider, LLMProviderError, LLMProviderRegistry
@@ -113,14 +113,18 @@ class MpcdfLLMProvider(LLMProvider):
             available = await self._credentials(refresh=attempt == 1)
             try:
                 response = await self._post(available, model_id, messages, temperature)
-            except httpx.TimeoutException as e:
-                raise LLMProviderError(f"{self.label} did not answer in time") from e
-            except httpx.TransportError as e:
+            except httpx.TimeoutException:
+                raise LLMProviderError(f"{self.label} did not answer in time") from None
+            except httpx.ConnectError:
+                # The request never left: safe to look again once. Other transport errors may
+                # have reached the endpoint, and a retry would double the GPU work.
                 if attempt == 0:
                     continue
-                raise LLMProviderError(f"Could not reach {self.label}") from e
+                raise LLMProviderError(f"Could not reach {self.label}") from None
+            except httpx.TransportError:
+                raise LLMProviderError(f"Could not reach {self.label}") from None
             except httpx.HTTPError as e:
-                raise LLMProviderError(f"Request to {self.label} failed: {type(e).__name__}") from e
+                raise LLMProviderError(f"Request to {self.label} failed: {type(e).__name__}") from None
             # Stale credentials (401) or an endpoint that just ended (503): look again once
             if response.status_code in (401, 503) and attempt == 0:
                 continue
@@ -131,7 +135,7 @@ class MpcdfLLMProvider(LLMProvider):
         try:
             result = response.json()
         except ValueError as e:
-            raise LLMProviderError(f"{self.label} returned an invalid response") from e
+            raise LLMProviderError(f"{self.label} returned an invalid response") from None
         # Activity keeps the endpoint from idling out
         try:
             await get_manager().touch(preset=self.preset)
@@ -145,10 +149,17 @@ class MpcdfLLMProvider(LLMProvider):
 
 async def sync_providers(manager: ProvisioningManager) -> None:
     """Register a provider per ready preset, unregister vanished ones; other plugins' providers stay."""
-    try:
-        available = await manager.available()
-    except MpcdfError:  # LoginRequired and the rest: nothing available
-        available = []
+    available: list = []
+    if (await manager.session_status()).state != "ok":
+        pass  # no valid session: nothing available, and no network request
+    else:
+        try:
+            available = await manager.available()
+        except LoginRequired:
+            pass
+        except MpcdfError as e:  # transient (timeouts, protocol): keep what is registered
+            logger.warning("Could not refresh the MPCDF providers: %s", type(e).__name__)
+            return
     registry = LLMProviderRegistry.get_instance()
     current: dict[str, MpcdfLLMProvider] = {}
     for item in available:

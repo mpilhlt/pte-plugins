@@ -54,6 +54,10 @@ class MpcdfLlmPlugin(Plugin):
     async def initialize(self, context: PluginContext) -> None:
         """Create the manager (it opens in the background) and start offering ready endpoints."""
         await start_manager()
+        if self._watch_task is not None:
+            self._watch_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await self._watch_task
         self._watch_task = asyncio.create_task(providers.watch())
 
     async def cleanup(self) -> None:

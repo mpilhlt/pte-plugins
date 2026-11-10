@@ -15,6 +15,7 @@ from unittest.mock import patch
 
 import httpx
 from mpcdf_llm import names
+from mpcdf_llm.errors import LoginRequired, ProtocolError
 from mpcdf_llm.manager import ProvisioningManager
 from mpcdf_llm.models import Framework
 from mpcdf_llm.presets import Preset
@@ -162,6 +163,44 @@ class TestSync(_Base):
         await providers.sync_providers(self.manager)
         self.assertEqual(self.registry.list_providers(), [])
 
+    async def test_sync_with_invalid_session_does_not_call_available(self):
+        await self.start_ready()
+        await providers.sync_providers(self.manager)
+        self.assertIn("mpcdf-llm-p", [p.id for p in self.registry.list_providers()])
+        calls = []
+
+        async def available():
+            calls.append(1)
+            return []
+
+        await self.manager.logout()
+        with patch.object(self.manager, "available", available):
+            await providers.sync_providers(self.manager)
+        self.assertEqual(calls, [])
+        self.assertEqual(self.registry.list_providers(), [])
+
+    async def test_sync_keeps_providers_on_transient_error(self):
+        await self.start_ready()
+        await providers.sync_providers(self.manager)
+
+        async def boom():
+            raise ProtocolError("timeout")
+
+        with patch.object(self.manager, "available", boom):
+            await providers.sync_providers(self.manager)
+        self.assertIn("mpcdf-llm-p", [p.id for p in self.registry.list_providers()])
+
+    async def test_sync_unregisters_on_login_required(self):
+        await self.start_ready()
+        await providers.sync_providers(self.manager)
+
+        async def boom():
+            raise LoginRequired("expired")
+
+        with patch.object(self.manager, "available", boom):
+            await providers.sync_providers(self.manager)
+        self.assertEqual(self.registry.list_providers(), [])
+
     async def test_watch_survives_without_login_and_without_manager(self):
         with patch.object(providers, "SYNC_INTERVAL_SECONDS", 0.01):
             task = asyncio.create_task(providers.watch())
@@ -251,7 +290,7 @@ class TestChat(_Base):
         self.assertEqual(len(seen), 2)
         self.assertEqual(str(ctx.exception), "MPCDF: p returned 503")
 
-    async def test_transport_error_retried_once(self):
+    async def test_connect_error_retried_once(self):
         await self.start_ready()
         await providers.sync_providers(self.manager)
         provider = self.registry.get_provider("mpcdf-llm-p")
@@ -260,12 +299,31 @@ class TestChat(_Base):
         def handler(request):
             seen.append(request)
             if len(seen) == 1:
-                raise httpx.RemoteProtocolError("boom http://fake.llmis/x")
+                raise httpx.ConnectError("boom http://fake.llmis/x")
             return httpx.Response(200, json={"choices": [{"message": {"content": "ok"}}]})
 
         with patch.object(providers, "new_http_client", lambda: httpx.AsyncClient(transport=httpx.MockTransport(handler))):
             self.assertEqual(await provider.chat_completion("m", "s", "u"), "ok")
         self.assertEqual(len(seen), 2)
+
+    async def test_other_transport_errors_not_retried(self):
+        await self.start_ready()
+        await providers.sync_providers(self.manager)
+        provider = self.registry.get_provider("mpcdf-llm-p")
+        for exc in (httpx.ReadError("boom http://fake.llmis/x"), httpx.RemoteProtocolError("boom http://fake.llmis/x")):
+            seen = []
+
+            def handler(request, exc=exc):
+                seen.append(request)
+                raise exc
+
+            with patch.object(providers, "new_http_client", lambda: httpx.AsyncClient(transport=httpx.MockTransport(handler))):
+                with self.assertRaises(LLMProviderError) as ctx:
+                    await provider.chat_completion("m", "s", "u")
+            self.assertEqual(len(seen), 1)
+            self.assertEqual(str(ctx.exception), "Could not reach MPCDF: p")
+            self.assertIsNone(ctx.exception.__cause__)
+            self.assertTrue(ctx.exception.__suppress_context__)
 
     async def test_raw_error_from_available_is_sanitized(self):
         provider = providers.MpcdfLLMProvider("p", "m")
@@ -293,6 +351,15 @@ class TestChat(_Base):
 
 
 class TestPluginLifecycle(_Base):
+    async def test_initialize_twice_cancels_previous_watch_task(self):
+        plugin = MpcdfLlmPlugin()
+        await plugin.initialize(None)
+        first = plugin._watch_task
+        await plugin.initialize(None)
+        self.assertTrue(first.cancelled())
+        self.assertIsNot(plugin._watch_task, first)
+        await plugin.cleanup()
+
     async def test_cleanup_unregisters_all(self):
         self.registry.register(OtherProvider())
         await self.start_ready()
