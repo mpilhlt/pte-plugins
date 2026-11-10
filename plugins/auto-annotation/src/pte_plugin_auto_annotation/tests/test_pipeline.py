@@ -161,7 +161,7 @@ class TestTimeBudget(unittest.TestCase):
         client, run = self._run(500)
         self.assertEqual(client.calls, 2)
         self.assertEqual(run.batches[0].retries, 1)
-        self.assertTrue(run.batches[1].error.startswith("TimeBudgetExceeded"))
+        self.assertTrue(str(run.batches[1].error).startswith("TimeBudgetExceeded"))
         self.assertEqual({o.status for o in run.outcomes}, {ProposalStatus.ERROR})
 
     def test_without_a_budget_all_retries_are_used(self):
@@ -177,6 +177,17 @@ class _TimingOutProvider:
 class TestTimeoutsAreTransient(unittest.TestCase):
     def test_read_timeout_message_is_transient(self):
         self.assertTrue(is_transient_message("Read timed out. (read timeout=180)"))
+
+    def test_provider_client_does_not_retry_a_rate_limit(self):
+        from fastapi_app.lib.llm.rate_limit import LLMRateLimitError
+
+        class LimitedProvider:
+            async def chat_completion(self, model_id, system_prompt, user_prompt, temperature=0.2):
+                raise LLMRateLimitError("Rate limit or quota reached for model 'm'")
+
+        with self.assertRaises(LLMRateLimitError) as raised:
+            asyncio.run(ProviderChatClient(LimitedProvider(), "m").complete("s", "u"))
+        self.assertNotIsInstance(raised.exception, TransientError)
 
     def test_provider_client_retries_a_read_timeout(self):
         with self.assertRaises(TransientError):

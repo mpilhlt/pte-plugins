@@ -29,7 +29,7 @@ from fastapi_app.lib.llm import LLMProviderError
 from fastapi_app.lib.repository.file_repository import FileRepository
 from fastapi_app.lib.secrets import secret_required_detail
 from fastapi_app.lib.storage.file_storage import FileStorage
-from fastapi_app.plugin_api import get_settings
+from fastapi_app.plugin_api import LLMRateLimitError, get_settings, rate_limit_http_error
 
 from .annotation import annotate_file, find_targets
 from .batching import BatchSpec
@@ -145,6 +145,10 @@ async def complete(
     try:
         started = time.monotonic()
         text = await provider.chat_completion(body.model_id, body.system_prompt, body.user_prompt, body.temperature)
+    except LLMRateLimitError as e:
+        # Before is_transient_message, whose pattern matches "rate limit" and would report a retryable 503
+        logger.warning(f"auto-annotation: provider '{body.provider_id}' is rate-limited: {e}")
+        raise rate_limit_http_error(e) from e
     except (LLMProviderError, requests.RequestException) as e:
         logger.warning(f"auto-annotation: provider '{body.provider_id}' failed: {e}")
         # 503 tells the client that retrying may help (overload, rate limit, timeout)

@@ -38,7 +38,8 @@ class ModelsBusyError(ApiError):
     """A model of the run is reported as busy, so the run was not started."""
 
 
-TRANSIENT_STATUSES = frozenset({429, 503})
+# A 429 is not among them: the editor waits out short rate limits itself, so a 429 means a long wait or an exhausted quota
+TRANSIENT_STATUSES = frozenset({503})
 
 
 def _check(response: requests.Response) -> dict[str, object]:

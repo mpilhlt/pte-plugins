@@ -5,6 +5,8 @@
 
 import asyncio
 import unittest
+
+import requests
 from typing import cast
 from types import SimpleNamespace
 from unittest import mock
@@ -209,6 +211,23 @@ class TestRoutes(unittest.TestCase):
         for message, status in (("503 This model is currently experiencing high demand", 503), ("400 invalid request", 502)):
             with self.subTest(message=message), mock.patch.object(self.provider, "chat_completion", side_effect=LLMProviderError(message)):
                 self.assertEqual(self.client.post("/api/plugins/auto-annotation/complete", json=request).status_code, status)
+
+    def test_complete_reports_a_rate_limit_as_429_with_retry_after(self):
+        from datetime import timedelta
+        from fastapi_app.lib.llm.rate_limit import LLMRateLimitError, utc_now
+        request = {"provider_id": "endpoint-local", "model_id": "qwen", "system_prompt": "S", "user_prompt": "U"}
+        error = LLMRateLimitError("Rate limit or quota reached for model 'qwen'", available_at=utc_now() + timedelta(seconds=300))
+        with mock.patch.object(self.provider, "chat_completion", side_effect=error):
+            response = self.client.post("/api/plugins/auto-annotation/complete", json=request)
+        self.assertEqual(response.status_code, 429)
+        self.assertGreaterEqual(int(response.headers["Retry-After"]), 298)
+        # The CLI does not retry it: until the given time, every request would fail at once
+        relayed = requests.Response()
+        relayed.status_code, relayed._content, relayed.url = 429, response.content, "http://test/complete"
+        relayed.request = requests.Request("POST", "http://test/complete").prepare()
+        with self.assertRaises(api_client.ApiError) as raised:
+            api_client._check_any(relayed)
+        self.assertNotIsInstance(raised.exception, api_client.TransientApiError)
 
     def test_complete_unknown_provider(self):
         response = self.client.post("/api/plugins/auto-annotation/complete", json={

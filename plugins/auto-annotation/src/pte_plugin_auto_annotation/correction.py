@@ -77,8 +77,14 @@ class ProviderChatClient:
     temperature: float = 0.0
 
     async def complete(self, system_prompt: str, user_prompt: str) -> str:
+        # Imported here: this client runs on the server only, and the module stays importable without the editor
+        from fastapi_app.plugin_api import LLMRateLimitError
+
         try:
             return await self.provider.chat_completion(self.model_id, system_prompt, user_prompt, self.temperature)
+        except LLMRateLimitError:
+            # Not transient: short waits were waited out already, and until the given time every request fails at once
+            raise
         except Exception as e:
             if is_transient_message(str(e)):
                 raise TransientError(str(e)) from e
