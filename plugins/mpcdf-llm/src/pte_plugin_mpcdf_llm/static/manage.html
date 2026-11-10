@@ -36,6 +36,9 @@
     #progress li.failed { color: #b71c1c; }
     progress { width: 200px; vertical-align: middle; }
     [hidden] { display: none !important; }
+    dialog { border: 1px solid #bbb; border-radius: 5px; padding: 16px 20px; max-width: 460px; }
+    dialog p { margin: 0 0 14px; }
+    dialog form { background: none; padding: 0; }
   </style>
 </head>
 <body>
@@ -74,7 +77,21 @@
     <thead><tr><th>Name</th><th>Model</th><th>Hardware</th><th></th></tr></thead>
     <tbody id="presets"><tr><td colspan="4" class="empty">Loading...</td></tr></tbody>
   </table>
-  <div class="buttons" style="margin-top:8px"><button type="button" class="secondary" id="new-preset">New preset</button></div>
+  <div class="buttons" style="margin-top:8px">
+    <button type="button" class="secondary" id="new-preset">New preset</button>
+    <button type="button" class="secondary" id="export-presets">Export</button>
+    <button type="button" class="secondary" id="import-presets">Import</button>
+    <input type="file" id="import-file" accept=".json,application/json" hidden>
+  </div>
+  <div id="presets-msg" class="msg"></div>
+  <dialog id="import-dialog">
+    <p id="import-question"></p>
+    <form method="dialog" class="buttons">
+      <button value="replace" class="danger" id="import-replace">Replace</button>
+      <button value="merge" class="primary" id="import-merge">Merge</button>
+      <button value="cancel" class="secondary">Cancel</button>
+    </form>
+  </dialog>
   <form id="preset-form" hidden style="margin-top:10px" autocomplete="off">
     <div class="row">
       <div class="field" data-field="name"><label for="f-name">Name</label><input type="text" id="f-name" pattern="[a-z0-9][a-z0-9._-]*" required><span class="err"></span></div>
@@ -122,7 +139,7 @@
   <script type="module">
     import {
       parseSseChunk, untilToIso, describeFrame, fieldErrors, parseDuration, toIsoDuration,
-      formatDuration, formatTimeLeft,
+      formatDuration, formatTimeLeft, exportPresets, parsePresetsImport, planImport,
     } from '/api/plugins/mpcdf-llm/static/manage-helpers.js';
 
     const BASE = '/api/plugins/mpcdf-llm/admin';
@@ -416,6 +433,88 @@
       } finally {
         btn.disabled = false;
       }
+    });
+
+    // Preset export and import
+    $('export-presets').addEventListener('click', () => {
+      if (!presets.length) { showMsg('presets-msg', 'There are no presets to export', 'error'); return; }
+      showMsg('presets-msg', '');
+      const blob = new Blob([exportPresets(presets)], { type: 'application/json' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `mpcdf-llm-presets-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.append(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+    });
+
+    /** Ask whether the import replaces or merges with the existing presets; resolves 'replace', 'merge' or 'cancel'. */
+    function askImportMode(count, existing) {
+      const dialog = $('import-dialog');
+      $('import-question').textContent =
+        `The file contains ${count} preset(s) and there are already ${existing} preset(s). ` +
+        'Replace the existing presets with the imported ones, or merge, which adds only the presets whose name does not exist yet?';
+      return new Promise((resolve) => {
+        dialog.addEventListener('close', () => resolve(dialog.returnValue || 'cancel'), { once: true });
+        dialog.returnValue = '';
+        dialog.showModal();
+      });
+    }
+
+    $('import-presets').addEventListener('click', () => { $('import-file').value = ''; $('import-file').click(); });
+    $('import-file').addEventListener('change', async () => {
+      const file = $('import-file').files[0];
+      if (!file) return;
+      showMsg('presets-msg', '');
+      let incoming;
+      try { incoming = parsePresetsImport(await file.text()); }
+      catch (e) { showMsg('presets-msg', e.message, 'error'); return; }
+      if (!incoming.length) { showMsg('presets-msg', 'The file contains no presets', 'error'); return; }
+      const mode = presets.length ? await askImportMode(incoming.length, presets.length) : 'merge';
+      if (mode === 'cancel') return;
+      const plan = planImport(presets, incoming, mode);
+      if (plan.put.length && !loggedIn) {
+        showMsg('presets-msg', 'Log in to MPCDF to import presets (they are checked against the options of the provider).', 'error');
+        return;
+      }
+      const buttons = [$('import-presets'), $('export-presets')];
+      buttons.forEach((b) => { b.disabled = true; });
+      const failed = [];
+      const notRemoved = [];
+      try {
+        for (const preset of plan.put) {
+          const res = await api(`/presets/${encodeURIComponent(preset.name)}`, 'PUT', preset);
+          if (res.ok) continue;
+          const errors = res.status === 422 ? fieldErrors(res.body) : {};
+          const detail = Object.keys(errors).length
+            ? Object.entries(errors).map(([k, v]) => `${k}: ${v}`).join(', ')
+            : errorText(res);
+          failed.push(`${preset.name}: ${detail}`);
+        }
+        // a replace with failed presets keeps the existing ones, so nothing is lost
+        if (!failed.length) {
+          for (const name of plan.remove) {
+            const res = await api(`/presets/${encodeURIComponent(name)}`, 'DELETE');
+            if (!res.ok) notRemoved.push(`${name}: ${errorText(res)}`);
+          }
+        }
+      } finally {
+        buttons.forEach((b) => { b.disabled = false; });
+        await loadPresets();
+      }
+      const parts = [`Imported ${plan.put.length - failed.length} preset(s)`];
+      if (plan.skipped.length) parts.push(`skipped ${plan.skipped.length} existing: ${plan.skipped.join(', ')}`);
+      if (plan.remove.length && !failed.length) parts.push(`removed ${plan.remove.length - notRemoved.length}`);
+      let text = parts.join('; ') + '.';
+      if (failed.length) {
+        text += `\nNot imported:\n${failed.join('\n')}`;
+        if (plan.remove.length) text += '\nNo presets were removed.';
+      }
+      if (notRemoved.length) text += `\nNot removed:\n${notRemoved.join('\n')}`;
+      const ok = !failed.length && !notRemoved.length;
+      showMsg('presets-msg', text, ok ? 'ok' : 'error');
+      if (ok) notify(`Imported ${plan.put.length} preset(s)`, 'success', 'check-circle');
     });
 
     // 4. Start

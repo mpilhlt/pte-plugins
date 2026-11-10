@@ -9,9 +9,20 @@ The plugin is a thin wrapper around the [mpcdf-llm](https://gitlab.mpcdf.mpg.de/
 Administrators open the management page from the plugin menu (Inference > MPCDF LLM endpoints). The dialog has these parts:
 
 - **Session.** Log in with the MPCDF user name, password and one-time code. The session is stored on the server, so every worker uses it, and it is renewed as long as the login stays valid. When it is lost, the dialog asks for a login again.
-- **Presets.** A preset describes one endpoint: framework (vLLM or Ollama), model, machine, GPU type and count, run time, queue time, extra arguments, environment, and the supervisor rules below. Presets are created and edited in the dialog.
+- **Presets.** A preset describes one endpoint: framework (vLLM or Ollama), model, machine, GPU type and count, run time, queue time, extra arguments, environment, and the supervisor rules below. Presets are created and edited in the dialog. **Export** downloads all presets as a JSON file and **Import** reads such a file (see below).
 - **Start.** Choose a preset and start it, optionally with a "keep alive until" time of day. The dialog shows the progress (queued, building, pulling the model, ready). Closing the dialog does not stop the start.
 - **Endpoints.** Lists the endpoints with their preset, status, remaining time and "until"; they can be cancelled here.
+
+### Exporting and importing presets
+
+Export writes `mpcdf-llm-presets-<date>.json` with all presets (`{"format": "mpcdf-llm-presets", "version": 1, "presets": [...]}`). Import also accepts a bare JSON array of presets. A file with a preset without a name, or with the same name twice, is rejected.
+
+When presets already exist, the import asks how to combine them. Presets are identified by name:
+
+- **Merge** adds only the presets whose name does not exist yet. Existing presets stay unchanged, and the imported presets of the same name are skipped.
+- **Replace** saves all imported presets, overwriting those of the same name, and then deletes the existing presets that are not in the file. If an imported preset is rejected, nothing is deleted.
+
+Importing needs an MPCDF login, because saving a preset checks it against the options of the service (machines, GPU types and so on). The dialog lists the presets it could not import with the reason.
 
 Per preset, the supervisor (one per installation) applies these rules:
 

@@ -131,3 +131,80 @@ export function formatTimeLeft(expiresAt, now = new Date()) {
   const mm = minutes % 60;
   return h ? `${h} h ${String(mm).padStart(2, '0')} min` : `${mm} min`;
 }
+
+/** `format` value of a preset export file. */
+export const PRESETS_EXPORT_FORMAT = 'mpcdf-llm-presets';
+
+/**
+ * @typedef {object} PresetLike
+ * @property {string} name
+ */
+
+/**
+ * @typedef {object} ImportPlan
+ * @property {PresetLike[]} put - Presets to save
+ * @property {string[]} remove - Names of existing presets to delete (only when replacing)
+ * @property {string[]} skipped - Imported names left out because a preset of that name exists (only when merging)
+ */
+
+/**
+ * The export file content for the given presets.
+ * @param {PresetLike[]} presets
+ * @param {Date} [now]
+ * @returns {string} JSON text
+ */
+export function exportPresets(presets, now = new Date()) {
+  return JSON.stringify(
+    { format: PRESETS_EXPORT_FORMAT, version: 1, exported_at: now.toISOString(), presets },
+    null,
+    2,
+  ) + '\n';
+}
+
+/**
+ * Parse an export file. Accepts the export format or a bare array of presets.
+ * @param {string} text
+ * @returns {PresetLike[]}
+ * @throws {Error} When the file is not a preset list, a preset has no name, or a name occurs twice
+ */
+export function parsePresetsImport(text) {
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    throw new Error('The file is not valid JSON');
+  }
+  const list = Array.isArray(data) ? data : data && data.format === PRESETS_EXPORT_FORMAT ? data.presets : null;
+  if (!Array.isArray(list)) throw new Error('The file is not an MPCDF LLM preset export');
+  const seen = new Set();
+  list.forEach((p, i) => {
+    if (!p || typeof p !== 'object' || Array.isArray(p) || typeof p.name !== 'string' || !p.name.trim()) {
+      throw new Error(`Preset ${i + 1} has no name`);
+    }
+    if (seen.has(p.name)) throw new Error(`The preset name "${p.name}" occurs more than once`);
+    seen.add(p.name);
+  });
+  return list;
+}
+
+/**
+ * What an import does. "replace" saves all imported presets and deletes the existing ones that are
+ * not in the file; "merge" saves only the imported presets whose name does not exist yet.
+ * @param {PresetLike[]} existing
+ * @param {PresetLike[]} incoming
+ * @param {'replace'|'merge'} mode
+ * @returns {ImportPlan}
+ */
+export function planImport(existing, incoming, mode) {
+  const existingNames = new Set(existing.map((p) => p.name));
+  if (mode === 'replace') {
+    const incomingNames = new Set(incoming.map((p) => p.name));
+    return { put: incoming, remove: [...existingNames].filter((n) => !incomingNames.has(n)), skipped: [] };
+  }
+  if (mode !== 'merge') throw new Error(`Unknown import mode: ${mode}`);
+  return {
+    put: incoming.filter((p) => !existingNames.has(p.name)),
+    remove: [],
+    skipped: incoming.filter((p) => existingNames.has(p.name)).map((p) => p.name),
+  };
+}
