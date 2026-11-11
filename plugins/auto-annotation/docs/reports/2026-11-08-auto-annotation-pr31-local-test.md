@@ -1,6 +1,6 @@
 # Is the three-model auto-annotation pipeline worth the effort?
 
-Date: 2026-11-08, updated 2026-11-09 and 2026-11-10. Documents `10.5771__2699-1284-2024-3-149` and `10.12775__clr.2013.008`, variant `grobid.training.references`, on a local instance of the editor.
+Date: 2026-11-08, updated 2026-11-09 to 2026-11-11. Documents `10.5771__2699-1284-2024-3-149` and `10.12775__clr.2013.008`, variant `grobid.training.references`, on a local instance of the editor.
 
 ## Result
 
@@ -189,7 +189,7 @@ All runs started only while Kisski reported `glm-5.3` as free, and it failed all
 
 ## Models tested and rejected
 
-Models that need not be tested again for this task unless the model, the prompt or the rules change. The MPCDF runs used dedicated vLLM endpoints of the [MPCDF LLM plugin](../../../mpcdf-llm/README.md) (one MI300A per model on Viper), so their results are free of the timeouts and connection errors of a shared service. They were probed on clr (`ba7zek`, input `qbb9sh`), first 16 aligned units, `units:8`, one run:
+Models that need not be tested again for this task unless the model, the prompt or the rules change. The MPCDF runs used dedicated vLLM endpoints of the [MPCDF LLM plugin](../../../mpcdf-llm/README.md) (one or two MI300A per model on Viper), so their results are free of the timeouts and connection errors of a shared service. They were probed on clr (`ba7zek`, input `qbb9sh`), first 16 aligned units, `units:8`, one run:
 
 ```bash
 UV_NO_SYNC=1 uv run python -m pte_plugin_auto_annotation.probe \
@@ -204,6 +204,7 @@ UV_NO_SYNC=1 uv run python -m pte_plugin_auto_annotation.probe \
 | `gemma-4-31b-it` | Kisski, full documents | 71.3–73.0 | 11–20 | Below 75 F1, and too many failed units for a second opinion |
 | `google/gemma-4-31B-it` (BF16) | MPCDF, 16 units | 73.8 | 18.8 | Same score and failure rate as on Kisski. All 3 failed units changed the text, so the failures are the model's own, not the service's |
 | `openai/gpt-oss-120b` | MPCDF, 16 units | 31.7 | 25.0 | Edit recall 22.0: it leaves most needed changes undone; 4 units changed the text |
+| `Qwen/Qwen3.5-122B-A10B-FP8`, reasoning off | MPCDF, 16 units | 58.4 | 25.0 | Weak, and slow: 385 s for the two batches of 8, against 113 s for Gemma 4 31B. All 4 failed units changed the text |
 | `qwen3.6-35b-a3b` | Kisski, full documents | 58.7–63.1 | 11 | Weak, and 60–115% of DeepSeek's request time |
 | `gemini-3.5-flash-lite` | Gemini, full documents | 57.1–70.0 | – | Weak as a corrector; the arbiter rarely chose it |
 | `glm-5.3` as arbiter | Kisski | – | – | Failed 8 of 64 and 48 of 86 units with timeouts and connection errors (see above); usable only with the fallback to a corrector |
@@ -211,7 +212,7 @@ UV_NO_SYNC=1 uv run python -m pte_plugin_auto_annotation.probe \
 Not tested:
 
 - `google/gemma-4-26B-A4B-it`: the mixture-of-experts sibling of Gemma 4 31B (about 4B active parameters), expected to be weaker than the 31B model and not faster in a way that matters.
-- `deepseek-ai/DeepSeek-V4-Flash-0731` on MPCDF (two MI300A): not running yet. vLLM 0.30 accepts its FP4 experts, but the first start was cancelled by the then fixed build timeout of 30 min, 25% into loading (23 min download of 155 GiB, about 19 min load). The second start, with the weights cached, ended on MPCDF's side after 23 min, about when loading should have finished. The cause is in the log of job 12962533, which has not been read yet. Presets now have their own build timeout.
+- `deepseek-ai/DeepSeek-V4-Flash-0731` on MPCDF (two MI300A): not running yet. vLLM 0.30 accepts its FP4 experts, but the first start was cancelled by the then fixed build timeout of 30 min, 25% into loading (23 min download of 155 GiB, about 19 min load). The second start, with the weights cached, ended on MPCDF's side after 23 min, about when loading should have finished. The job log (12962533) shows why: vLLM's sparse attention for this model on ROCm needs AITER or a gfx950/gfx11 GPU, and the MI300A is gfx942. Not pursued, since DeepSeek is available on Kisski.
 - `glm-5.3` and `deepseek-v4.1-flash-1017` on MPCDF: their weights (about 750 GB and 510 GB) do not fit into two MI300A (2 × 128 GB). They stay on Kisski only.
 
 ## Recommendation
