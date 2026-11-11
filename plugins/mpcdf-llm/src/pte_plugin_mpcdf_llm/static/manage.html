@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>MPCDF LLM</title>
+  <title>My MPCDF endpoints</title>
   <style>
     body { font-family: Arial, sans-serif; padding: 16px 20px; margin: 0; color: #333; font-size: 14px; }
     h2 { margin: 0 0 12px; border-bottom: 2px solid #2196F3; padding-bottom: 8px; font-size: 1.2em; }
@@ -42,10 +42,11 @@
   </style>
 </head>
 <body>
-  <h2>MPCDF LLM</h2>
-  <p class="hint">Manages the GPU endpoints on the MPCDF LLM service. Users reach ready endpoints through the model picker; nobody sees MPCDF credentials or API keys.</p>
+  <h2>My MPCDF endpoints</h2>
+  <p class="hint">Starts GPU endpoints on the MPCDF LLM service with your own MPCDF account. Your ready endpoints appear in your model picker; other users neither see nor use them.</p>
 
   <h3>1. MPCDF session</h3>
+  <p class="hint">Log in with your own MPCDF account. The server keeps your session encrypted, so it can renew your endpoints while you are away, until you log out. "Remove all keys" in the API Keys dialog logs you out as well.</p>
   <div class="box">
     <div id="session-ok" hidden>
       <span id="session-text"></span>
@@ -65,14 +66,29 @@
     <div id="session-msg" class="msg"></div>
   </div>
 
-  <h3>2. Endpoints</h3>
+  <h3>2. Start</h3>
+  <div class="box">
+    <div class="row">
+      <div class="field"><label for="start-preset">Preset</label><select id="start-preset"></select></div>
+      <div class="field narrow"><label for="start-until">Keep alive until (optional)</label><input type="time" id="start-until"></div>
+    </div>
+    <p class="hint" id="hf-hint" hidden>You have not stored a Hugging Face read token. Presets of gated models need one: add it as "Hugging Face read token" in the API Keys dialog (user menu &gt; API Keys).</p>
+    <div class="buttons"><button type="button" class="primary" id="start-btn">Start</button></div>
+    <ul id="progress"></ul>
+    <progress id="pull" max="100" value="0" hidden></progress>
+    <div id="start-msg" class="msg"></div>
+  </div>
+
+  <h3>3. My endpoints</h3>
   <table>
     <thead><tr><th>Preset</th><th>Model</th><th>Status</th><th>Time left</th><th>Until</th><th></th></tr></thead>
     <tbody id="endpoints"><tr><td colspan="6" class="empty">Loading...</td></tr></tbody>
   </table>
   <div id="endpoints-msg" class="msg"></div>
 
-  <h3>3. Presets</h3>
+  <section id="admin-presets" hidden>
+  <h3>4. Presets</h3>
+  <p class="hint">Presets are shared by all users; only administrators change them. Saving a preset in the form checks it against the service's options and needs your own MPCDF login.</p>
   <table>
     <thead><tr><th>Name</th><th>Model</th><th>Hardware</th><th></th></tr></thead>
     <tbody id="presets"><tr><td colspan="4" class="empty">Loading...</td></tr></tbody>
@@ -124,18 +140,17 @@
     </div>
     <div id="preset-msg" class="msg"></div>
   </form>
+  </section>
 
-  <h3>4. Start</h3>
-  <div class="box">
-    <div class="row">
-      <div class="field"><label for="start-preset">Preset</label><select id="start-preset"></select></div>
-      <div class="field narrow"><label for="start-until">Keep alive until (optional)</label><input type="time" id="start-until"></div>
-    </div>
-    <div class="buttons"><button type="button" class="primary" id="start-btn">Start</button></div>
-    <ul id="progress"></ul>
-    <progress id="pull" max="100" value="0" hidden></progress>
-    <div id="start-msg" class="msg"></div>
-  </div>
+  <section id="admin-overview" hidden>
+  <h3>5. All users' endpoints</h3>
+  <p class="hint">Read from the users' state files, without using their sessions. Administrators cannot cancel other users' endpoints; removing a user's stored session stops the server from acting for that user, and the endpoints then expire or idle out at MPCDF.</p>
+  <table>
+    <thead><tr><th>User</th><th>Session</th><th>Preset</th><th>Status</th><th>Until</th><th>Last activity</th><th></th></tr></thead>
+    <tbody id="overview"><tr><td colspan="7" class="empty">Loading...</td></tr></tbody>
+  </table>
+  <div id="overview-msg" class="msg"></div>
+  </section>
 
   <script type="module">
     import {
@@ -144,7 +159,7 @@
     } from '/api/plugins/mpcdf-llm/static/manage-helpers.js';
 
     const PLUGIN_BASE = '/api/plugins/mpcdf-llm';
-    const BASE = `${PLUGIN_BASE}/admin`;
+    const BASE = `${PLUGIN_BASE}/my`;
     const sessionId = new URLSearchParams(window.location.search).get('session_id') || '';
     const $ = (id) => document.getElementById(id);
 
@@ -153,6 +168,7 @@
     let editing = null; // preset being edited (keeps fields the form does not show, e.g. lead_time)
     let creating = false; // the form makes a new preset (new or duplicate), so its name must be free
     let loggedIn = false;
+    let isAdmin = false;
 
     /** Notify through the editor, if the sandbox is there. */
     function notify(message, kind = 'info', icon = 'info-circle') {
@@ -544,7 +560,7 @@
 
     $('start-btn').addEventListener('click', async () => {
       const name = $('start-preset').value;
-      if (!name) { showMsg('start-msg', 'Create a preset first', 'error'); return; }
+      if (!name) { showMsg('start-msg', isAdmin ? 'Create a preset first' : 'There are no presets yet; ask an administrator to add one', 'error'); return; }
       let until;
       try { until = untilToIso($('start-until').value); }
       catch (e) { showMsg('start-msg', e.message, 'error'); return; }
@@ -599,19 +615,69 @@
       }
     });
 
+    // 5. All users' endpoints (admin)
+    async function loadOverview() {
+      if (!isAdmin) return;
+      const res = await api('/overview', 'GET', null, PLUGIN_BASE);
+      if (!res.ok) { fillRows($('overview'), [], 7, errorText(res)); return; }
+      showMsg('overview-msg', '');
+      const rows = [];
+      for (const user of res.body) {
+        const entries = user.endpoints.length ? user.endpoints : [null];
+        entries.forEach((ep, i) => {
+          const tr = el('tr');
+          tr.append(
+            el('td', i === 0 ? user.username : ''),
+            el('td', i === 0 ? (user.has_session ? 'stored' : 'none') : ''),
+            el('td', ep ? ep.preset : '-'),
+            el('td', ep ? (ep.ready ? 'ready' : 'starting') : '-'),
+            el('td', ep?.until ? new Date(ep.until).toLocaleString() : '-'),
+            el('td', ep ? new Date(ep.last_activity).toLocaleString() : '-'),
+          );
+          const td = el('td', null, { class: 'actions' });
+          if (i === 0 && user.has_session) {
+            const remove = el('button', 'Remove session', { type: 'button', class: 'danger' });
+            remove.addEventListener('click', async () => {
+              if (!confirm(`Remove the stored MPCDF session of ${user.username}? The server then no longer renews or uses their endpoints.`)) return;
+              remove.disabled = true;
+              const r = await api(`/users/${encodeURIComponent(user.username)}/session`, 'DELETE', null, PLUGIN_BASE);
+              if (!r.ok) showMsg('overview-msg', errorText(r), 'error');
+              else notify(`Removed the MPCDF session of ${user.username}`, 'success', 'check-circle');
+              await refreshAll();
+            });
+            td.append(remove);
+          }
+          tr.append(td);
+          rows.push(tr);
+        });
+      }
+      fillRows($('overview'), rows, 7, 'Nobody has used MPCDF yet.');
+    }
+
+    async function loadContext() {
+      const res = await api('/context', 'GET', null, PLUGIN_BASE);
+      if (!res.ok) return;
+      isAdmin = res.body.is_admin;
+      $('admin-presets').hidden = !isAdmin;
+      $('admin-overview').hidden = !isAdmin;
+      $('hf-hint').hidden = res.body.hf_token_stored;
+    }
+
     // Refresh
     async function refreshAll() {
+      await loadContext();
       await loadSession();
       options = null;
       await loadPresets();
       await loadEndpoints();
+      await loadOverview();
     }
 
     let polling = false;
     setInterval(async () => {
       if (polling || document.visibilityState !== 'visible') return;
       polling = true;
-      try { await Promise.all([loadSession().catch(() => {}), loadEndpoints().catch(() => {})]); } finally { polling = false; }
+      try { await Promise.all([loadSession().catch(() => {}), loadEndpoints().catch(() => {}), loadOverview().catch(() => {})]); } finally { polling = false; }
     }, 10000);
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') loadEndpoints().catch(() => {});

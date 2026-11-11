@@ -1,5 +1,5 @@
 /**
- * MPCDF LLM plugin API tests: access control and the session state.
+ * MPCDF LLM plugin API tests: access control, per-user routes and the session state.
  * No test calls a route that reaches MPCDF.
  *
  * @testCovers plugins/mpcdf-llm/src/pte_plugin_mpcdf_llm/routes.py
@@ -33,21 +33,42 @@ describe('MPCDF LLM plugin API', () => {
     await logout(user);
   });
 
-  test('non-admins get 403 on presets and the management page', async () => {
-    assert.strictEqual((await authenticatedRequest(user, `${BASE}/admin/presets`, 'GET')).status, 403);
-    assert.strictEqual((await authenticatedRequest(user, `${BASE}/manage`, 'GET')).status, 403);
+  test('every user opens the management page and reads the presets', async () => {
+    for (const session of [admin, user]) {
+      const page = await authenticatedRequest(session, `${BASE}/manage`, 'GET');
+      assert.strictEqual(page.status, 200);
+      assert.match(await page.text(), /My MPCDF endpoints/);
+      const presets = await authenticatedRequest(session, `${BASE}/my/presets`, 'GET');
+      assert.strictEqual(presets.status, 200);
+    }
   });
 
-  test('non-admins get 403 on the managed endpoints', async () => {
-    assert.strictEqual((await authenticatedRequest(user, `${BASE}/managed`, 'GET')).status, 403);
+  test('every user gets their own managed endpoints and context', async () => {
+    assert.deepStrictEqual(await authenticatedApiCall(user, `${BASE}/managed`, 'GET'), []);
+    const context = await authenticatedApiCall(user, `${BASE}/context`, 'GET');
+    assert.strictEqual(context.is_admin, false);
+    assert.strictEqual(typeof context.hf_token_stored, 'boolean');
+    assert.strictEqual((await authenticatedApiCall(admin, `${BASE}/context`, 'GET')).is_admin, true);
   });
 
-  test('admins can read presets and open the management page', async () => {
-    const presets = await authenticatedRequest(admin, `${BASE}/admin/presets`, 'GET');
-    assert.strictEqual(presets.status, 200);
-    const page = await authenticatedRequest(admin, `${BASE}/manage`, 'GET');
-    assert.strictEqual(page.status, 200);
-    assert.match(await page.text(), /MPCDF LLM/);
+  test('non-admins cannot change the preset catalog', async () => {
+    const preset = { name: 'api-test-user', framework: 'vLLM', model: 'openai/gpt-oss-120b', machine: 'Viper', gpu_type: 'mi300a', gpus: 1 };
+    assert.strictEqual((await authenticatedRequest(user, `${BASE}/my/presets/api-test-user`, 'PUT', preset)).status, 403);
+    assert.strictEqual((await authenticatedRequest(user, `${BASE}/my/presets/api-test-user`, 'DELETE')).status, 403);
+  });
+
+  test('the overview of all users and session removal are admin only', async () => {
+    assert.strictEqual((await authenticatedRequest(user, `${BASE}/overview`, 'GET')).status, 403);
+    assert.strictEqual((await authenticatedRequest(user, `${BASE}/users/someone/session`, 'DELETE')).status, 403);
+    const overview = await authenticatedRequest(admin, `${BASE}/overview`, 'GET');
+    assert.strictEqual(overview.status, 200);
+    assert.ok(Array.isArray(await overview.json()));
+  });
+
+  test('the Hugging Face read token is an API key users can store', async () => {
+    const services = await authenticatedApiCall(user, '/api/v1/secrets', 'GET');
+    assert.ok(services.some((s) => s.id === 'hf-read-token'));
+    assert.ok(!services.some((s) => s.id === 'mpcdf-llm-session'));
   });
 
   test('admins can import presets without an MPCDF session', async () => {
@@ -55,9 +76,9 @@ describe('MPCDF LLM plugin API', () => {
     const result = await authenticatedApiCall(admin, `${BASE}/presets/import`, 'POST', [preset, { model: 'no name' }]);
     assert.deepStrictEqual(result.saved, ['api-test-import']);
     assert.deepStrictEqual(Object.keys(result.errors), ['#2']);
-    const listed = await authenticatedApiCall(admin, `${BASE}/admin/presets`, 'GET');
+    const listed = await authenticatedApiCall(admin, `${BASE}/my/presets`, 'GET');
     assert.ok(listed.some((p) => p.name === 'api-test-import'));
-    const deleted = await authenticatedRequest(admin, `${BASE}/admin/presets/api-test-import`, 'DELETE');
+    const deleted = await authenticatedRequest(admin, `${BASE}/my/presets/api-test-import`, 'DELETE');
     assert.strictEqual(deleted.status, 204);
   });
 
@@ -66,13 +87,17 @@ describe('MPCDF LLM plugin API', () => {
     assert.strictEqual(response.status, 403);
   });
 
-  test('the session starts out as login_required', async () => {
-    const session = await authenticatedApiCall(admin, `${BASE}/admin/session`, 'GET');
-    assert.strictEqual(session.state, 'login_required');
+  test('every user starts without an MPCDF session', async () => {
+    for (const session of [admin, user]) {
+      const state = await authenticatedApiCall(session, `${BASE}/my/session`, 'GET');
+      assert.strictEqual(state.state, 'login_required');
+    }
   });
 
   test('the library read router (API keys) is not mounted', async () => {
-    const response = await authenticatedRequest(admin, `${BASE}/endpoints`, 'GET');
-    assert.strictEqual(response.status, 404);
+    for (const path of ['/endpoints', '/my/available', '/llm/available']) {
+      const response = await authenticatedRequest(admin, `${BASE}${path}`, 'GET');
+      assert.strictEqual(response.status, 404, path);
+    }
   });
 });

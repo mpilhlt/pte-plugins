@@ -22,7 +22,7 @@ Plugins for the [PDF-TEI-Editor](https://github.com/mpilhlt/pdf-tei-editor). Eac
 | [llamore](plugins/llamore-extractor) | `pte-plugin-llamore-extractor` | 1.0.0 | Extract references using LLamore with the configured LLM model |
 | [local-sync](plugins/local-sync) | `pte-plugin-local-sync` | 1.0.0 | Synchronize collection documents with local filesystem |
 | [metadata-extraction](plugins/metadata-extraction) | `pte-plugin-metadata-extraction` | 1.1.0 | Extract bibliographic metadata from PDFs, enrich TEI headers and backfill missing metadata in collections |
-| [mpcdf-llm](plugins/mpcdf-llm) | `pte-plugin-mpcdf-llm` | 1.0.0 | Starts and manages MPCDF-hosted LLM endpoints and offers them as free models |
+| [mpcdf-llm](plugins/mpcdf-llm) | `pte-plugin-mpcdf-llm` | 1.0.0 | Lets every user start MPCDF-hosted LLM endpoints with their own MPCDF account and offers them as models |
 | [revision-feed](plugins/revision-feed) | `pte-plugin-revision-feed` | 1.0.0 | Per-project Atom feeds of document revisions |
 | [rng-converter](plugins/rng-converter) | `pte-plugin-rng-converter` | 1.0.0 | Generate RelaxNG schema from TEI document structure |
 | [update-metadata](plugins/update-metadata) | `pte-plugin-update-metadata` | 1.0.0 | Update TEI documents with complete bibliographic metadata from DOI lookup |

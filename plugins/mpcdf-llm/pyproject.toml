@@ -1,12 +1,12 @@
 [project]
 name = "pte-plugin-mpcdf-llm"
 dynamic = ["version"]
-description = "Starts and manages MPCDF-hosted LLM endpoints and offers them as free models"
+description = "Lets every user start MPCDF-hosted LLM endpoints with their own MPCDF account and offers them as models"
 readme = "README.md"
 requires-python = ">=3.13"
 license = "CC0-1.0"
 dependencies = [
-    "mpcdf-llm[fastapi,testing] @ git+https://gitlab.mpcdf.mpg.de/cboul/llm-mpcdf.git@bdcb9f576ababb69bdcad98b7442ae6671187178",
+    "mpcdf-llm[fastapi,testing] @ git+https://gitlab.mpcdf.mpg.de/cboul/llm-mpcdf.git@1ffc5c4c3226ad3efdd541e07b1104e24511d8fb",
 ]
 
 [project.urls]

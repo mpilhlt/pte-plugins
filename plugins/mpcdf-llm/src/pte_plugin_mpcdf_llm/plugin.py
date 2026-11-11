@@ -1,9 +1,9 @@
 """
 MPCDF LLM plugin.
 
-Lets administrators start MPCDF-hosted LLM endpoints. ``initialize()`` creates the
-per-worker ProvisioningManager (see manager.py); ``cleanup()`` closes it without
-cancelling any endpoint.
+Lets every user start MPCDF-hosted LLM endpoints with their own MPCDF account.
+``initialize()`` starts serving the users' ProvisioningManagers in this worker (see
+manager.py); ``cleanup()`` closes them without cancelling any endpoint.
 """
 
 import asyncio
@@ -11,10 +11,11 @@ import logging
 from contextlib import suppress
 from typing import Any, Callable
 
+from fastapi_app.lib.secrets import register_secret_service, unregister_secret_service
 from fastapi_app.plugin_api import Plugin, PluginContext
 
-from . import providers
-from .manager import PLUGIN_ID, start_manager, stop_manager
+from . import manager, providers
+from .manager import HF_TOKEN_SECRET, PLUGIN_ID
 
 
 class MpcdfLlmPlugin(Plugin):
@@ -30,15 +31,15 @@ class MpcdfLlmPlugin(Plugin):
         return {
             "id": PLUGIN_ID,
             "name": "MPCDF LLM",
-            "description": "Starts MPCDF-hosted LLM endpoints and offers them as free models",
+            "description": "Starts MPCDF-hosted LLM endpoints with the user's own MPCDF account and offers them as models",
             "category": "inference",
             "version": "1.0.0",
-            "required_roles": ["admin"],
+            "required_roles": [],
             "endpoints": [
                 {
                     "name": "manage",
-                    "label": "MPCDF LLM endpoints",
-                    "description": "Log in to MPCDF and start or stop LLM endpoints",
+                    "label": "My MPCDF endpoints",
+                    "description": "Log in to MPCDF with your own account and start or stop LLM endpoints",
                     "state_params": [],
                 }
             ],
@@ -53,12 +54,18 @@ class MpcdfLlmPlugin(Plugin):
         return {"outputUrl": f"/api/plugins/{PLUGIN_ID}/manage"}
 
     async def initialize(self, context: PluginContext) -> None:
-        """Create the manager (it opens in the background) and start offering ready endpoints."""
+        """Serve the users' managers (they open in the background) and offer their ready endpoints."""
         # The library reads its state file under a file lock every few seconds, and its
         # protocol module logs every websocket message; both flood a debug-level log.
         logging.getLogger("filelock").setLevel(logging.WARNING)
         logging.getLogger("mpcdf_llm.protocol").setLevel(logging.INFO)
-        await start_manager()
+        register_secret_service(
+            HF_TOKEN_SECRET,
+            "Hugging Face read token",
+            description="Read access token of your Hugging Face account. Needed to start MPCDF endpoints that serve gated models.",
+            help_url="https://huggingface.co/settings/tokens",
+        )
+        await manager.start()
         if self._watch_task is not None:
             self._watch_task.cancel()
             with suppress(asyncio.CancelledError):
@@ -66,11 +73,12 @@ class MpcdfLlmPlugin(Plugin):
         self._watch_task = asyncio.create_task(providers.watch())
 
     async def cleanup(self) -> None:
-        """Stop offering endpoints, close the manager. Endpoints keep running."""
+        """Stop offering endpoints, close the managers. Endpoints keep running."""
         if self._watch_task is not None:
             self._watch_task.cancel()
             with suppress(asyncio.CancelledError):
                 await self._watch_task
             self._watch_task = None
         providers.unregister_all()
-        await stop_manager()
+        await manager.stop()
+        unregister_secret_service(HF_TOKEN_SECRET)

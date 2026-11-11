@@ -1,41 +1,90 @@
 """
 Routes of the MPCDF LLM plugin.
 
-- GET /api/plugins/mpcdf-llm/manage   management page (admin only)
-- GET /api/plugins/mpcdf-llm/managed  preset and until of managed endpoints (admin only)
-- POST /api/plugins/mpcdf-llm/presets/import  save imported presets without an MPCDF session (admin only)
-- /api/plugins/mpcdf-llm/admin/...    the library's admin router (admin only)
+Every route that uses an MPCDF session acts on the requesting user's own manager; nobody can
+use another user's session.
+
+- GET /api/plugins/mpcdf-llm/manage    management page (authenticated)
+- GET /api/plugins/mpcdf-llm/context   the page's user context (authenticated)
+- GET /api/plugins/mpcdf-llm/managed   preset and until of the user's managed endpoints (authenticated)
+- /api/plugins/mpcdf-llm/my/...        the library's admin router on the user's manager (authenticated;
+                                       changing the preset catalog is admin only)
+- POST /api/plugins/mpcdf-llm/presets/import  save imported presets into the catalog (admin only)
+- GET /api/plugins/mpcdf-llm/overview  all users' endpoints from their state files (admin only)
+- DELETE /api/plugins/mpcdf-llm/users/{username}/session  remove a user's stored session (admin only)
 
 The library's read router is deliberately not mounted: it returns API keys.
 """
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
-from fastapi.responses import HTMLResponse
+from typing import Any
+
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
+from fastapi.responses import HTMLResponse, Response
+from mpcdf_llm.manager import ProvisioningManager
 from mpcdf_llm.presets import Preset
+from mpcdf_llm.storage import FileStateStore
 from mpcdf_llm.web import admin_router
 from pydantic import BaseModel, ValidationError
 
 from fastapi_app.lib.core.dependencies import get_auth_manager
 from fastapi_app.lib.permissions.acl_utils import user_is_admin
 from fastapi_app.lib.plugins.plugin_tools import load_plugin_html
-from fastapi_app.plugin_api import get_session_manager, get_settings, require_admin_user
+from fastapi_app.lib.secrets import get_secret_store
+from fastapi_app.plugin_api import get_session_manager, get_settings, require_admin_user, require_authenticated_user
 
-from .manager import PLUGIN_ID, get_manager
+from . import manager as manager_module
+from .manager import PLUGIN_ID, SESSION_SECRET, get_user_manager
 
-router = APIRouter(prefix=f"/api/plugins/{PLUGIN_ID}", tags=[PLUGIN_ID])
+BASE = f"/api/plugins/{PLUGIN_ID}"
 
-router.include_router(admin_router(get_manager), prefix="/admin", dependencies=[Depends(require_admin_user)])
+router = APIRouter(prefix=BASE, tags=[PLUGIN_ID])
 
 
-@router.get("/managed", dependencies=[Depends(require_admin_user)])
-async def managed_endpoints() -> list[dict]:
-    """Which preset each library-managed endpoint belongs to, and its keep-alive cutoff.
+def _catalog_writes_for_admins(request: Request, user: dict[str, Any] = Depends(require_authenticated_user)) -> None:
+    """Presets are an installation-wide catalog: only admins change it."""
+    if request.method in ("PUT", "DELETE") and request.url.path.startswith(f"{BASE}/my/presets/") and not user_is_admin(user):
+        raise HTTPException(status_code=403, detail="Only administrators can change the presets")
 
-    Only these fields: no follower ids, keys or tokens."""
+
+router.include_router(
+    admin_router(get_user_manager),
+    prefix="/my",
+    dependencies=[Depends(require_authenticated_user), Depends(_catalog_writes_for_admins)],
+)
+
+
+async def _own_manager(user: dict[str, Any] = Depends(require_authenticated_user)) -> ProvisioningManager:
+    """The requesting user's manager for this module's routes (503 when not initialized)."""
     try:
-        manager = get_manager()
+        return await get_user_manager(user)
     except LookupError:
         raise HTTPException(status_code=503, detail="MPCDF LLM is not initialized") from None
+
+
+class PageContext(BaseModel):
+    """What the management page needs to know about the requesting user."""
+
+    username: str
+    is_admin: bool
+    hf_token_stored: bool
+
+
+@router.get("/context")
+async def page_context(user: dict[str, Any] = Depends(require_authenticated_user)) -> PageContext:
+    """The requesting user's name, role and whether they stored a Hugging Face token."""
+    username = user.get("username") or ""
+    return PageContext(
+        username=username,
+        is_admin=user_is_admin(user),
+        hf_token_stored=bool(username) and manager_module.has_hf_token(username),
+    )
+
+
+@router.get("/managed")
+async def managed_endpoints(manager: ProvisioningManager = Depends(_own_manager)) -> list[dict[str, Any]]:
+    """Which preset each of the user's library-managed endpoints belongs to, and its keep-alive cutoff.
+
+    Only these fields: no follower ids, keys or tokens."""
     return [
         {
             "endpoint_id": m.endpoint_id,
@@ -63,16 +112,13 @@ def _validation_message(error: ValidationError) -> str:
 
 @router.post("/presets/import", dependencies=[Depends(require_admin_user)])
 async def import_presets(presets: list[dict[str, object]]) -> PresetImportResult:
-    """Save presets from an export file.
+    """Save presets from an export file into the catalog.
 
-    Presets live in the plugin's data directory, so this needs no MPCDF session. Unlike
-    ``PUT /admin/presets/{name}``, it checks only the preset model, not the live options of the
-    service (machines, GPU types); a preset the service does not support fails when it is started.
-    Each preset is saved on its own; the invalid ones are reported in ``errors`` by name."""
-    try:
-        manager = get_manager()
-    except LookupError:
-        raise HTTPException(status_code=503, detail="MPCDF LLM is not initialized") from None
+    This needs no MPCDF session. Unlike ``PUT /my/presets/{name}``, it checks only the preset
+    model, not the live options of the service (machines, GPU types); a preset the service does
+    not support fails when it is started. Each preset is saved on its own; the invalid ones are
+    reported in ``errors`` by name."""
+    catalog = manager_module.catalog()
     saved: list[str] = []
     errors: dict[str, str] = {}
     for index, data in enumerate(presets):
@@ -83,9 +129,64 @@ async def import_presets(presets: list[dict[str, object]]) -> PresetImportResult
         except ValidationError as e:
             errors[key] = _validation_message(e)
             continue
-        manager.presets.put(preset)
+        catalog.put(preset)
         saved.append(preset.name)
     return PresetImportResult(saved=saved, errors=errors)
+
+
+class OverviewEndpoint(BaseModel):
+    """One managed endpoint of a user, as recorded in the user's state file."""
+
+    endpoint_id: int
+    preset: str
+    ready: bool
+    until: str | None
+    submitted_at: str
+    last_activity: str
+
+
+class OverviewUser(BaseModel):
+    """A user of the plugin with their managed endpoints."""
+
+    username: str
+    has_session: bool
+    endpoints: list[OverviewEndpoint]
+
+
+@router.get("/overview", dependencies=[Depends(require_admin_user)])
+async def overview() -> list[OverviewUser]:
+    """All users' managed endpoints, read from their state files without using their sessions."""
+    result: list[OverviewUser] = []
+    for username in manager_module.known_users():
+        entries = FileStateStore(manager_module.user_dir(username)).managed().values()
+        result.append(OverviewUser(
+            username=username,
+            has_session=manager_module.has_stored_session(username),
+            endpoints=[
+                OverviewEndpoint(
+                    endpoint_id=m.endpoint_id,
+                    preset=m.preset,
+                    ready=m.ready_at is not None,
+                    until=m.until.isoformat() if m.until else None,
+                    submitted_at=m.submitted_at.isoformat(),
+                    last_activity=m.last_activity.isoformat(),
+                )
+                for m in sorted(entries, key=lambda e: e.endpoint_id)
+                if m.replaced_by is None
+            ],
+        ))
+    return result
+
+
+@router.delete("/users/{username}/session", status_code=204)
+async def remove_user_session(username: str, admin: dict[str, Any] = Depends(require_admin_user)) -> Response:
+    """Remove a user's stored MPCDF session: the server no longer acts for the user at MPCDF.
+
+    The user's endpoints keep running until they expire or idle out at MPCDF; other workers drop
+    their manager of the user within one watch interval."""
+    get_secret_store().delete(username, SESSION_SECRET)
+    await manager_module.drop_manager(username)
+    return Response(status_code=204)
 
 
 @router.get("/manage", response_class=HTMLResponse)
@@ -95,11 +196,11 @@ async def manage_page(
     session_manager=Depends(get_session_manager),
     auth_manager=Depends(get_auth_manager),
 ) -> HTMLResponse:
-    """The management page; it talks to the admin routes."""
+    """The management page; it talks to the routes above."""
     session_value = x_session_id or session_id
     if not session_value or not session_manager.is_session_valid(session_value, get_settings().session_timeout):
         raise HTTPException(status_code=401, detail="Authentication required")
     user = auth_manager.get_user_by_session_id(session_value, session_manager)
-    if not user or not user_is_admin(user):
-        raise HTTPException(status_code=403, detail="Admin role required")
+    if not user:
+        raise HTTPException(status_code=401, detail="Authentication required")
     return HTMLResponse(load_plugin_html(__file__, "manage.html"))
