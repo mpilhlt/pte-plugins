@@ -19,6 +19,11 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    outputs:
+      # commit of the last release made in this run (empty if nothing was released)
+      sha: ${{ steps.released.outputs.sha }}
+      # the plugins released in this run, e.g. "grobid 1.2.0, kisski 0.4.1"
+      summary: ${{ steps.released.outputs.summary }}
     # The release commit this workflow pushes carries no [skip ci] (it would also suppress
     # release.yml's tag-push trigger, see release.config.js), so it re-triggers this workflow.
     # Guard against re-entering the loop for nothing: that second run would find only the
@@ -51,9 +56,103 @@ jobs:
       - name: Release each plugin with qualifying commits
         run: |
           set -e
+          git tag --list | sort > "$RUNNER_TEMP/tags-before"
           for id in $(jq -r '.plugins[].id' pte-plugins.json); do
             echo "::group::$id"
             path=$(jq -r --arg id "$id" '.plugins[] | select(.id==$id) | .path' pte-plugins.json)
             PLUGIN_ID="$id" PLUGIN_PATH="$path" npx semantic-release
             echo "::endgroup::"
           done
+
+      # Runs even if a later plugin's release failed, so that the plugins released before it
+      # still get their pdf-tei-editor pins bumped.
+      - name: Collect the plugins released in this run
+        id: released
+        if: ${{ !cancelled() }}
+        run: |
+          set -e
+          [ -f "$RUNNER_TEMP/tags-before" ] || exit 0
+          sha=""
+          summary=""
+          for tag in $(git tag --list | sort | comm -13 "$RUNNER_TEMP/tags-before" -); do
+            summary="${summary:+$summary, }${tag%-v*} ${tag##*-v}"
+            # each release commit builds on the previous one, so the descendant is the latest
+            tag_sha=$(git rev-parse "$tag^{commit}")
+            if [ -z "$sha" ] || git merge-base --is-ancestor "$sha" "$tag_sha"; then
+              sha="$tag_sha"
+            fi
+          done
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "summary=$summary" >> "$GITHUB_OUTPUT"
+          echo "Released: ${summary:-none}"
+
+  # Opens a PR against pdf-tei-editor's devel that moves all of core's [tool.uv.sources] pins to
+  # the last release commit of this run and relocks uv.lock (all pins move together, see
+  # scripts/bump_core_pins.py for why). The PR runs core's Tests
+  # workflow with all plugins installed; pdf-tei-editor's merge-plugin-bumps.yml merges it when
+  # they pass, and a failure stays open for triage. Needs the PDF_TEI_EDITOR_BUMP_TOKEN secret: a
+  # fine-grained PAT for mpilhlt/pdf-tei-editor with Contents and Pull requests read/write. Neither
+  # GITHUB_TOKEN (no access to another repository, and its PRs trigger no workflows) nor a deploy
+  # key (cannot open PRs) works here.
+  bump-core:
+    needs: release
+    if: ${{ !cancelled() && needs.release.outputs.sha != '' }}
+    runs-on: ubuntu-latest
+    env:
+      BUMP_TOKEN: ${{ secrets.PDF_TEI_EDITOR_BUMP_TOKEN }}
+    steps:
+      - name: Check for the token
+        id: token
+        run: |
+          if [ -z "$BUMP_TOKEN" ]; then
+            echo "::warning::PDF_TEI_EDITOR_BUMP_TOKEN is not set; not opening a pin bump PR in pdf-tei-editor."
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v7
+        if: steps.token.outputs.present == 'true'
+        with:
+          path: pte-plugins
+
+      - uses: actions/checkout@v7
+        if: steps.token.outputs.present == 'true'
+        with:
+          repository: mpilhlt/pdf-tei-editor
+          ref: devel
+          token: ${{ secrets.PDF_TEI_EDITOR_BUMP_TOKEN }}
+          path: core
+
+      - name: Install uv
+        if: steps.token.outputs.present == 'true'
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+
+      - name: Bump the pins and open a PR
+        if: steps.token.outputs.present == 'true'
+        working-directory: core
+        env:
+          GH_TOKEN: ${{ secrets.PDF_TEI_EDITOR_BUMP_TOKEN }}
+          SHA: ${{ needs.release.outputs.sha }}
+          SUMMARY: ${{ needs.release.outputs.summary }}
+        run: |
+          set -euo pipefail
+          bumped=$(python3 ../pte-plugins/scripts/bump_core_pins.py pyproject.toml "$SHA")
+          if [ -z "$bumped" ]; then
+            echo "pdf-tei-editor already pins $SHA."
+            exit 0
+          fi
+          uv lock
+          branch="bump/pte-plugins-${GITHUB_RUN_ID}"
+          title="chore(deps): bump pte-plugins pins ($SUMMARY)"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          git commit -am "$title"
+          git push origin "$branch"
+          body=$(printf 'Automated by %s after releasing: %s.\n\nMoves the `[tool.uv.sources]` pins of all pte-plugins to %s and relocks `uv.lock`. Changed pins:\n\n%s\n\nMerged automatically by `merge-plugin-bumps.yml` when the Tests workflow passes. A failure means core and the latest plugin releases are incompatible.\n' \
+            "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            "$SUMMARY" \
+            "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/commit/$SHA" \
+            "$(sed 's|^|- `|; s|$|`|' <<<"$bumped")")
+          gh pr create --repo mpilhlt/pdf-tei-editor --base devel --head "$branch" --title "$title" --body "$body"
