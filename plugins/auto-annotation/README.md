@@ -1,11 +1,25 @@
 # Auto-annotation
 
-Building blocks for an automated first annotation of TEI documents produced by any extractor: cheap LLMs correct the extractor's output against the document's machine rules, a stronger model arbitrates where they disagree. The design is in the proposal `2026-11-05-auto-annotation-proposal.md` (project files; to be moved to `docs/history` in pdf-tei-editor with the implementation).
+Automated annotation of TEI documents produced by any extractor: an LLM corrects the extractor's output against the document's machine rules. The design is in the proposal `2026-11-05-auto-annotation-proposal.md` (project files; to be moved to `docs/history` in pdf-tei-editor with the implementation).
 
 It contains:
 
+- the **Correct annotations in new version** action in the editor's Tools menu, which corrects the open document with one model and saves the result as a new version;
 - the **model probe**, which measures how well a single model corrects the annotation of gold documents, and how that changes with the number of review units sent in one request;
 - the **annotation pipeline**, which annotates documents or a whole collection with two models and an arbiter and saves the result as a new version.
+
+## Correct annotations in new version
+
+The Tools menu item (section "Annotation") is for annotators, reviewers and admins. It is enabled when the open document's `editorialDecl` has a machine-readable rule reference (`subtype="machine"`).
+
+1. After a confirmation naming the model selected in **Tools > Inference**, unsaved changes are saved and the document becomes read-only.
+2. The server takes over the document's lock from the user's session and holds it under the job's id (`auto-annotation:<job id>`), so the document opens read-only everywhere, also when the user returns to it in the same tab. The lock is refreshed with every request and every 30 seconds; if the browser tab is closed, it expires like any other lock. The action is refused while another user edits the document, and for gold versions.
+3. The review units of the variant (its `reviewUnits` path) are sent to the model in batches of 16 units, one request per batch, with split-and-retry of failing batches and retries as in the pipeline. A progress widget shows how many units are done and changed; it can be minimized and cancelled.
+4. Units take the model's proposal if it passes the checks (well-formed, same outermost element, text unchanged); otherwise they keep the original. For segmenting variants, text may move between neighbouring units of a batch.
+5. The corrected document gets a `revisionDesc/change` by `#auto-annotation` (status `extraction`, label `Auto-annotation`). Its `desc` names the model as `<name type="model" subtype="<provider id>" key="<provider id>/<model id>">` with the model's label as text, and records the counts as `<measure type="corrected-units" subtype="changed|unchanged|invalid|error|unprocessed" commodity="<provider id>/<model id>" quantity="<n>">` and the duration as `<time dur="PT4M12S">`. These elements need a schema that allows them in `desc`.
+6. The client saves the document as a new version of the open one through the editor's save API; the source version is then frozen, since a version was derived from it. If the source document is still open, the new version is loaded; otherwise a dialog asks whether to load it.
+
+If the model changes nothing, no version is created. If the run is cancelled or a request fails (after retries), the user can save the corrections made so far; the change then records the unprocessed units. In every case that saves nothing, the job's lock is released and the source can be edited again.
 
 ## Model probe
 
@@ -107,8 +121,11 @@ The modules `plugin.py`, `routes.py`, `sources.py`, `models.py`, `annotation.py`
 | `pipeline.py` | The pipeline: `annotate_units()` runs A and B, then the arbiter; a decision per unit |
 | `model_spec.py` | Resolving model names |
 | `models.py` | Resolving a model for a user, with key and access checks (server) |
-| `document.py` | Writing a pipeline result into the TEI document: units, revision change (server) |
+| `document.py` | Writing a pipeline result or a single model's corrections into the TEI document: units, revision change (server) |
 | `annotation.py` | Annotating a stored version, finding the versions of a collection to annotate (server) |
+| `single.py` | Correcting one batch of units with a single model, checking the corrections a client sends back |
+| `correction_routes.py` | Routes of the "Correct annotations in new version" action, the job's lock (server) |
+| `extensions/auto-annotation.js` | The Tools menu action (frontend extension) |
 | `cli_common.py` | Connection options of the CLIs |
 | `api_client.py` | HTTP client and `ServerChatClient` for the CLI |
 | `probe.py` | The model probe CLI |
@@ -116,7 +133,15 @@ The modules `plugin.py`, `routes.py`, `sources.py`, `models.py`, `annotation.py`
 
 ## Routes
 
-All for reviewers and admins:
+For annotators, reviewers and admins, used by the Tools menu action (`<job>` is `{"job_id", "stable_id"}`):
+
+- `POST /api/plugins/auto-annotation/correct/start` `{"stable_id", "provider_id", "model_id", "batch"}`: checks the version and the model, takes over the lock and returns the job id, the number of units and the unit indices of each batch; 423 if another session holds the lock.
+- `POST /api/plugins/auto-annotation/correct/batch` `{<job>, "provider_id", "model_id", "units", "retries"}`: corrects the given units; per unit its status and the corrected XML if it changed. A failed request is reported in `error`. 409 if the job no longer holds the lock.
+- `POST /api/plugins/auto-annotation/correct/heartbeat` `<job>`: refreshes the lock (409 if it was lost).
+- `POST /api/plugins/auto-annotation/correct/finish` `{<job>, "provider_id", "model_id", "model_label", "corrections": [{"index", "xml"}], "processed", "invalid", "errors", "seconds"}`: checks the corrections and returns the document with them and the revision change; it does not save.
+- `POST /api/plugins/auto-annotation/correct/release` `<job>`: releases the lock and sends `lockReleased` to the other sessions.
+
+For reviewers and admins, used by the CLIs:
 
 - `GET /api/plugins/auto-annotation/eval-source?doc=<doc id>&variant=<variant>[&reference=<id>][&input=<id>][&rules=false]`: reference (the document's gold version of the variant, or `reference`) and input XML, variant, unit path, and the rules; with `reference`, `doc` and `variant` may be left out. Rules are the machine refs of the reference version's `editorialDecl`, else human refs, without user overrides.
 - `POST /api/plugins/auto-annotation/resolve-model` `{"model": "<name>"}`: provider and model id, after checking model access.
@@ -126,4 +151,4 @@ All for reviewers and admins:
 
 ## Tests
 
-Unit tests with mock models in `src/pte_plugin_auto_annotation/tests`, run from the repository root as described in the main README.
+Unit tests with mock models (Python) and of the frontend extension (`*.test.js`) in `src/pte_plugin_auto_annotation/tests`, run from the repository root as described in the main README.

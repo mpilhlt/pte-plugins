@@ -1,5 +1,5 @@
 """
-Writing a pipeline result into the TEI document (server side, uses the editor's TEI utilities):
+Writing a pipeline result or a single model's corrections into the TEI document (server side, uses the editor's TEI utilities):
 
 - the units are replaced by their results; the rest of the document keeps its formatting. For a
   segmenting variant a result may consist of several elements or none (a group's result replaces
@@ -8,6 +8,9 @@ Writing a pipeline result into the TEI document (server side, uses the editor's 
   In its `desc`, how often the arbiter chose each version (overall, and where both models gave a
   valid proposal) and how many proposals of each model failed the checks are `measure` elements (`@type`, `@subtype`, `@quantity`, and the model in
   `@commodity`), and the duration is a `time` element with `@dur`, for later analysis
+- for a correction by a single model (single.py), the change records the model as
+  `<name type="model" subtype="<provider id>" key="<provider id>/<model id>">` and the number of
+  changed, unchanged, invalid, failed and unprocessed units as `measure` elements of type `corrected-units`
 """
 
 from __future__ import annotations
@@ -21,6 +24,7 @@ from fastapi_app.lib.utils.tei_utils import add_revision_change, serialize_tei_l
 
 from .checks import ProposalStatus
 from .pipeline import Decision, PipelineResult, UnitDecision
+from .single import CorrectionSummary
 from .units import TEI_NS, find_unit_elements, parse_document, parse_unit
 
 VALID_STATUSES = (ProposalStatus.OK, ProposalStatus.UNCHANGED)
@@ -174,6 +178,59 @@ def write_result(
             replacements[first] = d.result_xml
             replacements.update({i: "" for i in rest})
     replace_units(root, unit_path, replacements, segmenting=result.segmenting)
+    return _record_change(root, xml, description_xml(result, models, seconds), when, status, label)
+
+
+def model_name_xml(provider_id: str, model_id: str, label: str | None = None) -> str:
+    """The model as a `name` element: `<name type="model" subtype="<provider>" key="<provider>/<model>">label</name>`."""
+    key = f"{provider_id}/{model_id}"
+    return f'<name type="model" subtype="{_escape(provider_id)}" key="{_escape(key)}">{_escape(label or key)}</name>'
+
+
+def correction_description_xml(provider_id: str, model_id: str, summary: CorrectionSummary, seconds: float, model_label: str | None = None) -> str:
+    """
+    The content of the change's `desc` for a correction by a single model: the model as a `name`
+    element (see model_name_xml()), the counts as `measure` elements and the duration as `time`.
+    """
+    model = f"{provider_id}/{model_id}"
+    counts = ", ".join(_measure("corrected-units", key, value, model) for key, value in summary.measures())
+    stopped = f" Stopped after {summary.processed} of {summary.units} units." if summary.processed < summary.units else ""
+    iso, text = iso_duration(seconds)
+    return (
+        f"Annotation corrected by {model_name_xml(provider_id, model_id, model_label)}: "
+        f"{summary.units} units, {summary.changed} changed.{stopped} "
+        f"Units: {counts}. Completed in <time dur=\"{iso}\">{text}</time>."
+    )
+
+
+def write_corrections(
+    xml: str,
+    unit_path: str | None,
+    replacements: Mapping[int, str],
+    provider_id: str,
+    model_id: str,
+    summary: CorrectionSummary,
+    when: str,
+    seconds: float,
+    segmenting: bool = False,
+    status: str = "extraction",
+    label: str | None = "Auto-annotation",
+    model_label: str | None = None,
+) -> str:
+    """
+    The document with the corrected units of a single model (index -> unit XML; with segmenting, a
+    unit may become several elements or none) and a revision change by `#auto-annotation`.
+
+    Raises:
+        ValueError: the document is not well-formed, or a correction cannot be inserted.
+    """
+    root = parse_document(xml)
+    replace_units(root, unit_path, replacements, segmenting=segmenting)
+    return _record_change(root, xml, correction_description_xml(provider_id, model_id, summary, seconds, model_label), when, status, label)
+
+
+def _record_change(root: etree._Element, xml: str, desc_xml: str, when: str, status: str, label: str | None) -> str:
+    """Add the revision change (with `desc_xml` as the content of its `desc`) and the respStmt; serialize like `xml`."""
     has_title_stmt_parent = root.find(f"{_tei('teiHeader')}/{_tei('fileDesc')}") is not None
     # the respStmt that names the pipeline needs a fileDesc; without one the change is still recorded
     revision_desc_path = f"{_tei('teiHeader')}/{_tei('revisionDesc')}"
@@ -190,7 +247,7 @@ def write_result(
         change = revision_desc[-1]
         placeholder = change.find(_tei("desc"))
         if placeholder is not None:
-            desc = etree.fromstring(f'<desc xmlns="{TEI_NS}">{description_xml(result, models, seconds)}</desc>')
+            desc = etree.fromstring(f'<desc xmlns="{TEI_NS}">{desc_xml}</desc>')
             desc.tail = placeholder.tail
             change.replace(placeholder, desc)
             etree.cleanup_namespaces(root)
