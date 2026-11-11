@@ -1,30 +1,23 @@
 """
-Two workers (two managers on one data dir) against one FakeLlmis.
+Two workers (two managers of one user on that user's directory) against one FakeLlmis.
 
-Worker A holds the supervisor lock; worker B is passive and handles the start.
+Worker A holds the supervisor lock; worker B is passive and handles the start. Both read the
+user's session from the shared secret store.
 
 @testCovers plugins/mpcdf-llm/src/pte_plugin_mpcdf_llm/providers.py
 @testCovers plugins/mpcdf-llm/src/pte_plugin_mpcdf_llm/manager.py
 """
 
 import asyncio
-import tempfile
-import unittest
-from pathlib import Path
 
-import httpx
 from mpcdf_llm import names
 from mpcdf_llm.manager import ProvisioningManager
 from mpcdf_llm.supervisor import Supervisor
-from mpcdf_llm.testing import FakeLlmis
 
-from fastapi_app.plugin_api import LLMProviderRegistry
+from pte_plugin_mpcdf_llm import manager as manager_module
 from pte_plugin_mpcdf_llm import providers
 
-from .test_providers import PRESET
-
-
-TIMEOUT = 10
+from .support import TIMEOUT, PluginTestCase, until
 
 
 def T(awaitable):
@@ -32,43 +25,23 @@ def T(awaitable):
     return asyncio.wait_for(awaitable, TIMEOUT)
 
 
-async def until(condition):
-    """Wait (bounded) until the condition holds."""
-    deadline = asyncio.get_running_loop().time() + TIMEOUT
-    while not condition():
-        if asyncio.get_running_loop().time() > deadline:
-            raise TimeoutError("condition not reached")
-        await asyncio.sleep(0.005)
-
-
-class TestTwoWorkers(unittest.IsolatedAsyncioTestCase):
+class TestTwoWorkers(PluginTestCase):
     async def asyncSetUp(self):
-        temp = tempfile.TemporaryDirectory()
-        self.addCleanup(temp.cleanup)
-        self.data = Path(temp.name) / "mgr"
-        LLMProviderRegistry.reset_instance()
-        providers._registered.clear()
-        self.addCleanup(LLMProviderRegistry.reset_instance)
-        self.addCleanup(providers._registered.clear)
-        self.fake = FakeLlmis()
-        await self.fake.start()
-        self.addAsyncCleanup(self.fake.stop)
-
+        await super().asyncSetUp()
         self.closers: dict[ProvisioningManager, object] = {}
         self.a = await self.make()
         await T(self.a.login("alice", "pw", "123456"))
-        self.a.presets.put(PRESET)
         self.sup_a = Supervisor(self.a)  # takes the lock; never started: tests call tick()
         self.addCleanup(self.sup_a.release)
-        self.b = await self.make()
+        self.b = await self.make()  # logged in through the stored session only
         self.sup_b = Supervisor(self.b)
         self.addCleanup(self.sup_b.release)
         self.assertTrue(self.sup_a.active)
         self.assertFalse(self.sup_b.active)
 
     async def make(self) -> ProvisioningManager:
-        http = httpx.AsyncClient(transport=self.fake.http_transport())
-        manager = ProvisioningManager(self.data, base_url=self.fake.base_url, http=http, poll_interval=0.01)
+        manager_module.user_dir("alice").mkdir(parents=True, exist_ok=True)
+        manager = manager_module.new_manager("alice")
         await manager.open()
         closed = False
 
@@ -77,7 +50,6 @@ class TestTwoWorkers(unittest.IsolatedAsyncioTestCase):
             if not closed:
                 closed = True
                 await manager.close()
-                await http.aclose()
 
         self.closers[manager] = close
         self.addAsyncCleanup(close)
@@ -141,16 +113,15 @@ class TestTwoWorkers(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.fake.received.count(names.SUBMIT), 1)
         self.assertNotIn(names.DELETE_ENDPOINT, self.fake.received)
 
-    async def test_providers_converge_in_both_workers(self):
-        # One process, one registry: sync worker by worker and look after each.
+    async def test_session_of_one_worker_used_by_the_other(self):
+        self.assertEqual((await self.b.session_status()).state, "ok")
+        self.assertEqual((await self.b.session_status()).username, "alice")
+
+    async def test_endpoints_of_one_user_in_another_workers_cache(self):
+        # The worker whose manager_for() map holds b sees the endpoint b started.
         driver = asyncio.create_task(self.drive())
         events = await T(self.collect())
         await T(driver)
         self.assertEqual(events[-1].phase, "ready")
-        registry = LLMProviderRegistry.get_instance()
-        for manager in (self.a, self.b):
-            providers.unregister_all()
-            with self.assertRaises(KeyError):
-                registry.get_provider("mpcdf-llm-p")
-            await T(providers.sync_providers(manager))
-            self.assertEqual(registry.get_provider("mpcdf-llm-p").label, "MPCDF: p")
+        await T(providers.refresh_user("alice", self.a))
+        self.assertEqual(providers.ready_presets("alice"), {"p": "openai/gpt-oss-120b"})
