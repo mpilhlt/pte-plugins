@@ -88,7 +88,9 @@ jobs:
 
       - name: Install Playwright browsers
         working-directory: pdf-tei-editor
-        run: npx playwright install --with-deps chromium
+        # The runner image has Chromium's system libraries; --with-deps only adds fonts via apt.
+        # If the Ubuntu mirrors are unreachable, install the browser without them.
+        run: npx playwright install --with-deps chromium || npx playwright install chromium
 
       - name: Editor E2E tests with the plugins
         working-directory: pdf-tei-editor
