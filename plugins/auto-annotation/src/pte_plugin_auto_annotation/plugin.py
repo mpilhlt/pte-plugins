@@ -1,31 +1,35 @@
 """
 Auto-annotation plugin.
 
-Building blocks for an automated first annotation of GROBID training data by LLMs (see
-README.md). This version provides the model probe: routes the probe CLI (probe.py) uses to read
-gold documents and to run completions with the models configured in the app.
+Automated annotation of TEI documents by LLMs (see README.md): the "Correct annotations in new
+version" action of the Tools menu (frontend extension, routes in correction_routes.py), the model
+probe and the annotation pipeline CLIs (routes in routes.py).
 """
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
-from fastapi_app.plugin_api import Plugin, PluginContext
+from fastapi_app.plugin_api import FrontendExtensionRegistry, Plugin, PluginContext
+
+logger = logging.getLogger(__name__)
 
 
 class AutoAnnotationPlugin(Plugin):
-    """Routes for evaluating LLMs at correcting annotations against gold versions."""
+    """Corrects the annotations of a document with an LLM; routes for evaluating and running LLM annotation."""
 
     @property
     def metadata(self) -> dict[str, Any]:
         return {
             "id": "auto-annotation",
             "name": "Auto-annotation",
-            "description": "Evaluates LLMs at correcting GROBID training annotations against gold versions (model probe)",
+            "description": "Corrects the annotations of a document with an LLM in a new version; model probe and annotation pipeline",
             "category": "annotation",
             "version": "0.1.0",
-            "required_roles": ["reviewer"],
+            "required_roles": ["annotator", "reviewer"],
             "endpoints": [],
         }
 
@@ -33,7 +37,12 @@ class AutoAnnotationPlugin(Plugin):
         return {}
 
     async def initialize(self, context: PluginContext) -> None:
-        pass
+        """Register the frontend extension."""
+        extension_file = Path(__file__).parent / "extensions" / "auto-annotation.js"
+        if extension_file.exists():
+            FrontendExtensionRegistry.get_instance().register_extension(extension_file, self.metadata["id"])
+        else:
+            logger.warning("Auto-annotation frontend extension not found at %s", extension_file)
 
     async def cleanup(self) -> None:
         pass

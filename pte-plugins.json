@@ -81,7 +81,7 @@
       "module": "pte_plugin_auto_annotation",
       "path": "plugins/auto-annotation",
       "version": "1.3.0",
-      "description": "Evaluates LLMs at correcting GROBID training annotations against gold versions (model probe)",
+      "description": "Corrects the annotations of TEI documents with LLMs; model probe and annotation pipeline",
       "requires": [],
       "dependencies": [],
       "engines": {

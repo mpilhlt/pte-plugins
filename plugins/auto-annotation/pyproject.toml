@@ -1,7 +1,7 @@
 [project]
 name = "pte-plugin-auto-annotation"
 dynamic = ["version"]
-description = "Evaluates LLMs at correcting GROBID training annotations against gold versions (model probe)"
+description = "Corrects the annotations of TEI documents with LLMs; model probe and annotation pipeline"
 readme = "README.md"
 requires-python = ">=3.13"
 license = "CC0-1.0"
