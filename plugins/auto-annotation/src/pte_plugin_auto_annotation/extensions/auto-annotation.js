@@ -47,7 +47,7 @@ const INVALID_STATUSES = new Set(['missing', 'malformed', 'wrong_root', 'text_ch
  * @param {{isCancelled?: () => boolean, onProgress?: (processed: number, total: number, changed: number) => void, now?: () => number}} [hooks]
  * @returns {Promise<CorrectionOutcome>}
  */
-export async function runCorrection(correctBatch, batches, hooks = {}) {
+export const runCorrection = async (correctBatch, batches, hooks = {}) => {
   const now = hooks.now ?? (() => Date.now());
   const started = now();
   const total = batches.reduce((sum, batch) => sum + batch.length, 0);
@@ -81,7 +81,7 @@ export async function runCorrection(correctBatch, batches, hooks = {}) {
   }
   outcome.seconds = Math.round((now() - started) / 100) / 10;
   return outcome;
-}
+};
 
 /**
  * Escape text for use in a dialog's HTML message.
