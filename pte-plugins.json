@@ -62,7 +62,7 @@
       "package": "pte-plugin-archival-edition",
       "module": "pte_plugin_archival_edition",
       "path": "plugins/archival-edition",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "description": "Extractor for photographed archival documents with a description form, schema and annotation guidelines",
       "requires": [
         "anthropic-llm"
