@@ -84,7 +84,8 @@ class ProbeStartRequest(BaseModel):
     provider_id: str
     model_id: str
     model_label: str | None = None
-    title: str | None = None
+    # The document's label as the file selection shows it
+    doc_label: str | None = None
     batches: list[str] = Field(default_factory=lambda: ["units:1", "units:4", "units:8", "units:16", "units:32"], min_length=1, max_length=20)
     modes: list[OutputMode] = Field(default_factory=lambda: ["all"], min_length=1)
     repeats: int = Field(default=1, ge=1, le=10)
@@ -115,12 +116,18 @@ class ProbeStatusResponse(BaseModel):
     finished_at: str | None
     model: str
     model_label: str
-    title: str | None
+    doc_label: str | None
     reference_stable_id: str
 
 
 class RunRequest(BaseModel):
     run_id: str
+
+
+def _doc_label(meta: dict[str, object]) -> str | None:
+    # "title": runs stored before the label was used
+    label = meta.get("doc_label") or meta.get("title")
+    return str(label) if label else None
 
 
 def _status_response(run: StoredRun) -> ProbeStatusResponse:
@@ -130,7 +137,7 @@ def _status_response(run: StoredRun) -> ProbeStatusResponse:
         run_id=run.run_id, state=status.state, planned_runs=status.planned_runs, finished_runs=status.finished_runs,
         current_run=status.current_run, current=status.current, error=status.error, started_at=status.started_at,
         finished_at=status.finished_at, model=model_key(meta), model_label=str(meta.get("model_label") or model_key(meta)),
-        title=str(meta["title"]) if meta.get("title") else None, reference_stable_id=str(meta.get("reference_stable_id")),
+        doc_label=_doc_label(meta), reference_stable_id=str(meta.get("reference_stable_id")),
     )
 
 
@@ -194,7 +201,7 @@ async def start(
     meta: dict[str, object] = {
         "username": username,
         "provider_id": body.provider_id, "model_id": body.model_id, "model_label": body.model_label or model,
-        "doc_id": source.doc_id, "title": body.title, "variant": source.variant,
+        "doc_id": source.doc_id, "doc_label": body.doc_label, "variant": source.variant,
         "reference_stable_id": source.reference_stable_id, "reference_is_gold": source.reference_is_gold,
         "input_stable_id": source.input_stable_id, "input_choice": source.input_choice, "input_is_extraction": source.input_is_extraction,
         "aligned_units": units, "prompt_version": PROMPT_VERSION, "rules_hash": source.rules_hash,

@@ -66,10 +66,10 @@ const BATCH_SPEC = /^(units|chars):[1-9]\d*$/;
  * @property {string|null} current
  * @property {string|null} error
  * @property {string} model_label
- * @property {string|null} title
+ * @property {string|null} doc_label
  * @typedef {{run_id: string, planned_runs: number, units: number, reference_is_gold: boolean, input_stable_id: string}} ProbeStartResult
  * @typedef {{id: string, label?: string, variant?: string, is_gold_standard?: boolean}} ArtifactItem
- * @typedef {{doc_metadata?: {title?: string}, artifacts?: ArtifactItem[]}} DocumentEntry
+ * @typedef {{doc_id?: string, source?: {label?: string}, doc_metadata?: {title?: string}, artifacts?: ArtifactItem[]}} DocumentEntry
  */
 
 /**
@@ -130,17 +130,17 @@ export function parseBatchSpecs(checked, extra) {
  * The body of POST /probe/start.
  * @param {ProbeFormValues} values
  * @param {string} referenceStableId
- * @param {string} title
+ * @param {string} docLabel - The document's label
  * @returns {Record<string, unknown>}
  */
-export function startRequest(values, referenceStableId, title) {
+export function startRequest(values, referenceStableId, docLabel) {
   return {
     reference_stable_id: referenceStableId,
     input_stable_id: values.inputStableId,
     provider_id: values.providerId,
     model_id: values.modelId,
     model_label: values.modelLabel,
-    title: title || null,
+    doc_label: docLabel || null,
     batches: values.batches,
     modes: values.modes,
     repeats: values.repeats,
@@ -158,7 +158,7 @@ export function startRequest(values, referenceStableId, title) {
  * @returns {string}
  */
 export function progressLabel(status) {
-  const subject = `Testing ${status.model_label}${status.title ? ` on "${status.title}"` : ''}`;
+  const subject = `Testing ${status.model_label}${status.doc_label ? ` on "${status.doc_label}"` : ''}`;
   if (!status.current) return `${subject}…`;
   return `${subject}: run ${status.current_run} of ${status.planned_runs} (${status.current})`;
 }
@@ -170,6 +170,15 @@ export function progressLabel(status) {
  */
 export function progressValue(status) {
   return status.planned_runs ? Math.round((status.finished_runs / status.planned_runs) * 100) : 0;
+}
+
+/**
+ * The label of a document as the file selection shows it.
+ * @param {DocumentEntry} doc
+ * @returns {string}
+ */
+export function documentLabel(doc) {
+  return doc.source?.label || doc.doc_metadata?.title || doc.doc_id || '';
 }
 
 export default class AutoAnnotationModelTestExtension extends FrontendExtensionPlugin {
@@ -289,7 +298,7 @@ export default class AutoAnnotationModelTestExtension extends FrontendExtensionP
     const referenceId = this.state?.xml;
     if (!referenceId || !this._mayTest()) return;
     const found = findVersion(this.state?.fileData ?? [], referenceId);
-    const title = found?.doc.doc_metadata?.title || '';
+    const docLabel = found ? documentLabel(found.doc) : '';
     if (!found?.artifact.is_gold_standard) {
       const go = await dialog.confirm(
         'The current version is not a gold version. The model\'s corrections will be scored against annotations that may contain errors, so the scores may be misleading. Test the model anyway?',
@@ -303,7 +312,7 @@ export default class AutoAnnotationModelTestExtension extends FrontendExtensionP
     /** @type {ProbeStartResult} */
     let started;
     try {
-      started = /** @type {ProbeStartResult} */ (await this.callPluginApi('/api/plugins/auto-annotation/probe/start', 'POST', startRequest(values, referenceId, title)));
+      started = /** @type {ProbeStartResult} */ (await this.callPluginApi('/api/plugins/auto-annotation/probe/start', 'POST', startRequest(values, referenceId, docLabel)));
     } catch (err) {
       dialog.error(`The model test could not be started: ${escapeHtml(err.message)}`);
       return;
@@ -314,7 +323,7 @@ export default class AutoAnnotationModelTestExtension extends FrontendExtensionP
     );
     this.track({
       run_id: started.run_id, state: 'running', planned_runs: started.planned_runs, finished_runs: 0, current_run: 0,
-      current: null, error: null, model_label: values.modelLabel, title: title || null,
+      current: null, error: null, model_label: values.modelLabel, doc_label: docLabel || null,
     });
   }
 

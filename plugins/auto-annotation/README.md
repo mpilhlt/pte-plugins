@@ -168,7 +168,7 @@ For annotators, reviewers and admins, used by the Tools menu action (`<job>` is 
 
 For reviewers and admins, used by "Test model with current document" (`<run>` is `{"run_id"}`):
 
-- `POST /api/plugins/auto-annotation/probe/start` `{"reference_stable_id", "input_stable_id", "provider_id", "model_id", "model_label", "title", "batches", "modes", "repeats", "concurrency", "retries", "temperature", "max_units", "force_busy"}`: checks the parameters, the model and the documents and starts the test; returns the run id, the number of runs and of units. 409 if the user has a test running or the model is busy, 422 for invalid parameters or documents without aligned units.
+- `POST /api/plugins/auto-annotation/probe/start` `{"reference_stable_id", "input_stable_id", "provider_id", "model_id", "model_label", "doc_label", "batches", "modes", "repeats", "concurrency", "retries", "temperature", "max_units", "force_busy"}`: checks the parameters, the model and the documents and starts the test; returns the run id, the number of runs and of units. 409 if the user has a test running or the model is busy, 422 for invalid parameters or documents without aligned units.
 - `GET /api/plugins/auto-annotation/probe/status?run=<id>`: state (`running`, `done`, `failed`, `cancelled`, `interrupted`), runs finished and planned, the run under way, the error.
 - `GET /api/plugins/auto-annotation/probe/jobs`: the user's running tests.
 - `POST /api/plugins/auto-annotation/probe/cancel` `<run>` and `POST /api/plugins/auto-annotation/probe/delete` `<run>`: for the user who started the test and admins.

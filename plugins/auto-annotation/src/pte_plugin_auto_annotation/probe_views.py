@@ -103,7 +103,7 @@ def _model_label(meta: Mapping[str, object]) -> str:
 
 
 def _document_label(meta: Mapping[str, object]) -> str:
-    return str(meta.get("title") or meta.get("doc_id") or meta.get("reference_stable_id"))
+    return str(meta.get("doc_label") or meta.get("title") or meta.get("doc_id") or meta.get("reference_stable_id"))
 
 
 SUMMARY_HEADERS = ["Batching", "Mode", "Runs", "Calls", "Retries", "Errors %", "Failures %", "Exact %", "Edit P", "Edit R", "Edit F1", "Field F1", "Edit R by quarter", "Seconds"]

@@ -27,7 +27,7 @@ const {
 } = await import('../extensions/auto-annotation-model-test.js');
 
 const FILE_DATA = [{
-  doc_metadata: { title: 'A paper' },
+  source: { label: 'Smith 2024' }, doc_metadata: { title: 'A paper' },
   artifacts: [
     { id: 'x1', label: 'Extraction', variant: 'refs' },
     { id: 'g1', label: 'Gold', variant: 'refs', is_gold_standard: true },
@@ -57,12 +57,12 @@ describe('helpers', () => {
 
   it('build the start request and the progress label', () => {
     assert.deepStrictEqual(startRequest({ ...VALUES, maxUnits: 5 }, 'g1', 'A paper'), {
-      reference_stable_id: 'g1', input_stable_id: null, provider_id: 'p', model_id: 'm', model_label: 'Model M', title: 'A paper',
+      reference_stable_id: 'g1', input_stable_id: null, provider_id: 'p', model_id: 'm', model_label: 'Model M', doc_label: 'A paper',
       batches: ['units:4'], modes: ['all'], repeats: 1, concurrency: 1, retries: 4, temperature: 0, max_units: 5, force_busy: false,
     });
-    const status = { run_id: 'r', state: 'running', planned_runs: 4, finished_runs: 1, current_run: 2, current: 'units:4, all, #1', error: null, model_label: 'Model M', title: 'A paper' };
+    const status = { run_id: 'r', state: 'running', planned_runs: 4, finished_runs: 1, current_run: 2, current: 'units:4, all, #1', error: null, model_label: 'Model M', doc_label: 'A paper' };
     assert.strictEqual(progressLabel(status), 'Testing Model M on "A paper": run 2 of 4 (units:4, all, #1)');
-    assert.strictEqual(progressLabel({ ...status, current: null, title: null }), 'Testing Model M…');
+    assert.strictEqual(progressLabel({ ...status, current: null, doc_label: null }), 'Testing Model M…');
     assert.strictEqual(progressValue(status), 25);
   });
 });
@@ -144,15 +144,15 @@ describe('ModelTestExtension', () => {
 
   it('runs a test on a gold version, follows it and shows the results', async () => {
     statuses = [
-      { run_id: 'run-1', state: 'running', planned_runs: 2, finished_runs: 1, current_run: 2, current: 'units:4, all, #1', error: null, model_label: 'Model M', title: 'A paper' },
-      { run_id: 'run-1', state: 'done', planned_runs: 2, finished_runs: 2, current_run: 2, current: null, error: null, model_label: 'Model M', title: 'A paper' },
+      { run_id: 'run-1', state: 'running', planned_runs: 2, finished_runs: 1, current_run: 2, current: 'units:4, all, #1', error: null, model_label: 'Model M', doc_label: 'A paper' },
+      { run_id: 'run-1', state: 'done', planned_runs: 2, finished_runs: 2, current_run: 2, current: null, error: null, model_label: 'Model M', doc_label: 'A paper' },
     ];
     await ext.testModel();
     await ext._tracked.get('run-1');
     assert.deepStrictEqual(confirms, []);
     assert.strictEqual(calls[0][1], '/api/plugins/auto-annotation/probe/start');
     assert.strictEqual(calls[0][2].reference_stable_id, 'g1');
-    assert.strictEqual(calls[0][2].title, 'A paper');
+    assert.strictEqual(calls[0][2].doc_label, 'Smith 2024');
     assert.match(notes[0], /has started \(2 runs on 10 units\)/);
     const [kind, id, options] = progressCalls[0];
     assert.deepStrictEqual([kind, id, options.minimized, options.cancellable], ['show', 'auto-annotation-probe-run-1', true, true]);
@@ -177,14 +177,14 @@ describe('ModelTestExtension', () => {
     assert.match(errors[0], /could not be started: The model is very busy/);
     assert.deepStrictEqual(notes, []);
 
-    statuses = [{ run_id: 'run-2', state: 'failed', planned_runs: 3, finished_runs: 1, current_run: 2, current: null, error: 'All requests failed: 401', model_label: 'Model M', title: null }];
+    statuses = [{ run_id: 'run-2', state: 'failed', planned_runs: 3, finished_runs: 1, current_run: 2, current: null, error: 'All requests failed: 401', model_label: 'Model M', doc_label: null }];
     await ext.track({ ...statuses[0], state: 'running', error: null });
     assert.match(errors[1], /failed: All requests failed: 401\. The results of the 1 finished run\(s\) are kept/);
     assert.deepStrictEqual(shown, []);
   });
 
   it('cancels through the widget', async () => {
-    statuses = [{ run_id: 'run-3', state: 'cancelled', planned_runs: 3, finished_runs: 0, current_run: 1, current: null, error: null, model_label: 'Model M', title: null }];
+    statuses = [{ run_id: 'run-3', state: 'cancelled', planned_runs: 3, finished_runs: 0, current_run: 1, current: null, error: null, model_label: 'Model M', doc_label: null }];
     const tracking = ext.track({ ...statuses[0], state: 'running' });
     progressCalls[0][2].onCancel();
     await tracking;

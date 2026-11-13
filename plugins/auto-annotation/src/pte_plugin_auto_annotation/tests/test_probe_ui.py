@@ -43,7 +43,7 @@ PREFIX = "/api/plugins/auto-annotation/probe"
 
 def _meta(model_id: str = "oracle", reference: str = "gold1", user: str = "rev", prompt_version: int = 1) -> dict[str, object]:
     return {"username": user, "provider_id": "mock", "model_id": model_id, "model_label": model_id.title(), "doc_id": "doc1",
-            "title": "A document", "reference_stable_id": reference, "reference_is_gold": True, "input_stable_id": "v1",
+            "doc_label": "A document", "reference_stable_id": reference, "reference_is_gold": True, "input_stable_id": "v1",
             "input_choice": "earliest", "aligned_units": 4, "prompt_version": prompt_version, "rules_hash": "abc",
             "params": {"batches": ["units:1", "units:4"], "modes": ["all"], "repeats": 1, "concurrency": 1, "temperature": 0.0}}
 
@@ -208,7 +208,7 @@ class TestProbeRoutes(unittest.TestCase):
 
     def start(self, **body):
         return self.client.post(f"{PREFIX}/start", json={"reference_stable_id": "gold1", "provider_id": "mock", "model_id": "oracle",
-                                                         "model_label": "Oracle", "title": "A document", "batches": ["units:1", "units:4"], **body})
+                                                         "model_label": "Oracle", "doc_label": "A document", "batches": ["units:1", "units:4"], **body})
 
     def run_started_job(self) -> str:
         store, run_id, client, model, source, configs, concurrency, retry, max_units = self.started[-1]
