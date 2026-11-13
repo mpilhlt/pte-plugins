@@ -5,7 +5,7 @@ Automated annotation of TEI documents produced by any extractor: an LLM corrects
 It contains:
 
 - the **Correct annotations in new version** action in the editor's Tools menu, which corrects the open document with one model and saves the result as a new version;
-- the **model probe**, which measures how well a single model corrects the annotation of gold documents, and how that changes with the number of review units sent in one request;
+- the **model probe**, which measures how well a single model corrects the annotation of gold documents, and how that changes with the number of review units sent in one request; in the editor as **Test model with current document** in the Tools menu, and as a command line tool;
 - the **annotation pipeline**, which annotates documents or a whole collection with two models and an arbiter and saves the result as a new version.
 
 ## Correct annotations in new version
@@ -20,6 +20,25 @@ The Tools menu item (section "Annotation") is for annotators, reviewers and admi
 6. The client saves the document as a new version of the open one through the editor's save API; the source version is then frozen, since a version was derived from it. If the source document is still open, the new version is loaded; otherwise a dialog asks whether to load it.
 
 If the model changes nothing, no version is created. If the run is cancelled or a request fails (after retries), the user can save the corrections made so far; the change then records the unprocessed units. In every case that saves nothing, the job's lock is released and the source can be edited again.
+
+## Test model with current document
+
+Two items in the Tools menu (section "Inference") run the model probe in the editor. They are shown to reviewers and admins only.
+
+**Test model with current document** tests a model on the open version. That version is the reference that the model's corrections are scored against, and the model corrects an earlier extraction of the same document, chosen as by the probe's `--doc` (see below). The item is disabled when no document is open, when the document has no machine-readable rule reference, or when no model is available.
+
+1. If the open version is not a gold version, a warning asks for confirmation, since the scores are then measured against annotations that may contain errors.
+2. A form asks for the model (preselected: the default model of Tools > Inference), the batch sizes (`units:1` to `units:32`, plus further `units:N` or `chars:N` specs), the output modes, the repetitions, the requests in parallel, the retries, the temperature, a limit to the first units for a quick test, the version to correct (automatic or another version of the same variant), and whether to start even if the model is reported as busy. It shows the number of runs: batch sizes × modes × repetitions, each sending all units once.
+3. The server checks the parameters, the model (access, key, busy status) and the documents, and starts the test as a job of the worker that received the request. Errors open an error alert. A message confirms the start, and a minimized progress widget shows the runs done; its cancel button stops the test after the request under way. Each user can run one test at a time.
+4. When the test is done or was cancelled after a finished run, its results open in the plugin result dialog. Errors (all requests of a run failed, the server restarted) open an error alert, and the results of the finished runs are kept.
+
+**Model test results** opens the list of all tests, which can be filtered by model.
+
+The page of a test shows its parameters, its scores (as in the probe's report, with the input as the first row), download links for its result files and a zip of all of them, and two comparisons: the model's tests on other documents, with the scores per batch size and mode pooled over the units of the latest finished test of the model on each reference version, and the latest tests of other models on the same reference version. Tests with another prompt version, other rules (on the same document) or a reference that is not a gold version are marked, since their scores are not directly comparable. All reviewers see all tests; the user who started a test and admins can delete it.
+
+The tests are stored in `data/plugins/auto-annotation/probe-runs/<run id>/`: `meta.json` (user, model, document, versions, parameters), `status.json` (state and progress, rewritten while the test runs), and the probe's result files (`units.csv`, `batches.jsonl`, `summary.json`, `report.md`), written after every run. Every worker answers status requests and serves results from these files. A running test writes a heartbeat every 15 seconds; a test without a heartbeat for two minutes stopped with its worker and is shown as interrupted.
+
+The progress widget starts minimized with editor versions whose progress widget supports the `minimized` option; with older versions it starts maximized.
 
 ## Model probe
 
@@ -126,6 +145,12 @@ The modules `plugin.py`, `routes.py`, `sources.py`, `models.py`, `annotation.py`
 | `single.py` | Correcting one batch of units with a single model, checking the corrections a client sends back |
 | `correction_routes.py` | Routes of the "Correct annotations in new version" action, the job's lock (server) |
 | `extensions/auto-annotation.js` | The Tools menu action (frontend extension) |
+| `probe_store.py` | Storage of the editor's model tests: run directories, status, heartbeat, result files |
+| `probe_job.py` | Running a model test as a server job, cancelling it |
+| `probe_compare.py` | Comparing stored tests: other documents of the model (pooled scores), other models on the document |
+| `probe_views.py` | Result pages of the model tests |
+| `probe_routes.py` | Routes of "Test model with current document" (server) |
+| `extensions/auto-annotation-model-test.js` | The Tools menu items "Test model with current document" and "Model test results" (frontend extension) |
 | `cli_common.py` | Connection options of the CLIs |
 | `api_client.py` | HTTP client and `ServerChatClient` for the CLI |
 | `probe.py` | The model probe CLI |
@@ -140,6 +165,16 @@ For annotators, reviewers and admins, used by the Tools menu action (`<job>` is 
 - `POST /api/plugins/auto-annotation/correct/heartbeat` `<job>`: refreshes the lock (409 if it was lost).
 - `POST /api/plugins/auto-annotation/correct/finish` `{<job>, "provider_id", "model_id", "model_label", "corrections": [{"index", "xml"}], "processed", "invalid", "errors", "seconds"}`: checks the corrections and returns the document with them and the revision change; it does not save.
 - `POST /api/plugins/auto-annotation/correct/release` `<job>`: releases the lock and sends `lockReleased` to the other sessions.
+
+For reviewers and admins, used by "Test model with current document" (`<run>` is `{"run_id"}`):
+
+- `POST /api/plugins/auto-annotation/probe/start` `{"reference_stable_id", "input_stable_id", "provider_id", "model_id", "model_label", "title", "batches", "modes", "repeats", "concurrency", "retries", "temperature", "max_units", "force_busy"}`: checks the parameters, the model and the documents and starts the test; returns the run id, the number of runs and of units. 409 if the user has a test running or the model is busy, 422 for invalid parameters or documents without aligned units.
+- `GET /api/plugins/auto-annotation/probe/status?run=<id>`: state (`running`, `done`, `failed`, `cancelled`, `interrupted`), runs finished and planned, the run under way, the error.
+- `GET /api/plugins/auto-annotation/probe/jobs`: the user's running tests.
+- `POST /api/plugins/auto-annotation/probe/cancel` `<run>` and `POST /api/plugins/auto-annotation/probe/delete` `<run>`: for the user who started the test and admins.
+- `GET /api/plugins/auto-annotation/probe/view?run=<id>` and `GET /api/plugins/auto-annotation/probe/history[?model=<provider id>/<model id>]`: the pages; `GET /api/plugins/auto-annotation/probe/export?run=<id>[&file=<name>]`: a result file, or all as a zip.
+
+The plugin endpoint `probe_results` (not in the menu) returns the URL of a test's page, or of the list, for the plugin result dialog.
 
 For reviewers and admins, used by the CLIs:
 
