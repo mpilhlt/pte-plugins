@@ -237,6 +237,27 @@ def _records(model: str, source: EvalSource, config: RunConfig, alignment: Align
     return records
 
 
+def align_source(source: EvalSource, max_units: int | None = None) -> Alignment | SegmentAlignment:
+    """
+    Align the input units with the reference units; with max_units, only the first aligned units.
+
+    Raises:
+        ValueError: a document is not well-formed, the unit path is invalid, or no unit could be aligned.
+    """
+    alignment: Alignment | SegmentAlignment
+    if source.segmenting:
+        alignment = align_segments(source.input_xml, source.gold_xml, source.unit_path)
+        if max_units is not None:
+            alignment = alignment.truncated(max_units)
+    else:
+        alignment = align_documents(source.input_xml, source.gold_xml, source.unit_path)
+        if max_units is not None:
+            alignment = Alignment(alignment.pairs[:max_units], alignment.unmatched_input, alignment.unmatched_gold)
+    if not aligned_units(alignment):
+        raise ValueError("No unit of the input version matches the reference version by its text")
+    return alignment
+
+
 def sweep(specs: Sequence[BatchSpec], modes: Sequence[OutputMode], repeats: int) -> list[RunConfig]:
     """All combinations, repetitions innermost."""
     return [RunConfig(spec, mode, r) for spec in specs for mode in modes for r in range(1, repeats + 1)]
@@ -261,18 +282,8 @@ async def evaluate(
     Raises:
         ValueError: a document is not well-formed, the unit path is invalid, or no unit could be aligned.
     """
-    alignment: Alignment | SegmentAlignment
-    if source.segmenting:
-        alignment = align_segments(source.input_xml, source.gold_xml, source.unit_path)
-        if max_units is not None:
-            alignment = alignment.truncated(max_units)
-    else:
-        alignment = align_documents(source.input_xml, source.gold_xml, source.unit_path)
-        if max_units is not None:
-            alignment = Alignment(alignment.pairs[:max_units], alignment.unmatched_input, alignment.unmatched_gold)
+    alignment = align_source(source, max_units)
     units = aligned_units(alignment)
-    if not units:
-        raise ValueError("No unit of the input version matches the reference version by its text")
     result = EvaluationResult(model=model, source=source, alignment=alignment, planned_runs=len(configs))
 
     baseline = _scores(alignment, None)

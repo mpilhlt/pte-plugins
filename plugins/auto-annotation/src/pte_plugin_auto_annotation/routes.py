@@ -7,6 +7,7 @@ Routes of the auto-annotation plugin, used by the model probe CLI and the annota
   POST /api/plugins/auto-annotation/annotate      annotate one version with the pipeline (result returned, not saved)
   GET  /api/plugins/auto-annotation/targets       the version of each document of a collection to annotate
   POST /api/plugins/auto-annotation/correct/...   the "Correct annotations in new version" action (correction_routes.py)
+  ...  /api/plugins/auto-annotation/probe/...     "Test model with current document": the probe as a server job (probe_routes.py)
 
 The routes above are for reviewers and admins, those of correction_routes.py also for annotators. The completion route only relays prompts the client
 built; it applies the same model access rules as the LLM Reviewer.
@@ -36,6 +37,7 @@ from .annotation import annotate_file, find_targets
 from .batching import BatchSpec
 from .correction import RetryPolicy, is_transient_message
 from .correction_routes import router as correction_router
+from .probe_routes import router as probe_router
 from .pipeline import PipelineConfig
 from .prompts import OutputMode
 from .models import ModelResolutionError, ensure_model_access, provider_for_user, resolve_model_for_user
@@ -45,6 +47,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/plugins/auto-annotation", tags=["auto-annotation"])
 router.include_router(correction_router)
+router.include_router(probe_router)
 
 
 class RuleResponse(BaseModel):
