@@ -106,6 +106,40 @@ def _document_label(meta: Mapping[str, object]) -> str:
     return str(meta.get("doc_label") or meta.get("title") or meta.get("doc_id") or meta.get("reference_stable_id"))
 
 
+METHOD_SECTION = """
+<h2 id="method">How the scores are computed</h2>
+<p class="note"><b>What is compared.</b> Three versions of each review unit of the variant (the elements of its unit path, e.g. one
+<code>bibl</code> per reference): the <i>input</i>, which the model was asked to correct (normally the extraction the reference was derived
+from); the <i>proposal</i>, the unit as the model returned it; and the <i>reference</i>, the version the test was started on (ideally the gold
+version). Input and reference units are matched in document order by their text, ignoring whitespace; units without a match are not scored
+and their number is given above ("aligned"). For variants whose units the model may split or merge (e.g. the reference segmenter), both
+versions are read as one text, and each element is placed by its position in that text instead.</p>
+<p class="note"><b>Fields.</b> Each unit is broken down into fields, one per element including the unit's own element: its path from the unit
+element, its attributes (except <code>xml:id</code>) and its text, with whitespace collapsed. A unit is the multiset of its fields, so a
+wrong tag, a wrong attribute value or text in the wrong element each make a field differ.</p>
+<p class="note"><b>Edits (Edit P, Edit R, Edit F1).</b> Since the input is mostly right already, the main measure looks at the changes only.
+<i>Needed edits</i> are the fields that the reference has and the input lacks (to add) plus those that the input has and the reference lacks
+(to remove). <i>Made edits</i> are the same between input and proposal. A made edit is <i>correct</i> if it is also needed (the same field
+added, or the same field removed). Edit precision = correct edits / made edits (how many of the model's changes were right), edit recall =
+correct edits / needed edits (how many of the necessary changes it made), F1 = their harmonic mean. "–" means the denominator is 0, e.g. no
+precision when the model changed nothing.</p>
+<p class="note"><b>Fields (Field F1, Input field F1).</b> Agreement of the whole unit with the reference, unchanged fields included: field
+precision = fields of the proposal found in the reference / fields of the proposal, field recall = the same / fields of the reference. The
+input row (and "Input field F1") scores the input against the reference, which shows how much there was to correct. <b>Exact %</b>: units
+whose proposal has exactly the fields of the reference.</p>
+<p class="note"><b>Failures and errors.</b> A <i>failure</i> is a unit the model answered without a usable proposal: missing from the answer
+(in mode "all"), not well-formed, a different outermost element, or changed text (the model must not change the text). Failed units are
+scored as if the input were kept, i.e. as making no edits, so they lower recall. In mode "changed", a unit the model does not return counts
+as unchanged, not as a failure. An <i>error</i> is a unit whose request failed (provider error, also after the retries); errors say nothing
+about the model and are left out of all other columns.</p>
+<p class="note"><b>Averaging.</b> All scores are micro-averaged: the counts are summed over all units of a configuration (batch size and
+output mode, over its repetitions) before dividing, so long units with many fields weigh more than short ones. "Edit R by quarter" splits the
+edit recall by the position of the unit in its request (first to last quarter of the batch), which shows whether the model gets sloppier
+towards the end of long batches. "Seconds" is the time of the requests, without the waits before retries. The pooled table of a model sums
+the counts over the latest finished test on each reference version, so every document counts by its units.</p>
+"""
+
+
 SUMMARY_HEADERS = ["Batching", "Mode", "Runs", "Calls", "Retries", "Errors %", "Failures %", "Exact %", "Edit P", "Edit R", "Edit F1", "Field F1", "Edit R by quarter", "Seconds"]
 
 
@@ -217,9 +251,8 @@ def render_run_page(
     if item.summaries:
         parts.append(_summary_table(item.summaries, item.baseline, item.best))
         parts.append(
-            '<p class="note">Edit P/R: precision and recall of the changes the model made to the input, against the changes the reference needs. '
-            "Errors: units whose request failed; left out of all other columns. Failures: units answered without a usable proposal, scored as unchanged input. "
-            "The first row scores the input itself; the highlighted row has the highest edit F1.</p>"
+            '<p class="note">The first row scores the input itself; the highlighted row has the highest edit F1. '
+            '<a href="#method">How the scores are computed</a>.</p>'
         )
     else:
         parts.append('<p class="note">No run has finished yet.</p>')
@@ -259,6 +292,8 @@ def render_run_page(
         parts.append('<p class="note">The latest test of each model on the same reference version.</p>')
     else:
         parts.append('<p class="note">No other model has been tested on this reference version yet.</p>')
+
+    parts.append(METHOD_SECTION)
 
     if can_delete:
         parts.append(
