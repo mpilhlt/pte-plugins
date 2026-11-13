@@ -80,7 +80,7 @@
       "package": "pte-plugin-auto-annotation",
       "module": "pte_plugin_auto_annotation",
       "path": "plugins/auto-annotation",
-      "version": "1.4.0",
+      "version": "1.5.0",
       "description": "Corrects the annotations of TEI documents with LLMs; model probe and annotation pipeline",
       "requires": [],
       "dependencies": [],
