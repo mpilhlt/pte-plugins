@@ -147,9 +147,12 @@ async def view_progress(
         stage_counts = {stage: 0 for stage in lifecycle_order}
         stage_counts["no-status"] = 0
         total_progress_sum = 0
+        # The stage each document is counted under, used by the stage filter of the table
+        doc_stage: dict[str, str] = {}
 
         for doc_id in all_doc_ids:
             annotations = doc_annotations[doc_id]
+            doc_stage[doc_id] = "no-status"
             if not annotations:
                 stage_counts["no-status"] += 1
                 continue
@@ -159,6 +162,7 @@ async def view_progress(
 
             if status in lifecycle_order:
                 stage_counts[status] += 1
+                doc_stage[doc_id] = status
                 current_index = lifecycle_order.index(status)
                 doc_progress = ((current_index + 1) / len(lifecycle_order)) * 100
                 total_progress_sum += doc_progress
@@ -182,7 +186,7 @@ async def view_progress(
         for label, doc_id in documents:
             annotations = doc_annotations[doc_id]
 
-            label_cell = f'<span class="doc-label" title="{escape_html(label)}">{escape_html(label)}</span>'
+            label_cell = f'<span class="doc-label" data-stage="{escape_html(doc_stage[doc_id])}" title="{escape_html(label)}">{escape_html(label)}</span>'
             # Make doc_id clickable if a PDF exists for it
             pdf = doc_pdf.get(doc_id)
             if pdf:
@@ -272,14 +276,34 @@ async def view_progress(
                     margin-top: 8px;
                 }
                 .stage-badge {
+                    font: inherit;
                     background: white;
-                    border: 1px solid #e9ecef;
+                    border: 1px solid #adb5bd;
+                    color: #212529;
                     padding: 6px 12px;
                     border-radius: 4px;
                     font-size: 0.9em;
                 }
                 .stage-badge strong {
                     color: #495057;
+                }
+                .stage-hint {
+                    font-style: italic;
+                }
+                button.stage-badge {
+                    cursor: pointer;
+                }
+                button.stage-badge:hover {
+                    background: #f1f3f5;
+                }
+                button.stage-badge[aria-pressed="false"] {
+                    background: #f8f9fa;
+                    border: 1px dashed #ced4da;
+                    color: #adb5bd;
+                    text-decoration: line-through;
+                }
+                button.stage-badge[aria-pressed="false"] strong {
+                    color: #adb5bd;
                 }
                 .status-indicator {
                     display: inline-flex;
@@ -737,15 +761,22 @@ HISTORY_TABLE_JS = """
     $('#annotationProgressTable thead th').removeClass('sorting sorting_asc sorting_desc');
 
     var groupOf = [];
+    var groupStage = [];
     var group = -1;
     $('#annotationProgressTable tbody tr').each(function () {
-        if ($(this).find('.doc-label').length) group++;
+        var label = $(this).find('.doc-label');
+        if (label.length) {
+            group++;
+            groupStage.push(label.attr('data-stage'));
+        }
         groupOf.push(group);
     });
 
     var matchedGroups = null;
+    var hiddenStages = new Set();
     $.fn.dataTable.ext.search.push(function (settings, data, dataIndex) {
-        return matchedGroups === null || matchedGroups.has(groupOf[dataIndex]);
+        var g = groupOf[dataIndex];
+        return !hiddenStages.has(groupStage[g]) && (matchedGroups === null || matchedGroups.has(g));
     });
 
     table = $('#annotationProgressTable').DataTable({ ordering: false, pageLength: pageLength });
@@ -760,6 +791,15 @@ HISTORY_TABLE_JS = """
                 if ($(this.node()).text().toLowerCase().includes(query)) matchedGroups.add(groupOf[rowIdx]);
             });
         }
+        table.draw();
+    });
+
+    // The stage badges of the summary toggle the documents of their stage
+    $('.stage-badge[data-stage]').on('click', function () {
+        var stage = this.dataset.stage;
+        var active = this.getAttribute('aria-pressed') !== 'false';
+        this.setAttribute('aria-pressed', active ? 'false' : 'true');
+        if (active) hiddenStages.add(stage); else hiddenStages.delete(stage);
         table.draw();
     });
 """
@@ -1027,6 +1067,24 @@ def _create_status_indicator(status: str, lifecycle_order: list[str]) -> str:
     return f'<span class="status-indicator" title="{status_text} ({filled_count}/{total_stages})">{circles_html} <span class="status-label" style="background: {bg_color}; color: {text_color};">{status_display}</span></span>'
 
 
+def _stage_badge_html(stage: str, label: str, count: int) -> str:
+    """
+    A badge of the stage distribution. Clicking it hides or shows the documents counted under
+    the stage in the table (see HISTORY_TABLE_JS); all stages are shown initially.
+
+    Args:
+        stage: The stage, as in the ``data-stage`` attribute of the document labels
+        label: The text shown after the count
+        count: The number of documents counted under the stage
+
+    Returns:
+        HTML string for the badge
+    """
+    from fastapi_app.lib.plugins.plugin_tools import escape_html
+
+    return f'<button type="button" class="stage-badge" data-stage="{escape_html(stage)}" aria-pressed="true" title="Click to hide or show these documents"><strong>{count}</strong> {escape_html(label)}</button>'
+
+
 def _create_summary_card(
     total_docs: int,
     avg_progress: float,
@@ -1052,14 +1110,15 @@ def _create_summary_card(
     for stage in lifecycle_order:
         count = stage_counts.get(stage, 0)
         if count > 0:
-            stage_badges.append(f'<span class="stage-badge"><strong>{count}</strong> {stage}</span>')
+            stage_badges.append(_stage_badge_html(stage, stage, count))
 
     # Add no-status count if any
     no_status_count = stage_counts.get("no-status", 0)
     if no_status_count > 0:
-        stage_badges.append(f'<span class="stage-badge"><strong>{no_status_count}</strong> no status</span>')
+        stage_badges.append(_stage_badge_html("no-status", "no status", no_status_count))
 
     stage_badges_html = "\n".join(stage_badges) if stage_badges else '<span class="stage-badge">No data</span>'
+    hint_html = ' <span class="stage-hint">(click a badge to hide or show its documents)</span>' if stage_badges else ""
 
     return f"""
     <div class="summary-card">
@@ -1078,7 +1137,7 @@ def _create_summary_card(
             </div>
         </div>
         <div class="stage-distribution">
-            <div class="stat-label">Distribution by Lifecycle Stage</div>
+            <div class="stat-label">Distribution by Lifecycle Stage{hint_html}</div>
             <div class="stage-list">
                 {stage_badges_html}
             </div>

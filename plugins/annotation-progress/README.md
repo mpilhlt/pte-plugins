@@ -5,6 +5,7 @@ Backend plugin that provides an overview of annotation progress for documents in
 ## Features
 
 - Displays all documents in the current collection
+- Hides or shows the documents of a lifecycle stage by clicking its badge in the summary
 - Shows annotation labels with revision counts for each document
 - Groups annotations by document ID
 - Clickable annotation labels to open documents
@@ -26,6 +27,10 @@ The plugin generates a DataTables page with one row per version history of each 
 - **Last Change**, **Last Annotator**, **Status**, **Date**: from the last `<change>` of the most recently edited current version of the history
 
 Documents without any annotations show "No annotations". Sorting is disabled so that the rows of a document stay together; the search shows a document with all its histories if any of their rows match.
+
+### Filtering by lifecycle stage
+
+The summary above the table counts the documents by lifecycle stage: the most advanced status of a document's versions in `annotation.lifecycle.order`, or "no status" if the document has no annotations or none of its versions has a status from that list. Each stage badge is a toggle. Clicking it hides the documents of that stage from the table and shows the badge crossed out; clicking it again shows them again. All stages are shown when the page is loaded. The filter combines with the search, e.g. hiding "no status" lists only the documents that have been annotated.
 
 ### Share link
 

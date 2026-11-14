@@ -11,6 +11,7 @@ from unittest.mock import MagicMock
 
 from pte_plugin_annotation_progress.plugin import AnnotationProgressPlugin
 from pte_plugin_annotation_progress.routes import (
+    _create_summary_card,
     _document_label,
     _extract_annotation_info,
     _format_history_html,
@@ -348,3 +349,23 @@ class TestDocumentLabel(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestStageBadges(unittest.TestCase):
+    def test_badges_are_active_toggles_with_their_stage(self):
+        html = _create_summary_card(3, 50.0, 2, {"draft": 1, "approved": 0, "no-status": 2}, ["draft", "approved"])
+        self.assertIn('data-stage="draft" aria-pressed="true"', html)
+        self.assertIn('data-stage="no-status" aria-pressed="true"', html)
+        self.assertIn("</strong> no status</button>", html)
+        self.assertIn("click a badge to hide or show its documents", html)
+        # stages without documents get no badge
+        self.assertNotIn('data-stage="approved"', html)
+
+    def test_no_hint_without_badges(self):
+        html = _create_summary_card(0, 0.0, 0, {"no-status": 0}, ["draft"])
+        self.assertIn("No data", html)
+        self.assertNotIn("click a badge", html)
+
+    def test_escapes_stage(self):
+        html = _create_summary_card(1, 0.0, 1, {"<x>": 1}, ["<x>"])
+        self.assertNotIn("<x>", html)
