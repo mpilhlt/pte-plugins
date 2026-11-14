@@ -183,7 +183,7 @@
       "package": "pte-plugin-kisski",
       "module": "pte_plugin_kisski",
       "path": "plugins/kisski",
-      "version": "2.0.3",
+      "version": "2.0.4",
       "description": "Text and PDF processing using KISSKI Academic Cloud API",
       "requires": [],
       "dependencies": [
