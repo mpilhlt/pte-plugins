@@ -217,7 +217,7 @@
       "package": "pte-plugin-local-sync",
       "module": "pte_plugin_local_sync",
       "path": "plugins/local-sync",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "description": "Synchronize collection documents with local filesystem",
       "requires": [],
       "dependencies": [],
