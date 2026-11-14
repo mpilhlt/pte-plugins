@@ -277,7 +277,7 @@
       "package": "pte-plugin-rng-converter",
       "module": "pte_plugin_rng_converter",
       "path": "plugins/rng-converter",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "description": "Generate RelaxNG schema from TEI document structure",
       "requires": [],
       "dependencies": [],
