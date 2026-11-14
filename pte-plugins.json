@@ -110,7 +110,7 @@
       "package": "pte-plugin-edit-history",
       "module": "pte_plugin_edit_history",
       "path": "plugins/edit-history",
-      "version": "1.0.2",
+      "version": "1.0.3",
       "description": "View recent activity in the current collection",
       "requires": [],
       "dependencies": [],
