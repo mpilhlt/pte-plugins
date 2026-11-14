@@ -1,5 +1,5 @@
 {
-  "version": "2.0.0",
+  "version": "2.0.1",
   "readme": "https://github.com/mpilhlt/pte-plugins/tree/main/plugins/mpcdf-llm#readme",
   "engines": {
     "pte": ">=0.83.0",
