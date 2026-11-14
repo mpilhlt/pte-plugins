@@ -141,7 +141,7 @@
       "package": "pte-plugin-grobid",
       "module": "pte_plugin_grobid",
       "path": "plugins/grobid",
-      "version": "1.4.0",
+      "version": "1.4.1",
       "description": "Extract training data using GROBID server",
       "requires": [],
       "dependencies": [],
