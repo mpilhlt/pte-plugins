@@ -291,7 +291,7 @@
       "package": "pte-plugin-update-metadata",
       "module": "pte_plugin_update_metadata",
       "path": "plugins/update-metadata",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "description": "Update TEI documents with complete bibliographic metadata from DOI lookup",
       "requires": [],
       "dependencies": [],
