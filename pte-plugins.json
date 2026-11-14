@@ -11,7 +11,7 @@
       "requires": [],
       "dependencies": [],
       "engines": {
-        "pte": ">=0.76.0",
+        "pte": ">=0.83.0",
         "pte-plugin-api": "^1.0"
       }
     },
@@ -25,7 +25,7 @@
       "requires": [],
       "dependencies": [],
       "engines": {
-        "pte": ">=0.76.0",
+        "pte": ">=0.83.0",
         "pte-plugin-api": "^1.0"
       }
     },
@@ -101,7 +101,7 @@
       ],
       "dependencies": [],
       "engines": {
-        "pte": ">=0.76.0",
+        "pte": ">=0.83.0",
         "pte-plugin-api": "^1.0"
       }
     },
@@ -115,7 +115,7 @@
       "requires": [],
       "dependencies": [],
       "engines": {
-        "pte": ">=0.76.0",
+        "pte": ">=0.83.0",
         "pte-plugin-api": "^1.0"
       }
     },
@@ -146,7 +146,7 @@
       "requires": [],
       "dependencies": [],
       "engines": {
-        "pte": ">=0.76.0",
+        "pte": ">=0.83.0",
         "pte-plugin-api": "^1.0"
       }
     },
@@ -160,7 +160,7 @@
       "requires": [],
       "dependencies": [],
       "engines": {
-        "pte": ">=0.76.0",
+        "pte": ">=0.83.0",
         "pte-plugin-api": "^1.0"
       }
     },
@@ -174,7 +174,7 @@
       "requires": [],
       "dependencies": [],
       "engines": {
-        "pte": ">=0.82.0",
+        "pte": ">=0.83.0",
         "pte-plugin-api": "^1.2"
       }
     },
@@ -191,7 +191,7 @@
         "pdf2image>=1.17.0"
       ],
       "engines": {
-        "pte": ">=0.82.0",
+        "pte": ">=0.83.0",
         "pte-plugin-api": "^1.2"
       }
     },
@@ -222,7 +222,7 @@
       "requires": [],
       "dependencies": [],
       "engines": {
-        "pte": ">=0.76.0",
+        "pte": ">=0.83.0",
         "pte-plugin-api": "^1.0"
       }
     },
@@ -238,7 +238,7 @@
       ],
       "dependencies": [],
       "engines": {
-        "pte": ">=0.76.0",
+        "pte": ">=0.83.0",
         "pte-plugin-api": "^1.0"
       }
     },
@@ -254,7 +254,7 @@
         "mpcdf-llm[fastapi,testing] @ git+https://gitlab.mpcdf.mpg.de/cboul/llm-mpcdf.git@1ffc5c4c3226ad3efdd541e07b1104e24511d8fb"
       ],
       "engines": {
-        "pte": ">=0.82.0",
+        "pte": ">=0.83.0",
         "pte-plugin-api": "^1.3"
       }
     },
@@ -268,7 +268,7 @@
       "requires": [],
       "dependencies": [],
       "engines": {
-        "pte": ">=0.76.0",
+        "pte": ">=0.83.0",
         "pte-plugin-api": "^1.0"
       }
     },
@@ -282,7 +282,7 @@
       "requires": [],
       "dependencies": [],
       "engines": {
-        "pte": ">=0.76.0",
+        "pte": ">=0.83.0",
         "pte-plugin-api": "^1.0"
       }
     },
@@ -296,7 +296,7 @@
       "requires": [],
       "dependencies": [],
       "engines": {
-        "pte": ">=0.76.0",
+        "pte": ">=0.83.0",
         "pte-plugin-api": "^1.0"
       }
     },
@@ -312,7 +312,7 @@
         "webdav4[fsspec]>=0.10.0"
       ],
       "engines": {
-        "pte": ">=0.76.0",
+        "pte": ">=0.83.0",
         "pte-plugin-api": "^1.0"
       }
     }
