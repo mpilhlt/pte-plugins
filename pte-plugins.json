@@ -94,7 +94,7 @@
       "package": "pte-plugin-collection-overview",
       "module": "pte_plugin_collection_overview",
       "path": "plugins/collection-overview",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "description": "Overview of gold-standard coverage and annotation progress across all accessible collections",
       "requires": [
         "annotation-progress"
