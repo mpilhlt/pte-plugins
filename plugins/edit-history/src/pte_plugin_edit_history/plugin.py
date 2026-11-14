@@ -89,7 +89,6 @@ class EditHistoryPlugin(Plugin):
             }
 
         variant_filter = params.get("variant")
-        session_id = params.get("_session_id", "")
 
         # Build URLs
         variant_param = f"&variant={variant_filter}" if variant_filter else ""

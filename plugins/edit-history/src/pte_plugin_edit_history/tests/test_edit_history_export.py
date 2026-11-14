@@ -61,10 +61,10 @@ class TestEditHistoryExport(unittest.IsolatedAsyncioTestCase):
 
         response = self.client.get(
             "/api/plugins/edit-history/export",
-            params={"collection": "test-collection", "session_id": "invalid"},
+            params={"collection": "test-collection"}, headers={"X-Session-ID": "invalid"},
         )
         self.assertEqual(response.status_code, 401)
-        self.assertIn("Invalid or expired session", response.json()["detail"])
+        self.assertIn("Session expired", response.json()["detail"])
 
     @patch("fastapi_app.config.get_settings")
     def test_export_csv_no_user(self, mock_settings):
@@ -81,10 +81,10 @@ class TestEditHistoryExport(unittest.IsolatedAsyncioTestCase):
 
         response = self.client.get(
             "/api/plugins/edit-history/export",
-            params={"collection": "test-collection", "session_id": "valid-session"},
+            params={"collection": "test-collection"}, headers={"X-Session-ID": "valid-session"},
         )
         self.assertEqual(response.status_code, 401)
-        self.assertIn("User not found", response.json()["detail"])
+        self.assertIn("Authentication required", response.json()["detail"])
 
     @patch("fastapi_app.lib.permissions.user_utils.user_has_collection_access")
     @patch("fastapi_app.config.get_settings")
@@ -106,7 +106,7 @@ class TestEditHistoryExport(unittest.IsolatedAsyncioTestCase):
 
         response = self.client.get(
             "/api/plugins/edit-history/export",
-            params={"collection": "test-collection", "session_id": "valid-session"},
+            params={"collection": "test-collection"}, headers={"X-Session-ID": "valid-session"},
         )
         self.assertEqual(response.status_code, 403)
         self.assertIn("Access denied", response.json()["detail"])
@@ -181,8 +181,8 @@ class TestEditHistoryExport(unittest.IsolatedAsyncioTestCase):
             "/api/plugins/edit-history/export",
             params={
                 "collection": "test-collection",
-                "session_id": "valid-session",
             },
+            headers={"X-Session-ID": "valid-session"},
         )
 
         # Verify response
@@ -272,8 +272,8 @@ class TestEditHistoryExport(unittest.IsolatedAsyncioTestCase):
             params={
                 "collection": "test-collection",
                 "variant": "grobid",
-                "session_id": "valid-session",
             },
+            headers={"X-Session-ID": "valid-session"},
         )
 
         self.assertEqual(response.status_code, 200)
@@ -313,7 +313,7 @@ class TestEditHistoryExport(unittest.IsolatedAsyncioTestCase):
 
         response = self.client.get(
             "/api/plugins/edit-history/export",
-            params={"collection": "test-collection", "session_id": "valid-session"},
+            params={"collection": "test-collection"}, headers={"X-Session-ID": "valid-session"},
         )
 
         self.assertEqual(response.status_code, 200)
