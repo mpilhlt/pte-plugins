@@ -3,18 +3,17 @@ Custom routes for RNG Converter plugin.
 """
 
 import logging
+from typing import Any
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
-from lxml import etree
 
 from fastapi_app.lib.core.dependencies import (
-    get_auth_manager,
     get_db,
     get_file_storage,
-    get_session_manager,
 )
 from pte_plugin_rng_converter.rng_generator import generate_rng_schema
+from fastapi_app.plugin_api import require_authenticated_user
 
 logger = logging.getLogger(__name__)
 
@@ -25,10 +24,7 @@ router = APIRouter(prefix="/api/plugins/rng-converter", tags=["rng-converter"])
 async def download_rng(
     file_id: str = Query(..., description="TEI file stable ID"),
     variant: str = Query("rng-schema", description="Variant name for the schema"),
-    session_id: str | None = Query(None),
-    x_session_id: str | None = Header(None, alias="X-Session-ID"),
-    session_manager=Depends(get_session_manager),
-    auth_manager=Depends(get_auth_manager),
+    user: dict[str, Any] = Depends(require_authenticated_user),
 ):
     """
     Generate and download RelaxNG schema from TEI document.
@@ -36,10 +32,7 @@ async def download_rng(
     Args:
         file_id: TEI file stable ID
         variant: Variant name for the schema
-        session_id: Session ID from query parameter
-        x_session_id: Session ID from header
-        session_manager: Session manager dependency
-        auth_manager: Auth manager dependency
+        user: Authenticated user
 
     Returns:
         RelaxNG schema as XML file
@@ -47,20 +40,7 @@ async def download_rng(
     from fastapi_app.config import get_settings
     from fastapi_app.lib.repository.file_repository import FileRepository
 
-    # Extract session ID (header takes precedence)
-    session_id_value = x_session_id or session_id
-    if not session_id_value:
-        raise HTTPException(status_code=401, detail="Authentication required")
-
-    # Validate session
     settings = get_settings()
-    if not session_manager.is_session_valid(session_id_value, settings.session_timeout):
-        raise HTTPException(status_code=401, detail="Invalid or expired session")
-
-    # Get user
-    user = auth_manager.get_user_by_session_id(session_id_value, session_manager)
-    if not user:
-        raise HTTPException(status_code=401, detail="User not found")
 
     try:
         db = get_db()
