@@ -2,7 +2,7 @@
   "version": "1.0.1",
   "readme": "https://github.com/mpilhlt/pte-plugins/tree/main/plugins/iaa-analyzer#readme",
   "engines": {
-    "pte": ">=0.76.0",
+    "pte": ">=0.83.0",
     "pte-plugin-api": "^1.0"
   }
 }

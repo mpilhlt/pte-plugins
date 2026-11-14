@@ -13,15 +13,13 @@ import asyncio
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
-from fastapi_app.lib.core.dependencies import get_auth_manager
-from fastapi_app.lib.permissions.acl_utils import user_is_admin
 from fastapi_app.lib.plugins.plugin_tools import load_plugin_html
 from fastapi_app.lib.secrets import MissingSecretError, SecretsError, require_user_secret
-from fastapi_app.plugin_api import LLMProviderError, get_session_manager, get_settings, require_admin_user
+from fastapi_app.plugin_api import LLMProviderError, require_admin_user
 
 from .keys import delete_shared_key, get_shared_key, set_shared_key
 from .llm_provider import EndpointLLMProvider
@@ -114,18 +112,9 @@ async def _test(provider: EndpointLLMProvider) -> TestResponse:
 
 @router.get("/manage", response_class=HTMLResponse)
 async def manage_page(
-    session_id: str | None = Query(None),
-    x_session_id: str | None = Header(None, alias="X-Session-ID"),
-    session_manager=Depends(get_session_manager),
-    auth_manager=Depends(get_auth_manager),
+    user: dict[str, Any] = Depends(require_admin_user),
 ) -> HTMLResponse:
     """The management page; it loads the endpoints through the JSON routes."""
-    session_value = x_session_id or session_id
-    if not session_value or not session_manager.is_session_valid(session_value, get_settings().session_timeout):
-        raise HTTPException(status_code=401, detail="Authentication required")
-    user = auth_manager.get_user_by_session_id(session_value, session_manager)
-    if not user or not user_is_admin(user):
-        raise HTTPException(status_code=403, detail="Admin role required")
     return HTMLResponse(load_plugin_html(__file__, "manage.html"))
 
 

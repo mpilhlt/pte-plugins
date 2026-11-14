@@ -93,10 +93,10 @@ class TestCollectionOverviewRoutes(unittest.TestCase):
 
         response = self.client.get(
             "/api/plugins/collection-overview/data",
-            params={"session_id": "invalid"},
+            headers={"X-Session-ID": "invalid"},
         )
         self.assertEqual(response.status_code, 401)
-        self.assertIn("Invalid or expired session", response.json()["detail"])
+        self.assertIn("Session expired", response.json()["detail"])
 
     @patch("fastapi_app.config.get_settings")
     def test_data_no_user(self, mock_settings):
@@ -106,10 +106,10 @@ class TestCollectionOverviewRoutes(unittest.TestCase):
 
         response = self.client.get(
             "/api/plugins/collection-overview/data",
-            params={"session_id": "valid-session"},
+            headers={"X-Session-ID": "valid-session"},
         )
         self.assertEqual(response.status_code, 401)
-        self.assertIn("User not found", response.json()["detail"])
+        self.assertIn("Authentication required", response.json()["detail"])
 
     @patch("fastapi_app.lib.repository.file_repository.FileRepository")
     @patch("fastapi_app.lib.utils.config_utils.get_config")
@@ -142,7 +142,7 @@ class TestCollectionOverviewRoutes(unittest.TestCase):
 
         response = self.client.get(
             "/api/plugins/collection-overview/data",
-            params={"session_id": "valid-session"},
+            headers={"X-Session-ID": "valid-session"},
         )
 
         self.assertEqual(response.status_code, 200)
@@ -182,7 +182,7 @@ class TestCollectionOverviewRoutes(unittest.TestCase):
 
         response = self.client.get(
             "/api/plugins/collection-overview/data",
-            params={"session_id": "valid-session"},
+            headers={"X-Session-ID": "valid-session"},
         )
 
         self.assertEqual(response.status_code, 200)
@@ -229,7 +229,7 @@ class TestCollectionOverviewRoutes(unittest.TestCase):
 
         response = self.client.get(
             "/api/plugins/collection-overview/data",
-            params={"session_id": "valid-session"},
+            headers={"X-Session-ID": "valid-session"},
         )
 
         self.assertEqual(response.status_code, 200)
@@ -265,7 +265,7 @@ class TestCollectionOverviewRoutes(unittest.TestCase):
 
         response = self.client.get(
             "/api/plugins/collection-overview/view",
-            params={"session_id": "valid-session"},
+            headers={"X-Session-ID": "valid-session"},
         )
 
         self.assertEqual(response.status_code, 200)
@@ -301,7 +301,7 @@ class TestCollectionOverviewRoutes(unittest.TestCase):
 
         response = self.client.get(
             "/api/plugins/collection-overview/export",
-            params={"session_id": "valid-session"},
+            headers={"X-Session-ID": "valid-session"},
         )
 
         self.assertEqual(response.status_code, 200)
@@ -343,7 +343,7 @@ class TestCollectionOverviewRoutes(unittest.TestCase):
 
         response = self.client.get(
             "/api/plugins/collection-overview/export",
-            params={"session_id": "valid-session"},
+            headers={"X-Session-ID": "valid-session"},
         )
 
         self.assertEqual(response.status_code, 200)

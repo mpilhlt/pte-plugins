@@ -9,16 +9,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse, HTMLResponse
 from lxml import etree
 
 from fastapi_app.lib.core.dependencies import (
-    get_auth_manager,
     get_db,
     get_file_repository,
     get_file_storage,
-    get_session_manager,
     require_authenticated_user,
 )
 from fastapi_app.lib.models import FileMetadata
@@ -33,10 +31,7 @@ router = APIRouter(prefix="/api/plugins/edit-history", tags=["edit-history"])
 async def view_history(
     collection: str = Query(..., description="Collection ID"),
     variant: str | None = Query(None, description="Variant filter"),
-    session_id: str | None = Query(None),
-    x_session_id: str | None = Header(None, alias="X-Session-ID"),
-    session_manager=Depends(get_session_manager),
-    auth_manager=Depends(get_auth_manager),
+    user: dict[str, Any] = Depends(require_authenticated_user),
 ):
     """
     View edit history as an HTML page with sortable table.
@@ -44,10 +39,7 @@ async def view_history(
     Args:
         collection: Collection ID to view
         variant: Optional variant filter
-        session_id: Session ID from query parameter
-        x_session_id: Session ID from header
-        session_manager: Session manager dependency
-        auth_manager: Auth manager dependency
+        user: Authenticated user
 
     Returns:
         HTML page with DataTables-powered table
@@ -56,20 +48,7 @@ async def view_history(
     from fastapi_app.lib.repository.file_repository import FileRepository
     from fastapi_app.lib.plugins.plugin_tools import generate_datatable_page, escape_html
 
-    # Extract session ID (header takes precedence)
-    session_id_value = x_session_id or session_id
-    if not session_id_value:
-        raise HTTPException(status_code=401, detail="Authentication required")
-
-    # Validate session
     settings = get_settings()
-    if not session_manager.is_session_valid(session_id_value, settings.session_timeout):
-        raise HTTPException(status_code=401, detail="Invalid or expired session")
-
-    # Get user
-    user = auth_manager.get_user_by_session_id(session_id_value, session_manager)
-    if not user:
-        raise HTTPException(status_code=401, detail="User not found")
 
     # Check collection access
     from fastapi_app.lib.permissions.user_utils import user_has_collection_access
@@ -156,10 +135,7 @@ async def view_history(
 async def export_csv(
     collection: str = Query(..., description="Collection ID"),
     variant: str | None = Query(None, description="Variant filter"),
-    session_id: str | None = Query(None),
-    x_session_id: str | None = Header(None, alias="X-Session-ID"),
-    session_manager=Depends(get_session_manager),
-    auth_manager=Depends(get_auth_manager),
+    user: dict[str, Any] = Depends(require_authenticated_user),
 ):
     """
     Export edit history as CSV.
@@ -167,10 +143,7 @@ async def export_csv(
     Args:
         collection: Collection ID to export
         variant: Optional variant filter
-        session_id: Session ID from query parameter
-        x_session_id: Session ID from header
-        session_manager: Session manager dependency
-        auth_manager: Auth manager dependency
+        user: Authenticated user
 
     Returns:
         CSV file as streaming response
@@ -179,20 +152,7 @@ async def export_csv(
     from fastapi_app.lib.repository.file_repository import FileRepository
     from fastapi_app.lib.permissions.user_utils import user_has_collection_access
 
-    # Extract session ID (header takes precedence)
-    session_id_value = x_session_id or session_id
-    if not session_id_value:
-        raise HTTPException(status_code=401, detail="Authentication required")
-
-    # Validate session
     settings = get_settings()
-    if not session_manager.is_session_valid(session_id_value, settings.session_timeout):
-        raise HTTPException(status_code=401, detail="Invalid or expired session")
-
-    # Get user
-    user = auth_manager.get_user_by_session_id(session_id_value, session_manager)
-    if not user:
-        raise HTTPException(status_code=401, detail="User not found")
 
     # Check collection access
     if not user_has_collection_access(user, collection, settings.db_dir):
@@ -316,10 +276,7 @@ def _history_entries(files: list[FileMetadata], file_storage: FileStorage) -> li
 
 @router.get("/all", response_class=HTMLResponse)
 async def view_all_history(
-    session_id: str | None = Query(None),
-    x_session_id: str | None = Header(None, alias="X-Session-ID"),
-    session_manager=Depends(get_session_manager),
-    auth_manager=Depends(get_auth_manager),
+    user: dict[str, Any] = Depends(require_authenticated_user),
     file_repo: FileRepository = Depends(get_file_repository),
     file_storage: FileStorage = Depends(get_file_storage),
 ) -> HTMLResponse:
@@ -327,15 +284,7 @@ async def view_all_history(
     from fastapi_app.config import get_settings
     from fastapi_app.lib.plugins.plugin_tools import escape_html, generate_datatable_page
 
-    session_id_value = x_session_id or session_id
-    if not session_id_value:
-        raise HTTPException(status_code=401, detail="Authentication required")
     settings = get_settings()
-    if not session_manager.is_session_valid(session_id_value, settings.session_timeout):
-        raise HTTPException(status_code=401, detail="Invalid or expired session")
-    user = auth_manager.get_user_by_session_id(session_id_value, session_manager)
-    if not user:
-        raise HTTPException(status_code=401, detail="User not found")
 
     entries = _history_entries(_accessible_tei_files(user, file_repo, settings.db_dir), file_storage)
     rows = [

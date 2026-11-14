@@ -7,18 +7,17 @@ import json
 import logging
 from io import StringIO
 from pathlib import Path
+from typing import Any
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response, StreamingResponse
 from lxml import etree
 
 from fastapi_app.lib.core.dependencies import (
-    get_auth_manager,
     get_db,
     get_file_storage,
-    get_session_manager,
 )
-from fastapi_app.plugin_api import FileRepository
+from fastapi_app.plugin_api import FileRepository, require_authenticated_user
 from pte_plugin_iaa_analyzer.diff_utils import (
     escape_html,
     find_element_line_offset,
@@ -301,11 +300,8 @@ async def show_diff(
     stable_id1: str = Query(..., description="First document stable ID"),
     stable_id2: str = Query(..., description="Second document stable ID"),
     content_xpath: str = Query(".//tei:text", description="XPath to content element to compare"),
-    session_id: str | None = Query(None, description="Session ID for authentication"),
-    x_session_id: str | None = Header(None, alias="X-Session-ID"),
     db=Depends(get_db),
-    session_manager=Depends(get_session_manager),
-    auth_manager=Depends(get_auth_manager),
+    user: dict[str, Any] = Depends(require_authenticated_user),
 ):
     """
     Render standalone side-by-side XML diff page showing only differences.
@@ -314,36 +310,17 @@ async def show_diff(
         stable_id1: First document stable ID
         stable_id2: Second document stable ID
         content_xpath: XPath expression to select content element (default: ".//tei:text")
-        session_id: Session ID for authentication (query param fallback)
-        x_session_id: Session ID from header
+        user: Authenticated user
         db: Database session
-        session_manager: Session manager dependency
-        auth_manager: Auth manager dependency
 
     Returns:
         HTML page with diff viewer
     """
-    from fastapi_app.config import get_settings
     from fastapi_app.lib.utils.tei_utils import extract_tei_metadata
     from pte_plugin_iaa_analyzer.plugin import (
         IGNORE_ATTRIBUTES,
         IGNORE_TAGS,
     )
-
-    # Authenticate
-    session_id_value = x_session_id or session_id
-    if not session_id_value:
-        raise HTTPException(status_code=401, detail="Authentication required")
-
-    # Validate session
-    settings = get_settings()
-    if not session_manager.is_session_valid(session_id_value, settings.session_timeout):
-        raise HTTPException(status_code=401, detail="Invalid or expired session")
-
-    # Get user
-    user = auth_manager.get_user_by_session_id(session_id_value, session_manager)
-    if not user:
-        raise HTTPException(status_code=401, detail="User not found")
 
     # Fetch both documents
     file_repo = FileRepository(db)

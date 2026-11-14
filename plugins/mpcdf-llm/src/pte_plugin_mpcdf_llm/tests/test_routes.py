@@ -8,17 +8,13 @@ logs in to the fake as MPCDF user "alice", and so on.
 """
 
 import asyncio
-from types import SimpleNamespace
-from unittest.mock import patch
 
 import httpx
 from fastapi import FastAPI
 from mpcdf_llm import names
 
-from fastapi_app.lib.core.dependencies import get_auth_manager, require_authenticated_user
-from fastapi_app.plugin_api import get_session_manager
+from fastapi_app.plugin_api import require_authenticated_user
 from pte_plugin_mpcdf_llm import manager as manager_module
-from pte_plugin_mpcdf_llm import routes as routes_module
 from pte_plugin_mpcdf_llm.manager import HF_TOKEN_SECRET, SESSION_SECRET
 from pte_plugin_mpcdf_llm.routes import router
 
@@ -35,19 +31,10 @@ class _Base(PluginTestCase):
     async def asyncSetUp(self):
         await super().asyncSetUp()
         self.fake.users.update(PASSWORDS_WITH_ADMIN)
-        patcher = patch.object(routes_module, "get_settings", lambda: SimpleNamespace(session_timeout=3600))
-        patcher.start()
-        self.addCleanup(patcher.stop)
         self.user: dict | None = ALICE
         self.app = FastAPI()
         self.app.include_router(router)
         self.app.dependency_overrides[require_authenticated_user] = lambda: self.user
-        self.app.dependency_overrides[get_session_manager] = lambda: SimpleNamespace(
-            is_session_valid=lambda sid, timeout: sid == "sid"
-        )
-        self.app.dependency_overrides[get_auth_manager] = lambda: SimpleNamespace(
-            get_user_by_session_id=lambda sid, sm: self.user
-        )
         client = httpx.AsyncClient(transport=httpx.ASGITransport(app=self.app), base_url="http://test")
         self.addAsyncCleanup(client.aclose)
         self.client = client
@@ -146,10 +133,9 @@ class TestOwnSession(_Base):
         self.assertTrue((await self.client.get(f"{BASE}/context")).json()["hf_token_stored"])
 
     async def test_manage_page_for_every_user(self):
-        self.assertEqual((await self.client.get(f"{BASE}/manage")).status_code, 401)
         for user in (ALICE, ADMIN):
             self.user = user
-            response = await self.client.get(f"{BASE}/manage", params={"session_id": "sid"})
+            response = await self.client.get(f"{BASE}/manage")
             self.assertEqual(response.status_code, 200)
             self.assertIn("My MPCDF endpoints", response.text)
 

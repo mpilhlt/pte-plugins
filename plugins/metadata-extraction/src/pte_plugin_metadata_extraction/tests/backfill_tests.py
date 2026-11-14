@@ -535,29 +535,29 @@ class TestBackfillRoute(unittest.TestCase):
 
     def test_requires_admin(self):
         self.auth_manager.get_user_by_session_id.return_value = {"username": "u", "roles": ["annotator"]}
-        response = self.client.post(self.url, params={"collection": "coll", "session_id": "s"})
+        response = self.client.post(self.url, params={"collection": "coll"}, headers={"X-Session-ID": "s"})
         self.assertEqual(response.status_code, 403)
 
     def test_unknown_collection(self):
-        response = self.client.post(self.url, params={"collection": "nope", "session_id": "s"})
+        response = self.client.post(self.url, params={"collection": "nope"}, headers={"X-Session-ID": "s"})
         self.assertEqual(response.status_code, 404)
 
     def test_options_page(self):
-        response = self.client.get(self.url + "/options", params={"collection": "coll", "session_id": "s"})
+        response = self.client.get(self.url + "/options", params={"collection": "coll"}, headers={"X-Session-ID": "s"})
         self.assertEqual(response.status_code, 200)
         self.assertIn("<strong>coll</strong>", response.text)
         self.assertIn("/api/plugins/metadata-extraction/static/backfill.js", response.text)
 
     def test_options_page_requires_admin(self):
         self.auth_manager.get_user_by_session_id.return_value = {"username": "u", "roles": ["annotator"]}
-        response = self.client.get(self.url + "/options", params={"collection": "coll", "session_id": "s"})
+        response = self.client.get(self.url + "/options", params={"collection": "coll"}, headers={"X-Session-ID": "s"})
         self.assertEqual(response.status_code, 403)
 
     def test_runs_backfill(self):
         report = {"summary": {"documents": 0, "documents_updated": 0, "errors": 0}}
         with patch("pte_plugin_metadata_extraction.backfill.backfill_collection", return_value=report) as run:
             response = self.client.post(
-                self.url, params={"collection": "coll", "session_id": "s", "dry_run": "true", "limit": "5"}
+                self.url, params={"collection": "coll", "dry_run": "true", "limit": "5"}, headers={"X-Session-ID": "s"}
             )
         self.assertEqual(response.status_code, 200)
         self.assertFalse(response.json()["grobid_available"])

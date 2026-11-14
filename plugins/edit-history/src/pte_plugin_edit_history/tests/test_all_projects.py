@@ -113,7 +113,7 @@ class TestAllProjectsHistory(unittest.TestCase):
     def test_all_page_lists_every_change_of_accessible_projects(self):
         self._add_fixture_documents()
 
-        response = self.client.get("/api/plugins/edit-history/all?session_id=s1")
+        response = self.client.get("/api/plugins/edit-history/all", headers={"X-Session-ID": "s1"})
 
         self.assertEqual(response.status_code, 200)
         for text in ["First", "Second", "Third"]:

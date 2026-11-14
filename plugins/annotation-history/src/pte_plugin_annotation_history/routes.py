@@ -2,7 +2,8 @@
 Custom routes for Annotation History plugin.
 """
 
-from fastapi import APIRouter, Query, HTTPException, Depends, Header
+from typing import Any
+from fastapi import APIRouter, Query, HTTPException, Depends
 from fastapi.responses import StreamingResponse, HTMLResponse
 from io import StringIO
 import logging
@@ -10,10 +11,8 @@ import logging
 from fastapi_app.lib.core.dependencies import (
     get_db,
     get_file_storage,
-    get_auth_manager,
-    get_session_manager,
 )
-from fastapi_app.plugin_api import FileRepository
+from fastapi_app.plugin_api import FileRepository, require_authenticated_user
 
 logger = logging.getLogger(__name__)
 
@@ -24,10 +23,7 @@ router = APIRouter(prefix="/api/plugins/annotation-history", tags=["plugins"])
 async def view_history(
     pdf: str = Query(..., description="PDF stable_id or file hash"),
     variant: str = Query("all", description="Model variant filter"),
-    session_id: str | None = Query(None),
-    x_session_id: str | None = Header(None, alias="X-Session-ID"),
-    session_manager=Depends(get_session_manager),
-    auth_manager=Depends(get_auth_manager),
+    user: dict[str, Any] = Depends(require_authenticated_user),
     db=Depends(get_db),
     file_storage=Depends(get_file_storage)
 ):
@@ -37,31 +33,12 @@ async def view_history(
     Args:
         pdf: PDF stable_id or file hash
         variant: Model variant filter (or 'all')
-        session_id: Session ID from query parameter
-        x_session_id: Session ID from header
-        session_manager: Session manager dependency
-        auth_manager: Auth manager dependency
+        user: Authenticated user
 
     Returns:
         HTML page with annotation history
     """
-    from fastapi_app.config import get_settings
     from pte_plugin_annotation_history.plugin import AnnotationHistoryPlugin
-
-    # Extract session ID (header takes precedence)
-    session_id_value = x_session_id or session_id
-    if not session_id_value:
-        raise HTTPException(status_code=401, detail="Authentication required")
-
-    # Validate session
-    settings = get_settings()
-    if not session_manager.is_session_valid(session_id_value, settings.session_timeout):
-        raise HTTPException(status_code=401, detail="Invalid or expired session")
-
-    # Get user
-    user = auth_manager.get_user_by_session_id(session_id_value, session_manager)
-    if not user:
-        raise HTTPException(status_code=401, detail="User not found")
 
     try:
         file_repo = FileRepository(db)

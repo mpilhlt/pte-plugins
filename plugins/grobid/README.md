@@ -79,7 +79,7 @@ The directory is created automatically. To force a fresh extraction for a docume
 
 `GET /api/plugins/grobid/diagnostics` — admin only. Runs layered connectivity checks and returns a JSON report useful for distinguishing between general network outages, DNS failures, TLS issues, and GROBID-specific problems.
 
-**Authentication:** session ID via `X-Session-ID` header or `session_id` query parameter. Requires admin role.
+**Authentication:** session ID via `X-Session-ID` header. Requires admin role.
 
 **Checks performed (in order):**
 

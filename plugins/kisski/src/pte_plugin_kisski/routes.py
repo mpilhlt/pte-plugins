@@ -3,16 +3,15 @@
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException
 from pydantic import BaseModel
 
 from fastapi_app.lib.core.dependencies import (
-    get_auth_manager,
     get_file_repository,
     get_file_storage,
-    get_session_manager,
 )
 from pte_plugin_kisski.extractor import KisskiExtractor
+from fastapi_app.plugin_api import require_authenticated_user
 
 logger = logging.getLogger(__name__)
 
@@ -46,10 +45,7 @@ class ExtractResponse(BaseModel):
 @router.post("/extract", response_model=ExtractResponse)
 async def extract(
     request: ExtractRequest = Body(...),
-    session_id: str | None = Query(None),
-    x_session_id: str | None = Header(None, alias="X-Session-ID"),
-    session_manager=Depends(get_session_manager),
-    auth_manager=Depends(get_auth_manager),
+    user: dict[str, Any] = Depends(require_authenticated_user),
     file_storage=Depends(get_file_storage),
     file_repo=Depends(get_file_repository),
 ):
@@ -61,20 +57,6 @@ async def extract(
 
     Returns JSON data extracted according to the prompt and optional schema.
     """
-    from fastapi_app.config import get_settings
-
-    # Authenticate
-    session_id_value = x_session_id or session_id
-    if not session_id_value:
-        raise HTTPException(status_code=401, detail="Authentication required")
-
-    settings = get_settings()
-    if not session_manager.is_session_valid(session_id_value, settings.session_timeout):
-        raise HTTPException(status_code=401, detail="Invalid or expired session")
-
-    user = auth_manager.get_user_by_session_id(session_id_value, session_manager)
-    if not user:
-        raise HTTPException(status_code=401, detail="User not found")
 
     # Validate input
     if not request.stable_id and not request.text_input:
@@ -142,27 +124,13 @@ async def extract(
 
 @router.get("/models")
 async def list_models(
-    session_id: str | None = Query(None),
-    x_session_id: str | None = Header(None, alias="X-Session-ID"),
-    session_manager=Depends(get_session_manager),
-    auth_manager=Depends(get_auth_manager),
+    user: dict[str, Any] = Depends(require_authenticated_user),
 ):
     """
     List available KISSKI models with their capabilities.
 
     Returns models with input/output modality information.
     """
-    from fastapi_app.config import get_settings
-
-    # Authenticate
-    session_id_value = x_session_id or session_id
-    if not session_id_value:
-        raise HTTPException(status_code=401, detail="Authentication required")
-
-    settings = get_settings()
-    if not session_manager.is_session_valid(session_id_value, settings.session_timeout):
-        raise HTTPException(status_code=401, detail="Invalid or expired session")
-
     extractor = KisskiExtractor()
 
     try:

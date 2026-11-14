@@ -3,47 +3,21 @@
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import Response
 
 from fastapi_app.lib.core.dependencies import (
     get_auth_manager,
     get_db,
     get_file_storage,
-    get_session_manager,
 )
 from fastapi_app.lib.core.database import DatabaseManager
-from fastapi_app.lib.core.sessions import SessionManager
-from fastapi_app.plugin_api import FileStorage
+from fastapi_app.plugin_api import FileStorage, require_authenticated_user
 from fastapi_app.lib.utils.auth import AuthManager
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/plugins/revision-feed", tags=["revision-feed"])
-
-
-def _authenticate(
-    session_id: str | None,
-    x_session_id: str | None,
-    session_manager: SessionManager,
-    auth_manager: AuthManager,
-) -> dict[str, Any]:
-    """Shared session-based auth check for the management endpoints."""
-    from fastapi_app.config import get_settings
-
-    session_id_value = x_session_id or session_id
-    if not session_id_value:
-        raise HTTPException(status_code=401, detail="Authentication required")
-
-    settings = get_settings()
-    if not session_manager.is_session_valid(session_id_value, settings.session_timeout):
-        raise HTTPException(status_code=401, detail="Invalid or expired session")
-
-    user = auth_manager.get_user_by_session_id(session_id_value, session_manager)
-    if not user:
-        raise HTTPException(status_code=401, detail="User not found")
-
-    return user
 
 
 def _feed_urls_for_user(user: dict[str, Any], token: str, request: Request) -> list[dict[str, str]]:
@@ -70,16 +44,12 @@ def _feed_urls_for_user(user: dict[str, Any], token: str, request: Request) -> l
 @router.get("/my-feeds")
 async def my_feeds(
     request: Request,
-    session_id: str | None = Query(None),
-    x_session_id: str | None = Header(None, alias="X-Session-ID"),
-    session_manager: SessionManager = Depends(get_session_manager),
-    auth_manager: AuthManager = Depends(get_auth_manager),
+    user: dict[str, Any] = Depends(require_authenticated_user),
 ) -> dict[str, Any]:
     """Return the user's feed token and feed URLs for every project they belong to."""
     from fastapi_app.config import get_settings
     from pte_plugin_revision_feed.token_store import get_or_create_token
 
-    user = _authenticate(session_id, x_session_id, session_manager, auth_manager)
     settings = get_settings()
     token = get_or_create_token(user["username"], settings.plugins_data_dir)
 
@@ -89,16 +59,12 @@ async def my_feeds(
 @router.post("/token/regenerate")
 async def regenerate_token_endpoint(
     request: Request,
-    session_id: str | None = Query(None),
-    x_session_id: str | None = Header(None, alias="X-Session-ID"),
-    session_manager: SessionManager = Depends(get_session_manager),
-    auth_manager: AuthManager = Depends(get_auth_manager),
+    user: dict[str, Any] = Depends(require_authenticated_user),
 ) -> dict[str, Any]:
     """Issue a new feed token for the user, invalidating the previous one."""
     from fastapi_app.config import get_settings
     from pte_plugin_revision_feed.token_store import regenerate_token
 
-    user = _authenticate(session_id, x_session_id, session_manager, auth_manager)
     settings = get_settings()
     token = regenerate_token(user["username"], settings.plugins_data_dir)
 

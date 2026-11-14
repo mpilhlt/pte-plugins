@@ -7,8 +7,6 @@
  * pagination/virtualization library is needed).
  */
 
-const sessionId = new URLSearchParams(window.location.search).get('session_id') || '';
-
 let ROWS = [];
 let LIFECYCLE_ORDER = [];
 let STAGE_COLORS = [];
@@ -72,9 +70,7 @@ function escapeHtml(str) {
 // -- Data loading -------------------------------------------------------------
 
 async function loadData() {
-  const res = await fetch('/api/plugins/collection-overview/data', {
-    headers: { 'X-Session-ID': sessionId },
-  });
+  const res = await fetch('/api/plugins/collection-overview/data');
   if (!res.ok) {
     document.getElementById('app').innerHTML = `<p class="error">Failed to load coverage data (${res.status}).</p>`;
     return;

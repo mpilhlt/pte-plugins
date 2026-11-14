@@ -39,7 +39,7 @@ class TestManagementRoutes(unittest.TestCase):
 
         response = self.client.get(
             "/api/plugins/revision-feed/my-feeds",
-            params={"session_id": "invalid"},
+            headers={"X-Session-ID": "invalid"},
         )
         self.assertEqual(response.status_code, 401)
 
@@ -54,7 +54,7 @@ class TestManagementRoutes(unittest.TestCase):
 
         response = self.client.get(
             "/api/plugins/revision-feed/my-feeds",
-            params={"session_id": "valid-session"},
+            headers={"X-Session-ID": "valid-session"},
         )
         self.assertEqual(response.status_code, 401)
 
@@ -67,7 +67,7 @@ class TestManagementRoutes(unittest.TestCase):
 
         response = self.client.post(
             "/api/plugins/revision-feed/token/regenerate",
-            params={"session_id": "invalid"},
+            headers={"X-Session-ID": "invalid"},
         )
         self.assertEqual(response.status_code, 401)
 
@@ -90,7 +90,7 @@ class TestManagementRoutes(unittest.TestCase):
 
         response = self.client.get(
             "/api/plugins/revision-feed/my-feeds",
-            params={"session_id": "valid-session"},
+            headers={"X-Session-ID": "valid-session"},
         )
 
         self.assertEqual(response.status_code, 200)
@@ -120,7 +120,7 @@ class TestManagementRoutes(unittest.TestCase):
 
         response = self.client.post(
             "/api/plugins/revision-feed/token/regenerate",
-            params={"session_id": "valid-session"},
+            headers={"X-Session-ID": "valid-session"},
         )
 
         self.assertEqual(response.status_code, 200)
@@ -156,7 +156,7 @@ class TestManagementRoutes(unittest.TestCase):
 
         response = self.client.get(
             "/api/plugins/revision-feed/my-feeds",
-            params={"session_id": "valid-session"},
+            headers={"X-Session-ID": "valid-session"},
         )
 
         self.assertEqual(response.status_code, 200)

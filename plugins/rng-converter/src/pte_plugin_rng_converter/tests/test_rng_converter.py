@@ -35,7 +35,6 @@ class TestRngConverterPlugin(unittest.TestCase):
         params = {
             "xml": "test-file-id",
             "variant": "test-variant",
-            "_session_id": "test-session"
         }
         result = asyncio.run(self.plugin.convert_to_rng(self.mock_context, params))
 

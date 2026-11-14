@@ -58,7 +58,7 @@ class TestUpdateMetadataAdminAuth(unittest.IsolatedAsyncioTestCase):
 
         response = self.client.get(
             "/api/plugins/update-metadata/options",
-            params={"session_id": "valid-session"},
+            headers={"X-Session-ID": "valid-session"},
         )
 
         self.assertEqual(response.status_code, 200)
@@ -77,11 +77,11 @@ class TestUpdateMetadataAdminAuth(unittest.IsolatedAsyncioTestCase):
 
         response = self.client.get(
             "/api/plugins/update-metadata/options",
-            params={"session_id": "valid-session"},
+            headers={"X-Session-ID": "valid-session"},
         )
 
         self.assertEqual(response.status_code, 403)
-        self.assertIn("Admin role required", response.json()["detail"])
+        self.assertIn("Admin access required", response.json()["detail"])
 
 
 if __name__ == "__main__":

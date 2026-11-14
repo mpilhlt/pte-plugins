@@ -4,15 +4,14 @@ Custom routes for Local Sync plugin.
 
 import logging
 from pathlib import Path
+from typing import Any
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse
 
-from fastapi_app.lib.core.dependencies import (
-    get_auth_manager,
-    get_session_manager,
-    get_sse_service,
-)
+from fastapi_app.lib.core.dependencies import get_sse_service
+from fastapi_app.lib.core.sessions import SessionManager
+from fastapi_app.plugin_api import get_session_manager, require_authenticated_user
 
 logger = logging.getLogger(__name__)
 
@@ -23,10 +22,7 @@ router = APIRouter(prefix="/api/plugins/local-sync", tags=["local-sync"])
 async def preview_sync(
     collection: str = Query(..., description="Collection ID"),
     variant: str = Query("all", description="Variant filter"),
-    session_id: str | None = Query(None),
-    x_session_id: str | None = Header(None, alias="X-Session-ID"),
-    session_manager=Depends(get_session_manager),
-    auth_manager=Depends(get_auth_manager),
+    user: dict[str, Any] = Depends(require_authenticated_user),
 ):
     """
     Preview sync changes without applying them.
@@ -34,10 +30,7 @@ async def preview_sync(
     Args:
         collection: Collection ID to sync
         variant: Variant filter
-        session_id: Session ID from query parameter
-        x_session_id: Session ID from header
-        session_manager: Session manager dependency
-        auth_manager: Auth manager dependency
+        user: Authenticated user
 
     Returns:
         HTML page with preview of changes
@@ -46,20 +39,7 @@ async def preview_sync(
     from fastapi_app.lib.permissions.user_utils import user_has_collection_access
     from fastapi_app.lib.utils.config_utils import get_config
 
-    # Extract session ID (header takes precedence)
-    session_id_value = x_session_id or session_id
-    if not session_id_value:
-        raise HTTPException(status_code=401, detail="Authentication required")
-
-    # Validate session
     settings = get_settings()
-    if not session_manager.is_session_valid(session_id_value, settings.session_timeout):
-        raise HTTPException(status_code=401, detail="Invalid or expired session")
-
-    # Get user
-    user = auth_manager.get_user_by_session_id(session_id_value, session_manager)
-    if not user:
-        raise HTTPException(status_code=401, detail="User not found")
 
     # Check collection access
     if not user_has_collection_access(user, collection, settings.db_dir):
@@ -107,10 +87,8 @@ async def preview_sync(
 async def execute_sync(
     collection: str = Query(..., description="Collection ID"),
     variant: str = Query("all", description="Variant filter"),
-    session_id: str | None = Query(None),
-    x_session_id: str | None = Header(None, alias="X-Session-ID"),
-    session_manager=Depends(get_session_manager),
-    auth_manager=Depends(get_auth_manager),
+    user: dict[str, Any] = Depends(require_authenticated_user),
+    session_manager: SessionManager = Depends(get_session_manager),
     sse_service=Depends(get_sse_service),
 ):
     """
@@ -119,10 +97,8 @@ async def execute_sync(
     Args:
         collection: Collection ID to sync
         variant: Variant filter
-        session_id: Session ID from query parameter
-        x_session_id: Session ID from header
-        session_manager: Session manager dependency
-        auth_manager: Auth manager dependency
+        user: Authenticated user
+        session_manager: Session manager, to notify all sessions of updated files
 
     Returns:
         HTML page with sync results (statistics only)
@@ -131,20 +107,7 @@ async def execute_sync(
     from fastapi_app.lib.permissions.user_utils import user_has_collection_access
     from fastapi_app.lib.utils.config_utils import get_config
 
-    # Extract session ID (header takes precedence)
-    session_id_value = x_session_id or session_id
-    if not session_id_value:
-        raise HTTPException(status_code=401, detail="Authentication required")
-
-    # Validate session
     settings = get_settings()
-    if not session_manager.is_session_valid(session_id_value, settings.session_timeout):
-        raise HTTPException(status_code=401, detail="Invalid or expired session")
-
-    # Get user
-    user = auth_manager.get_user_by_session_id(session_id_value, session_manager)
-    if not user:
-        raise HTTPException(status_code=401, detail="User not found")
 
     # Check collection access
     if not user_has_collection_access(user, collection, settings.db_dir):

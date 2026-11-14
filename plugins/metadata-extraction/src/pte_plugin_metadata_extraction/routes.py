@@ -11,22 +11,18 @@ import logging
 from functools import partial
 from typing import Any
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse
 
 from fastapi_app.lib.core.database import DatabaseManager
-from fastapi_app.lib.core.sessions import SessionManager
 from fastapi_app.lib.core.dependencies import (
-    get_auth_manager,
     get_db,
     get_file_storage,
-    get_session_manager,
     get_sse_service,
+    require_session_id,
 )
-from fastapi_app.lib.permissions.acl_utils import user_is_admin
 from fastapi_app.lib.sse.sse_service import SSEService
-from fastapi_app.plugin_api import FileStorage
-from fastapi_app.lib.utils.auth import AuthManager
+from fastapi_app.plugin_api import FileStorage, require_admin_user, require_authenticated_user
 
 logger = logging.getLogger(__name__)
 
@@ -37,10 +33,7 @@ router = APIRouter(prefix="/api/plugins/metadata-extraction", tags=["metadata-ex
 async def extract_metadata(
     stable_id: str = Query(..., description="PDF stable ID"),
     doi: str | None = Query(None, description="DOI string (optional)"),
-    session_id: str | None = Query(None),
-    x_session_id: str | None = Header(None, alias="X-Session-ID"),
-    session_manager=Depends(get_session_manager),
-    auth_manager=Depends(get_auth_manager),
+    user: dict[str, Any] = Depends(require_authenticated_user),
 ):
     """
     Extract bibliographic metadata for a PDF document.
@@ -51,21 +44,7 @@ async def extract_metadata(
     Returns:
         JSON with metadata fields (title, authors, date, publisher, etc.)
     """
-    from fastapi_app.config import get_settings
     from fastapi_app.lib.services.metadata_extraction import get_metadata_for_document
-
-    # Authenticate
-    session_id_value = x_session_id or session_id
-    if not session_id_value:
-        raise HTTPException(status_code=401, detail="Authentication required")
-
-    settings = get_settings()
-    if not session_manager.is_session_valid(session_id_value, settings.session_timeout):
-        raise HTTPException(status_code=401, detail="Invalid or expired session")
-
-    user = auth_manager.get_user_by_session_id(session_id_value, session_manager)
-    if not user:
-        raise HTTPException(status_code=401, detail="User not found")
 
     # Extract metadata
     metadata = await get_metadata_for_document(
@@ -76,51 +55,24 @@ async def extract_metadata(
     return metadata
 
 
-def _authorize_backfill(
-    session_id: str | None,
-    x_session_id: str | None,
-    collection: str,
-    session_manager: SessionManager,
-    auth_manager: AuthManager,
-) -> str:
+def _require_collection(collection: str) -> None:
     """
-    Check that the request comes from an admin and the collection exists.
-
-    Returns:
-        The session ID
+    Check that the collection exists.
 
     Raises:
-        HTTPException: 401 if not authenticated, 403 if not admin, 404 if the collection does not exist
+        HTTPException: 404 if the collection does not exist
     """
     from fastapi_app.config import get_settings
     from fastapi_app.lib.utils.collection_utils import validate_collection
 
-    session_id_value = x_session_id or session_id
-    if not session_id_value:
-        raise HTTPException(status_code=401, detail="Authentication required")
-
-    settings = get_settings()
-    if not session_manager.is_session_valid(session_id_value, settings.session_timeout):
-        raise HTTPException(status_code=401, detail="Invalid or expired session")
-
-    user = auth_manager.get_user_by_session_id(session_id_value, session_manager)
-    if not user:
-        raise HTTPException(status_code=401, detail="User not found")
-    if not user_is_admin(user):
-        raise HTTPException(status_code=403, detail="Admin role required")
-
-    if not validate_collection(collection, settings.db_dir):
+    if not validate_collection(collection, get_settings().db_dir):
         raise HTTPException(status_code=404, detail=f"Collection not found: {collection}")
-    return session_id_value
 
 
 @router.get("/backfill/options", response_class=HTMLResponse)
 async def backfill_options(
     collection: str = Query(..., description="ID of the collection whose documents are backfilled"),
-    session_id: str | None = Query(None),
-    x_session_id: str | None = Header(None, alias="X-Session-ID"),
-    session_manager: SessionManager = Depends(get_session_manager),
-    auth_manager: AuthManager = Depends(get_auth_manager),
+    user: dict[str, Any] = Depends(require_admin_user),
 ) -> HTMLResponse:
     """
     Options dialog for the collection backfill (admin only), opened from the plugin menu entry.
@@ -129,7 +81,7 @@ async def backfill_options(
 
     from fastapi_app.lib.plugins.plugin_tools import load_plugin_html
 
-    _authorize_backfill(session_id, x_session_id, collection, session_manager, auth_manager)
+    _require_collection(collection)
     page = load_plugin_html(__file__, "backfill.html").replace("__COLLECTION__", html.escape(collection))
     return HTMLResponse(content=page)
 
@@ -140,10 +92,8 @@ async def backfill_collection_metadata(
     dry_run: bool = Query(False, description="Report what would be added without saving"),
     use_grobid: bool = Query(True, description="Use GROBID header extraction as fallback if available"),
     limit: int | None = Query(None, ge=1, description="Maximum number of documents to process"),
-    session_id: str | None = Query(None),
-    x_session_id: str | None = Header(None, alias="X-Session-ID"),
-    session_manager: SessionManager = Depends(get_session_manager),
-    auth_manager: AuthManager = Depends(get_auth_manager),
+    user: dict[str, Any] = Depends(require_admin_user),
+    session_id: str = Depends(require_session_id),
     sse_service: SSEService = Depends(get_sse_service),
     db: DatabaseManager = Depends(get_db),
     file_storage: FileStorage = Depends(get_file_storage),
@@ -170,7 +120,7 @@ async def backfill_collection_metadata(
         get_live_grobid_server_url,
     )
 
-    session_id_value = _authorize_backfill(session_id, x_session_id, collection, session_manager, auth_manager)
+    _require_collection(collection)
     settings = get_settings()
 
     grobid_fetcher = None
@@ -178,7 +128,7 @@ async def backfill_collection_metadata(
     if grobid_server_url:
         grobid_fetcher = partial(fetch_grobid_header_metadata, server_url=grobid_server_url)
 
-    progress = ProgressBar(sse_service, session_id_value)
+    progress = ProgressBar(sse_service, session_id)
     progress.show(label=f"Backfilling metadata in collection {collection}...")
     await asyncio.sleep(0)
 
@@ -192,7 +142,7 @@ async def backfill_collection_metadata(
             collection_id=collection,
             file_repo=FileRepository(db),
             file_storage=file_storage,
-            session_id=session_id_value,
+            session_id=session_id,
             db_dir=settings.db_dir,
             grobid_fetcher=grobid_fetcher,
             dry_run=dry_run,
@@ -207,7 +157,7 @@ async def backfill_collection_metadata(
     if not dry_run:
         send_notification(
             sse_service,
-            session_id_value,
+            session_id,
             f"Backfilled metadata for {summary['documents_updated']} of {summary['documents']} documents in {collection}",
             "success" if summary["errors"] == 0 else "warning",
         )

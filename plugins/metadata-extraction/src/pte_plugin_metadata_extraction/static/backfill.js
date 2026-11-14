@@ -46,7 +46,6 @@
  */
 
 const params = new URLSearchParams(window.location.search);
-const sessionId = params.get('session_id') || '';
 const collection = params.get('collection') || '';
 
 const startBtn = /** @type {HTMLButtonElement} */ (document.getElementById('startBtn'));
@@ -185,7 +184,6 @@ async function startBackfill() {
   try {
     const response = await fetch(`/api/plugins/metadata-extraction/backfill?${query}`, {
       method: 'POST',
-      headers: { 'X-Session-ID': sessionId },
     });
     if (!response.ok) {
       const body = await response.json().catch(() => ({}));

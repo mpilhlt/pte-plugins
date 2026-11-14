@@ -151,14 +151,11 @@ class IAAAnalyzerPlugin(Plugin):
             # Compute pairwise agreements
             comparisons = self._compute_pairwise_agreements(versions)
 
-            # Generate HTML table with session_id for diff links
-            # Session ID is passed via params from the route handler
-            session_id = params.get("_session_id", "")
-            html = self._generate_html_table(comparisons, session_id)
+            html = self._generate_html_table(comparisons)
 
             # Build export URL
             variant_param = f"&variant={variant_filter}" if variant_filter else ""
-            export_url = f"/api/plugins/iaa-analyzer/export?pdf={pdf_id}{variant_param}&session_id={session_id}"
+            export_url = f"/api/plugins/iaa-analyzer/export?pdf={pdf_id}{variant_param}"
 
             return {
                 "html": html,
@@ -383,13 +380,12 @@ class IAAAnalyzerPlugin(Plugin):
 
         return matches
 
-    def _generate_html_table(self, comparisons: list[dict[str, Any]], session_id: str) -> str:
+    def _generate_html_table(self, comparisons: list[dict[str, Any]]) -> str:
         """
         Generate HTML table from comparison results.
 
         Args:
             comparisons: List of comparison dictionaries
-            session_id: Session ID for authentication in diff viewer links
 
         Returns:
             HTML table as string
@@ -439,7 +435,7 @@ class IAAAnalyzerPlugin(Plugin):
             diff_link = f'<a href="#" onclick="window.pluginSandbox.openDiff(\'{v1["stable_id"]}\', \'{v2["stable_id"]}\'); return false;" style="color: #0066cc; text-decoration: underline;">{comp["matches"]}/{comp["total"]}</a>'
 
             # Create link to standalone diff viewer
-            diff_url = f'/api/plugins/iaa-analyzer/diff?stable_id1={v1["stable_id"]}&stable_id2={v2["stable_id"]}&session_id={session_id}'
+            diff_url = f'/api/plugins/iaa-analyzer/diff?stable_id1={v1["stable_id"]}&stable_id2={v2["stable_id"]}'
             view_diff_link = f'<a href="#" onclick="event.preventDefault(); window.pluginSandbox?.openControlledWindow(\'{diff_url}\'); return false;" style="color: #0066cc; text-decoration: underline;">View Diff</a>'
 
             row_cells = [

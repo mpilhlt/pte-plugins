@@ -160,7 +160,6 @@
 
     const PLUGIN_BASE = '/api/plugins/mpcdf-llm';
     const BASE = `${PLUGIN_BASE}/my`;
-    const sessionId = new URLSearchParams(window.location.search).get('session_id') || '';
     const $ = (id) => document.getElementById(id);
 
     let presets = [];
@@ -181,9 +180,10 @@
       el.className = 'msg' + (text ? ' ' + kind : '');
     }
 
-    /** Fetch an admin route as the sandbox does (X-Session-ID header). Returns {status, body}. */
+    /** Fetch a route of the plugin. Returns {status, body}. */
     async function api(path, method = 'GET', payload = null, base = BASE) {
-      const init = { method, headers: { 'X-Session-ID': sessionId } };
+      /** @type {RequestInit & {headers: Record<string, string>}} */
+      const init = { method, headers: {} };
       if (payload !== null) {
         init.headers['Content-Type'] = 'application/json';
         init.body = JSON.stringify(payload);
@@ -266,7 +266,7 @@
     async function fetchManaged() {
       const out = new Map();
       try {
-        const response = await fetch('/api/plugins/mpcdf-llm/managed', { headers: { 'X-Session-ID': sessionId } });
+        const response = await fetch('/api/plugins/mpcdf-llm/managed');
         if (response.ok) (await response.json()).forEach((m) => out.set(m.endpoint_id, m));
       } catch { /* the table then shows "unmanaged" */ }
       return out;
@@ -573,7 +573,6 @@
         const query = until ? `?until=${encodeURIComponent(until)}` : '';
         const response = await fetch(`${BASE}/presets/${encodeURIComponent(name)}/start${query}`, {
           method: 'POST',
-          headers: { 'X-Session-ID': sessionId },
         });
         if (!response.ok) {
           const body = await response.json().catch(() => null);

@@ -7,19 +7,19 @@ and cancellation support.
 
 import asyncio
 import logging
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from typing import Any
+
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import HTMLResponse
 
 from fastapi_app.lib.core.dependencies import (
-    get_auth_manager,
     get_db,
     get_file_storage,
-    get_session_manager,
     get_sse_service,
+    require_session_id,
 )
-from fastapi_app.lib.permissions.acl_utils import user_is_admin
 from fastapi_app.lib.sse.sse_utils import ProgressBar, send_notification
-from fastapi_app.plugin_api import FileRepository
+from fastapi_app.plugin_api import FileRepository, require_admin_user
 from fastapi_app.lib.services.metadata_update_utils import update_tei_metadata
 
 logger = logging.getLogger(__name__)
@@ -64,41 +64,9 @@ async def cancel_update(progress_id: str):
     return {"status": "not_found"}
 
 
-def _authenticate_admin(session_id, x_session_id, session_manager, auth_manager):
-    """Authenticate request and verify admin role.
-
-    Returns:
-        Tuple of (session_id_value, user)
-
-    Raises:
-        HTTPException: If authentication fails or user is not admin
-    """
-    from fastapi_app.config import get_settings
-
-    session_id_value = x_session_id or session_id
-    if not session_id_value:
-        raise HTTPException(status_code=401, detail="Authentication required")
-
-    settings = get_settings()
-    if not session_manager.is_session_valid(session_id_value, settings.session_timeout):
-        raise HTTPException(status_code=401, detail="Invalid or expired session")
-
-    user = auth_manager.get_user_by_session_id(session_id_value, session_manager)
-    if not user:
-        raise HTTPException(status_code=401, detail="User not found")
-
-    if not user_is_admin(user):
-        raise HTTPException(status_code=403, detail="Admin role required")
-
-    return session_id_value, user
-
-
 @router.get("/options", response_class=HTMLResponse)
 async def options_form(
-    session_id: str | None = Query(None),
-    x_session_id: str | None = Header(None, alias="X-Session-ID"),
-    session_manager=Depends(get_session_manager),
-    auth_manager=Depends(get_auth_manager),
+    user: dict[str, Any] = Depends(require_admin_user),
 ):
     """
     Display options form for metadata update configuration.
@@ -106,8 +74,6 @@ async def options_form(
     Returns HTML form with radio buttons for extraction mode and checkbox
     for force overwrite.
     """
-    _authenticate_admin(session_id, x_session_id, session_manager, auth_manager)
-
     from fastapi_app.lib.plugins.plugin_tools import generate_sandbox_client_script
 
     sandbox_script = generate_sandbox_client_script()
@@ -240,10 +206,8 @@ async def execute_update(
     force: bool = Query(False, description="Overwrite existing biblStruct elements"),
     extraction_fallback: bool = Query(True, description="Use LLM extraction when DOI lookup fails"),
     limit: int | None = Query(None, description="Limit number of PDFs to process"),
-    session_id: str | None = Query(None),
-    x_session_id: str | None = Header(None, alias="X-Session-ID"),
-    session_manager=Depends(get_session_manager),
-    auth_manager=Depends(get_auth_manager),
+    user: dict[str, Any] = Depends(require_admin_user),
+    session_id: str = Depends(require_session_id),
     sse_service=Depends(get_sse_service),
     db=Depends(get_db),
     file_storage=Depends(get_file_storage),
@@ -258,18 +222,14 @@ async def execute_update(
         force: If True, overwrite existing biblStruct elements
         extraction_fallback: If True, use LLM extraction when DOI lookup fails
         limit: Maximum number of PDFs to process (for testing)
-        session_id: Session ID from query parameter
-        x_session_id: Session ID from header
+        user: Authenticated admin
+        session_id: Session that receives the SSE progress events
 
     Returns:
         HTML page with update results and statistics
     """
-    session_id_value, _ = _authenticate_admin(
-        session_id, x_session_id, session_manager, auth_manager
-    )
-
     # Set up progress tracking
-    progress = ProgressBar(sse_service, session_id_value)
+    progress = ProgressBar(sse_service, session_id)
     cancellation_token = CancellationToken(progress.progress_id)
 
     mode_label = "retrieval + extraction" if extraction_fallback else "retrieval only"
@@ -410,7 +370,7 @@ async def execute_update(
 
         # Send success notification
         send_notification(
-            sse_service, session_id_value,
+            sse_service, session_id,
             f"Updated {stats['updated']} TEI files from {stats['processed']} PDFs",
             "success"
         )
@@ -453,7 +413,7 @@ async def execute_update(
             """
 
             send_notification(
-                sse_service, session_id_value,
+                sse_service, session_id,
                 "Metadata update cancelled",
                 "warning"
             )
@@ -505,7 +465,7 @@ async def execute_update(
         """
 
         send_notification(
-            sse_service, session_id_value,
+            sse_service, session_id,
             f"Metadata update failed: {str(e)}",
             "danger"
         )
