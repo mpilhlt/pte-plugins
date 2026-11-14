@@ -305,7 +305,7 @@
       "package": "pte-plugin-webdav-sync",
       "module": "pte_plugin_webdav_sync",
       "path": "plugins/webdav-sync",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "description": "Synchronize files with a WebDAV server",
       "requires": [],
       "dependencies": [
