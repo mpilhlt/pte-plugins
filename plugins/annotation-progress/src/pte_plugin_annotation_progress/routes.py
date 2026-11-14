@@ -287,6 +287,9 @@ async def view_progress(
                 .stage-badge strong {
                     color: #495057;
                 }
+                .stage-hint {
+                    font-style: italic;
+                }
                 button.stage-badge {
                     cursor: pointer;
                 }
@@ -1115,6 +1118,7 @@ def _create_summary_card(
         stage_badges.append(_stage_badge_html("no-status", "no status", no_status_count))
 
     stage_badges_html = "\n".join(stage_badges) if stage_badges else '<span class="stage-badge">No data</span>'
+    hint_html = ' <span class="stage-hint">(click a badge to hide or show its documents)</span>' if stage_badges else ""
 
     return f"""
     <div class="summary-card">
@@ -1133,7 +1137,7 @@ def _create_summary_card(
             </div>
         </div>
         <div class="stage-distribution">
-            <div class="stat-label">Distribution by Lifecycle Stage</div>
+            <div class="stat-label">Distribution by Lifecycle Stage{hint_html}</div>
             <div class="stage-list">
                 {stage_badges_html}
             </div>

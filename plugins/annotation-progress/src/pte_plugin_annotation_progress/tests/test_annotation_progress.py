@@ -357,8 +357,14 @@ class TestStageBadges(unittest.TestCase):
         self.assertIn('data-stage="draft" aria-pressed="true"', html)
         self.assertIn('data-stage="no-status" aria-pressed="true"', html)
         self.assertIn("</strong> no status</button>", html)
+        self.assertIn("click a badge to hide or show its documents", html)
         # stages without documents get no badge
         self.assertNotIn('data-stage="approved"', html)
+
+    def test_no_hint_without_badges(self):
+        html = _create_summary_card(0, 0.0, 0, {"no-status": 0}, ["draft"])
+        self.assertIn("No data", html)
+        self.assertNotIn("click a badge", html)
 
     def test_escapes_stage(self):
         html = _create_summary_card(1, 0.0, 1, {"<x>": 1}, ["<x>"])

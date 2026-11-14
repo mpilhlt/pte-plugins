@@ -4,7 +4,7 @@ Implements [mpilhlt/pdf-tei-editor#505](https://github.com/mpilhlt/pdf-tei-edito
 
 ## Behavior
 
-- The badges under "Distribution by Lifecycle Stage" are toggle buttons (`aria-pressed`). All are active when the page loads.
+- The badges under "Distribution by Lifecycle Stage" are toggle buttons (`aria-pressed`). All are active when the page loads. The heading says "(click a badge to hide or show its documents)" so that the feature can be found.
 - Clicking a badge makes it inactive (grey, dashed border, crossed out) and hides the documents counted under its stage. Clicking it again shows them.
 - A document is filtered as a whole, with all its version history rows, under the same stage it is counted under in the summary: the status of its representative version (`_select_representative_annotation`), or `no-status` if it has no annotations or no status from `annotation.lifecycle.order`. This keeps the counts and the filtered rows consistent.
 - The filter combines with the search box (both are applied in the same DataTables search function).
