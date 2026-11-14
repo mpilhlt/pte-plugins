@@ -1,5 +1,5 @@
 {
-  "version": "1.1.0",
+  "version": "1.1.1",
   "readme": "https://github.com/mpilhlt/pte-plugins/tree/main/plugins/inference-endpoints#readme",
   "engines": {
     "pte": ">=0.83.0",
