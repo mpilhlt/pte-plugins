@@ -231,7 +231,7 @@
       "package": "pte-plugin-metadata-extraction",
       "module": "pte_plugin_metadata_extraction",
       "path": "plugins/metadata-extraction",
-      "version": "1.1.0",
+      "version": "1.1.1",
       "description": "Extract bibliographic metadata from PDFs, enrich TEI headers and backfill missing metadata in collections",
       "requires": [
         "grobid"
