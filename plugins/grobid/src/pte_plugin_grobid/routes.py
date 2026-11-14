@@ -13,23 +13,26 @@ import shutil
 import zipfile
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from typing import Any
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse, StreamingResponse
 
 from fastapi_app.lib.core.dependencies import (
-    get_auth_manager,
     get_db,
     get_file_storage,
-    get_session_manager,
     get_sse_service,
+    require_session_id,
 )
 from fastapi_app.lib.core.database import DatabaseManager
-from fastapi_app.lib.core.sessions import SessionManager
-from fastapi_app.plugin_api import FileStorage
-from fastapi_app.lib.utils.auth import AuthManager
+from fastapi_app.plugin_api import (
+    FileStorage,
+    require_admin_user,
+    require_authenticated_user,
+    require_reviewer_or_admin,
+)
 from fastapi_app.lib.sse.sse_service import SSEService
 from fastapi_app.lib.sse.sse_utils import ProgressBar, send_notification
-from fastapi_app.lib.permissions.acl_utils import user_is_admin, user_has_role
 from pte_plugin_grobid.cache import check_cache, cache_training_data
 from pte_plugin_grobid.config import get_grobid_server_url, get_model_path, get_grobid_server_timeout, is_grobid_cache_disabled
 
@@ -122,10 +125,7 @@ class CancellationToken:
 @router.get("/feature-tokens")
 async def get_feature_tokens(
     stable_id: str = Query(..., description="Stable ID of the GROBID training TEI file"),
-    session_id: str | None = Query(None),
-    x_session_id: str | None = Header(None, alias="X-Session-ID"),
-    session_manager: SessionManager = Depends(get_session_manager),
-    auth_manager: AuthManager = Depends(get_auth_manager),
+    user: dict[str, Any] = Depends(require_authenticated_user),
     db: DatabaseManager = Depends(get_db),
     file_storage: FileStorage = Depends(get_file_storage),
 ):
@@ -144,23 +144,10 @@ async def get_feature_tokens(
         ``{"status": "no_feature_file", "tokens": [], "count": 0}`` when the
         cache is missing or the TEI lacks extractable labels.
     """
-    from fastapi_app.config import get_settings
     from fastapi_app.lib.repository.file_repository import FileRepository
     from pte_plugin_grobid.cache import get_cache_dir, get_cache_key
     from pte_plugin_grobid.config import get_feature_suffix, LINE_BASED_VARIANTS
     from pte_plugin_grobid.sync import extract_feature_tokens, parse_encoding_labels
-
-    session_id_value = x_session_id or session_id
-    if not session_id_value:
-        raise HTTPException(status_code=401, detail="Authentication required")
-
-    settings = get_settings()
-    if not session_manager.is_session_valid(session_id_value, settings.session_timeout):
-        raise HTTPException(status_code=401, detail="Invalid or expired session")
-
-    user = auth_manager.get_user_by_session_id(session_id_value, session_manager)
-    if not user:
-        raise HTTPException(status_code=401, detail="User not found")
 
     file_repo = FileRepository(db)
     file_meta = file_repo.get_file_by_stable_id(stable_id)
@@ -197,43 +184,10 @@ async def get_feature_tokens(
     return {"status": "ok", "tokens": tokens, "count": len(tokens), "line_based": line_based}
 
 
-def _authenticate_reviewer(
-    session_id_value: str | None,
-    session_manager: SessionManager,
-    auth_manager: AuthManager,
-) -> dict:
-    """
-    Validate the session and require reviewer/admin role.
-
-    Shared by the reload-feature-file preview/execute routes below, which
-    have identical auth requirements. Raises HTTPException on failure.
-    """
-    from fastapi_app.config import get_settings
-
-    if not session_id_value:
-        raise HTTPException(status_code=401, detail="Authentication required")
-
-    settings = get_settings()
-    if not session_manager.is_session_valid(session_id_value, settings.session_timeout):
-        raise HTTPException(status_code=401, detail="Invalid or expired session")
-
-    user = auth_manager.get_user_by_session_id(session_id_value, session_manager)
-    if not user:
-        raise HTTPException(status_code=401, detail="User not found")
-
-    if not user_has_role(user, ["reviewer", "admin"]):
-        raise HTTPException(status_code=403, detail="Reviewer role required")
-
-    return user
-
-
 @router.get("/reload-feature-file/preview", response_class=HTMLResponse)
 async def reload_feature_file_preview(
     xml: str = Query(..., description="Stable ID of the open gold TEI file"),
-    session_id: str | None = Query(None),
-    x_session_id: str | None = Header(None, alias="X-Session-ID"),
-    session_manager: SessionManager = Depends(get_session_manager),
-    auth_manager: AuthManager = Depends(get_auth_manager),
+    user: dict[str, Any] = Depends(require_reviewer_or_admin),
     db: DatabaseManager = Depends(get_db),
     file_storage: FileStorage = Depends(get_file_storage),
 ):
@@ -254,8 +208,6 @@ async def reload_feature_file_preview(
         render_preview_html,
         resolve_reload_target,
     )
-
-    user = _authenticate_reviewer(x_session_id or session_id, session_manager, auth_manager)
 
     file_repo = FileRepository(db)
     try:
@@ -282,10 +234,7 @@ async def reload_feature_file_preview(
 @router.get("/reload-feature-file/execute", response_class=HTMLResponse)
 async def reload_feature_file_execute(
     xml: str = Query(..., description="Stable ID of the open gold TEI file"),
-    session_id: str | None = Query(None),
-    x_session_id: str | None = Header(None, alias="X-Session-ID"),
-    session_manager: SessionManager = Depends(get_session_manager),
-    auth_manager: AuthManager = Depends(get_auth_manager),
+    user: dict[str, Any] = Depends(require_reviewer_or_admin),
     db: DatabaseManager = Depends(get_db),
     file_storage: FileStorage = Depends(get_file_storage),
 ):
@@ -305,8 +254,6 @@ async def reload_feature_file_execute(
         render_result_html,
         resolve_reload_target,
     )
-
-    user = _authenticate_reviewer(x_session_id or session_id, session_manager, auth_manager)
 
     file_repo = FileRepository(db)
     try:
@@ -345,10 +292,7 @@ async def cancel_progress(progress_id: str):
 
 @router.get("/diagnostics")
 async def grobid_diagnostics(
-    session_id: str | None = Query(None),
-    x_session_id: str | None = Header(None, alias="X-Session-ID"),
-    session_manager: SessionManager = Depends(get_session_manager),
-    auth_manager: AuthManager = Depends(get_auth_manager),
+    user: dict[str, Any] = Depends(require_admin_user),
 ):
     """
     Run connectivity diagnostics for the GROBID server.
@@ -374,24 +318,6 @@ async def grobid_diagnostics(
     from urllib.parse import urlparse
 
     import requests as _requests
-
-    from fastapi_app.config import get_settings
-
-    # Auth
-    session_id_value = x_session_id or session_id
-    if not session_id_value:
-        raise HTTPException(status_code=401, detail="Authentication required")
-
-    settings = get_settings()
-    if not session_manager.is_session_valid(session_id_value, settings.session_timeout):
-        raise HTTPException(status_code=401, detail="Invalid or expired session")
-
-    user = auth_manager.get_user_by_session_id(session_id_value, session_manager)
-    if not user:
-        raise HTTPException(status_code=401, detail="User not found")
-
-    if not user_is_admin(user):
-        raise HTTPException(status_code=403, detail="Admin role required")
 
     def _check(label: str, fn):
         """Run fn(), return a result dict with status/duration/detail."""
@@ -481,10 +407,8 @@ async def download_training_package(
     flavor: str = Query("default", description="GROBID processing flavor"),
     force_refresh: bool = Query(False, description="Force re-download from GROBID"),
     no_progress: bool = Query(True, description="Suppress SSE progress events (for programmatic API use)"),
-    session_id: str | None = Query(None),
-    x_session_id: str | None = Header(None, alias="X-Session-ID"),
-    session_manager: SessionManager = Depends(get_session_manager),
-    auth_manager: AuthManager = Depends(get_auth_manager),
+    user: dict[str, Any] = Depends(require_reviewer_or_admin),
+    session_id: str = Depends(require_session_id),
     sse_service: SSEService = Depends(get_sse_service),
 ):
     """
@@ -502,8 +426,8 @@ async def download_training_package(
         collection: Collection ID to process
         flavor: GROBID processing flavor (e.g. "default", "article/footnotes-refs")
         force_refresh: Force re-download from GROBID (ignore cached data)
-        session_id: Session ID from query parameter
-        x_session_id: Session ID from header
+        user: Authenticated reviewer or admin
+        session_id: Session that receives the SSE progress events
 
     Returns:
         ZIP file as streaming response
@@ -513,23 +437,7 @@ async def download_training_package(
     from fastapi_app.lib.permissions.user_utils import user_has_collection_access
     from pte_plugin_grobid.sync import parse_encoding_labels
 
-    # Extract session ID (header takes precedence)
-    session_id_value = x_session_id or session_id
-    if not session_id_value:
-        raise HTTPException(status_code=401, detail="Authentication required")
-
-    # Validate session
     settings = get_settings()
-    if not session_manager.is_session_valid(session_id_value, settings.session_timeout):
-        raise HTTPException(status_code=401, detail="Invalid or expired session")
-
-    # Get user and check reviewer role
-    user = auth_manager.get_user_by_session_id(session_id_value, session_manager)
-    if not user:
-        raise HTTPException(status_code=401, detail="User not found")
-
-    if not user_has_role(user, ["reviewer", "admin"]):
-        raise HTTPException(status_code=403, detail="Reviewer role required")
 
     # Check collection access
     if not user_has_collection_access(user, collection, settings.db_dir):
@@ -564,7 +472,7 @@ async def download_training_package(
         progress = None
         cancellation_token = None
         if not no_progress:
-            progress = ProgressBar(sse_service, session_id_value)
+            progress = ProgressBar(sse_service, session_id)
             cancel_url = f"/api/plugins/grobid/cancel/{progress.progress_id}"
             cancellation_token = CancellationToken(progress.progress_id)
 
@@ -591,7 +499,7 @@ async def download_training_package(
                     # Check for cancellation
                     if cancellation_token and cancellation_token.is_cancelled:
                         send_notification(
-                            sse_service, session_id_value,
+                            sse_service, session_id,
                             "Download cancelled", "warning"
                         )
                         progress.hide() # type:ignore
@@ -718,7 +626,7 @@ async def download_training_package(
             # Send success notification (only if progress is enabled)
             if not no_progress:
                 send_notification(
-                    sse_service, session_id_value,
+                    sse_service, session_id,
                     f"Processed {documents_processed} documents ({documents_skipped} skipped)",
                     "success"
                 )

@@ -125,7 +125,7 @@ class ReloadFeatureFileRoutesTestCase(unittest.TestCase):
             "roles": ["user"],
         }
         response = self.client.get(
-            "/api/plugins/grobid/reload-feature-file/preview?xml=tei-1&session_id=abc"
+            "/api/plugins/grobid/reload-feature-file/preview?xml=tei-1", headers={"X-Session-ID": "abc"}
         )
         self.assertEqual(response.status_code, 403)
 
@@ -135,7 +135,7 @@ class ReloadFeatureFileRoutesTestCase(unittest.TestCase):
             "roles": ["user"],
         }
         response = self.client.get(
-            "/api/plugins/grobid/reload-feature-file/execute?xml=tei-1&session_id=abc"
+            "/api/plugins/grobid/reload-feature-file/execute?xml=tei-1", headers={"X-Session-ID": "abc"}
         )
         self.assertEqual(response.status_code, 403)
 
@@ -156,7 +156,7 @@ class ReloadFeatureFileRoutesTestCase(unittest.TestCase):
             side_effect=AssertionError("must not contact GROBID when access is denied"),
         ):
             response = self.client.get(
-                "/api/plugins/grobid/reload-feature-file/preview?xml=tei-1&session_id=abc"
+                "/api/plugins/grobid/reload-feature-file/preview?xml=tei-1", headers={"X-Session-ID": "abc"}
             )
 
         self.assertEqual(response.status_code, 200)
@@ -178,7 +178,7 @@ class ReloadFeatureFileRoutesTestCase(unittest.TestCase):
             new=mock.AsyncMock(),
         ) as mock_perform:
             response = self.client.get(
-                "/api/plugins/grobid/reload-feature-file/execute?xml=tei-1&session_id=abc"
+                "/api/plugins/grobid/reload-feature-file/execute?xml=tei-1", headers={"X-Session-ID": "abc"}
             )
 
         self.assertEqual(response.status_code, 200)
@@ -191,7 +191,7 @@ class ReloadFeatureFileRoutesTestCase(unittest.TestCase):
         self.file_repo.get_file_by_stable_id.return_value = None
 
         response = self.client.get(
-            "/api/plugins/grobid/reload-feature-file/preview?xml=tei-1&session_id=abc"
+            "/api/plugins/grobid/reload-feature-file/preview?xml=tei-1", headers={"X-Session-ID": "abc"}
         )
 
         self.assertEqual(response.status_code, 200)
@@ -208,7 +208,7 @@ class ReloadFeatureFileRoutesTestCase(unittest.TestCase):
             return_value=("0.8.1", "rev-2"),
         ):
             response = self.client.get(
-                "/api/plugins/grobid/reload-feature-file/preview?xml=tei-1&session_id=abc"
+                "/api/plugins/grobid/reload-feature-file/preview?xml=tei-1", headers={"X-Session-ID": "abc"}
             )
 
         self.assertEqual(response.status_code, 200)
@@ -227,7 +227,7 @@ class ReloadFeatureFileRoutesTestCase(unittest.TestCase):
             side_effect=RuntimeError("Connection refused"),
         ):
             response = self.client.get(
-                "/api/plugins/grobid/reload-feature-file/preview?xml=tei-1&session_id=abc"
+                "/api/plugins/grobid/reload-feature-file/preview?xml=tei-1", headers={"X-Session-ID": "abc"}
             )
 
         self.assertEqual(response.status_code, 200)
@@ -239,7 +239,7 @@ class ReloadFeatureFileRoutesTestCase(unittest.TestCase):
         self.file_repo.get_file_by_stable_id.return_value = None
 
         response = self.client.get(
-            "/api/plugins/grobid/reload-feature-file/execute?xml=tei-1&session_id=abc"
+            "/api/plugins/grobid/reload-feature-file/execute?xml=tei-1", headers={"X-Session-ID": "abc"}
         )
 
         self.assertEqual(response.status_code, 200)
@@ -258,7 +258,7 @@ class ReloadFeatureFileRoutesTestCase(unittest.TestCase):
             ),
         ) as mock_perform:
             response = self.client.get(
-                "/api/plugins/grobid/reload-feature-file/execute?xml=tei-1&session_id=abc"
+                "/api/plugins/grobid/reload-feature-file/execute?xml=tei-1", headers={"X-Session-ID": "abc"}
             )
 
         self.assertEqual(response.status_code, 200)
@@ -277,7 +277,7 @@ class ReloadFeatureFileRoutesTestCase(unittest.TestCase):
             new=mock.AsyncMock(side_effect=RuntimeError("GROBID request failed")),
         ):
             response = self.client.get(
-                "/api/plugins/grobid/reload-feature-file/execute?xml=tei-1&session_id=abc"
+                "/api/plugins/grobid/reload-feature-file/execute?xml=tei-1", headers={"X-Session-ID": "abc"}
             )
 
         self.assertEqual(response.status_code, 200)
