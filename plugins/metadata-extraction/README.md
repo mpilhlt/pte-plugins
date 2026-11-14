@@ -22,7 +22,7 @@ POST /api/plugins/metadata-extraction/backfill?collection=<collection-id>
 | `use_grobid` | `true` | Use GROBID header extraction as fallback (if available) |
 | `limit` | none | Maximum number of documents to process |
 
-The session is passed as `X-Session-ID` header or `session_id` query parameter. Non-admin users get `403`, unknown collections `404`.
+The session is passed as `X-Session-ID` header. Non-admin users get `403`, unknown collections `404`.
 
 ### What is written
 
