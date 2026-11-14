@@ -18,7 +18,7 @@ The library's read router is deliberately not mounted: it returns API keys.
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, Response
 from mpcdf_llm.manager import ProvisioningManager
 from mpcdf_llm.presets import Preset
@@ -26,11 +26,10 @@ from mpcdf_llm.storage import FileStateStore
 from mpcdf_llm.web import admin_router
 from pydantic import BaseModel, ValidationError
 
-from fastapi_app.lib.core.dependencies import get_auth_manager
 from fastapi_app.lib.permissions.acl_utils import user_is_admin
 from fastapi_app.lib.plugins.plugin_tools import load_plugin_html
 from fastapi_app.lib.secrets import get_secret_store
-from fastapi_app.plugin_api import get_session_manager, get_settings, require_admin_user, require_authenticated_user
+from fastapi_app.plugin_api import require_admin_user, require_authenticated_user
 
 from . import manager as manager_module
 from .manager import PLUGIN_ID, SESSION_SECRET, get_user_manager
@@ -191,16 +190,7 @@ async def remove_user_session(username: str, admin: dict[str, Any] = Depends(req
 
 @router.get("/manage", response_class=HTMLResponse)
 async def manage_page(
-    session_id: str | None = Query(None),
-    x_session_id: str | None = Header(None, alias="X-Session-ID"),
-    session_manager=Depends(get_session_manager),
-    auth_manager=Depends(get_auth_manager),
+    user: dict[str, Any] = Depends(require_authenticated_user),
 ) -> HTMLResponse:
     """The management page; it talks to the routes above."""
-    session_value = x_session_id or session_id
-    if not session_value or not session_manager.is_session_valid(session_value, get_settings().session_timeout):
-        raise HTTPException(status_code=401, detail="Authentication required")
-    user = auth_manager.get_user_by_session_id(session_value, session_manager)
-    if not user:
-        raise HTTPException(status_code=401, detail="Authentication required")
     return HTMLResponse(load_plugin_html(__file__, "manage.html"))
