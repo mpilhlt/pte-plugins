@@ -473,10 +473,10 @@ class TestAnnotationHistoryRoutes(unittest.TestCase):
             # Setup mock file storage
             self.mock_storage.read_file.return_value = tei_xml.encode("utf-8")
 
-            # Make request with session_id
+            # Make request with the session header
             response = self.client.get(
                 "/api/plugins/annotation-history/view",
-                params={"pdf": "test-pdf-id", "variant": "standard", "session_id": "test-session"}
+                params={"pdf": "test-pdf-id", "variant": "standard"}, headers={"X-Session-ID": "test-session"}
             )
 
             # Verify response
@@ -504,10 +504,10 @@ class TestAnnotationHistoryRoutes(unittest.TestCase):
             mock_repo.get_doc_id_by_file_id.return_value = None
             mock_repo_class.return_value = mock_repo
 
-            # Make request with session_id
+            # Make request with the session header
             response = self.client.get(
                 "/api/plugins/annotation-history/view",
-                params={"pdf": "nonexistent-id", "variant": "all", "session_id": "test-session"}
+                params={"pdf": "nonexistent-id", "variant": "all"}, headers={"X-Session-ID": "test-session"}
             )
 
             # Verify 404 error
