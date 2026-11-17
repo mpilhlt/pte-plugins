@@ -91,7 +91,7 @@ class TestProbeCli(unittest.TestCase):
         session = FakeSession()
         out, err = io.StringIO(), io.StringIO()
         with mock.patch.object(probe.ApiSession, "connect", return_value=session), redirect_stdout(out), redirect_stderr(err):
-            code = probe.main(["--user", "u", "--password", "p", "--env", "/nonexistent", *args])
+            code = probe.main(["--token", "pte_test", "--env", "/nonexistent", *args])
         return code, out.getvalue(), session
 
     def test_runs_and_writes_report(self):
@@ -152,7 +152,7 @@ class TestProbeCli(unittest.TestCase):
         out, err = io.StringIO(), io.StringIO()
         with tempfile.TemporaryDirectory() as tmp, \
                 mock.patch.object(probe.ApiSession, "connect", return_value=session), redirect_stdout(out), redirect_stderr(err):
-            code = probe.main(["--user", "u", "--password", "p", "--env", "/nonexistent", "--model", "m", "--doc", "doc1", "--doc", "doc2", "--variant", "grobid.training.references",
+            code = probe.main(["--token", "pte_test", "--env", "/nonexistent", "--model", "m", "--doc", "doc1", "--doc", "doc2", "--variant", "grobid.training.references",
                                "--batches", "units:4", "--repeats", "2", "--out", tmp])
             report = (Path(tmp) / "report.md").read_text()
             self.assertFalse(any(p.name.endswith(".tmp") for p in Path(tmp).iterdir()))
@@ -172,8 +172,8 @@ class TestProbeCli(unittest.TestCase):
     def test_load_env(self):
         with tempfile.TemporaryDirectory() as tmp:
             env = Path(tmp) / ".env"
-            env.write_text("# comment\nexport API_USER=alice\nAPI_PASSWORD='s3cret'\n")
-            self.assertEqual(load_env(env), {"API_USER": "alice", "API_PASSWORD": "s3cret"})
+            env.write_text("# comment\nexport API_TOKEN=pte_x\nAPI_BASE_URL='http://host'\n")
+            self.assertEqual(load_env(env), {"API_TOKEN": "pte_x", "API_BASE_URL": "http://host"})
 
 
 if __name__ == "__main__":

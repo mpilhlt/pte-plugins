@@ -60,7 +60,7 @@ The installed package also provides the command `pte-model-probe` with the same 
 - `--force-busy`: start even if a model is reported as busy. Without it, `probe` and `annotate` refuse to start while one of their models is `busy` or `very_busy` in the provider's status, because most requests to a busy model time out. Models whose provider reports no status count as free. In `annotate`, `--force` is unrelated: it re-annotates documents annotated before.
 - `--rules-file`: pin the rules to a local file instead of the reference version's rule refs.
 
-It runs against a running editor and logs in like `bin/batch-extract.js`: `--base-url`, `--token` (a personal access token, preferred) or `--user` and `--password`, or `API_BASE_URL`, `API_TOKEN`, `API_USER`, `API_PASSWORD` from the environment or `--env` (default `./.env`). The user needs the reviewer or admin role and access to the models.
+It runs against a running editor and logs in like `bin/batch-extract.js`: `--base-url` and `--token` (a personal access token), or `API_BASE_URL` and `API_TOKEN` from the environment or `--env` (default `./.env`). The user needs the reviewer or admin role and access to the models.
 
 ### What it measures
 

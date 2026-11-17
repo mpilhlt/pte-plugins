@@ -9,7 +9,6 @@ No imports from fastapi_app.
 from __future__ import annotations
 
 import asyncio
-import hashlib
 from collections.abc import Sequence
 from dataclasses import dataclass
 
@@ -69,23 +68,6 @@ class ApiSession:
     timeout: float = DEFAULT_TIMEOUT
 
     @classmethod
-    def login(cls, base_url: str, username: str, password: str, timeout: float = DEFAULT_TIMEOUT) -> "ApiSession":
-        """
-        Log in with the plain text password, as the web client does; use HTTPS for remote servers.
-
-        Servers from before mpilhlt/pdf-tei-editor#246 only accept the password's SHA-256 hash and reject the
-        plain text password with 422, so retry with the hash then.
-        """
-        base = base_url.rstrip("/")
-        url = f"{base}/api/v1/auth/login"
-        response = requests.post(url, json={"username": username, "password": password}, timeout=60)
-        if response.status_code == 422:
-            passwd_hash = hashlib.sha256(password.encode("utf-8")).hexdigest()
-            response = requests.post(url, json={"username": username, "passwd_hash": passwd_hash}, timeout=60)
-        data = _check(response)
-        return cls(base, str(data["sessionId"]), timeout)
-
-    @classmethod
     def login_with_token(cls, base_url: str, token: str, timeout: float = DEFAULT_TIMEOUT) -> "ApiSession":
         """Exchange a personal access token for a session."""
         base = base_url.rstrip("/")
@@ -94,12 +76,8 @@ class ApiSession:
 
     @classmethod
     def connect(cls, connection: Connection, timeout: float = DEFAULT_TIMEOUT) -> "ApiSession":
-        """Log in with the connection's token if it has one, otherwise with its username and password."""
-        if connection.token:
-            return cls.login_with_token(connection.base_url, connection.token, timeout)
-        if not connection.user or not connection.password:
-            raise ApiError("No credentials: a token, or a username and password, are needed")
-        return cls.login(connection.base_url, connection.user, connection.password, timeout)
+        """Log in with the connection's personal access token."""
+        return cls.login_with_token(connection.base_url, connection.token, timeout)
 
     @property
     def headers(self) -> dict[str, str]:
