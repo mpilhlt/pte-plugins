@@ -401,6 +401,41 @@ async def grobid_diagnostics(
     return {"checks": results}
 
 
+def _failed_documents_summary(failures: list[tuple[str, str]], limit: int = 5) -> str:
+    """
+    Describe the documents for which GROBID returned no training data, for a notification or error detail.
+
+    Args:
+        failures: (doc_id, reason) pairs
+        limit: Maximum number of document ids to name
+
+    Returns:
+        One sentence naming the documents, ending with a period
+    """
+    doc_ids = [doc_id for doc_id, _ in failures]
+    names = ", ".join(doc_ids[:limit])
+    if len(doc_ids) > limit:
+        names += f" and {len(doc_ids) - limit} more"
+    count = len(doc_ids)
+    noun = "document" if count == 1 else "documents"
+    return f"GROBID could not create training data for {count} {noun} ({names})."
+
+
+def _skipped_documents_report(failures: list[tuple[str, str]]) -> str:
+    """
+    Build the skipped-documents.txt report that is added to the training ZIP.
+
+    Args:
+        failures: (doc_id, reason) pairs
+
+    Returns:
+        Plain-text report with one line per document
+    """
+    lines = ["GROBID could not create training data for these documents, so they are missing from this package:", ""]
+    lines += [f"{doc_id}\t{reason}" for doc_id, reason in failures]
+    return "\n".join(lines) + "\n"
+
+
 @router.get("/download")
 async def download_training_package(
     collection: str = Query(..., description="Collection ID"),
@@ -493,6 +528,8 @@ async def download_training_package(
             zip_buffer = io.BytesIO()
             documents_processed = 0
             documents_skipped = 0
+            # (doc_id, reason) of documents whose training data GROBID did not return
+            grobid_failures: list[tuple[str, str]] = []
 
             with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
                 for i, pdf_file in enumerate(pdf_files):
@@ -575,6 +612,7 @@ async def download_training_package(
                             cache_training_data(doc_id, grobid_revision, doc_flavor, temp_dir, extracted_files)
                         except Exception as e:
                             logger.warning(f"Failed to fetch training data for {doc_id}: {e}")
+                            grobid_failures.append((doc_id, str(e)))
                             documents_skipped += 1
                             continue
 
@@ -609,6 +647,9 @@ async def download_training_package(
                         if settings.application_mode == "production" and not cached_data:
                             shutil.rmtree(temp_dir, ignore_errors=True)
 
+                if grobid_failures and documents_processed > 0:
+                    zf.writestr(f"{zip_stem}/skipped-documents.txt", _skipped_documents_report(grobid_failures))
+
             # Hide progress and clean up
             if progress:
                 progress.hide()
@@ -616,9 +657,14 @@ async def download_training_package(
                 cancellation_token.cleanup()
 
             if documents_processed == 0:
+                if grobid_failures:
+                    raise HTTPException(
+                        status_code=502,
+                        detail=f"No training data could be downloaded: {_failed_documents_summary(grobid_failures)}"
+                    )
                 raise HTTPException(
                     status_code=404,
-                    detail=f"No documents could be processed. {documents_skipped} skipped."
+                    detail=f"No documents with gold standard training data in collection '{collection}' ({documents_skipped} skipped)."
                 )
 
             zip_buffer.seek(0)
@@ -630,6 +676,12 @@ async def download_training_package(
                     f"Processed {documents_processed} documents ({documents_skipped} skipped)",
                     "success"
                 )
+                if grobid_failures:
+                    send_notification(
+                        sse_service, session_id,
+                        f"The download is missing documents: {_failed_documents_summary(grobid_failures)} The ZIP lists them in skipped-documents.txt.",
+                        "warning"
+                    )
 
             # Return ZIP as streaming response
             return StreamingResponse(

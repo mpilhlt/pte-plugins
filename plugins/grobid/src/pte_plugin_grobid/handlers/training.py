@@ -188,8 +188,10 @@ class TrainingHandler(GrobidHandler):
         """
         logger.info(f"Fetching training package from {pdf_path} via GROBID")
 
-        # Create session with retry logic
-        session = get_retry_session(retries=5, backoff_factor=2.0)
+        # Retry only transient errors. An HTTP 500 from createTraining is a
+        # processing failure inside GROBID that repeats for the same PDF, so
+        # retrying it only delays the next document (#504).
+        session = get_retry_session(retries=5, backoff_factor=2.0, status_forcelist=[429, 502, 503, 504])
 
         # Create project temp directory for processing
         settings = get_settings()
@@ -213,7 +215,11 @@ class TrainingHandler(GrobidHandler):
                 response = session.post(url, files=files, timeout=get_grobid_extraction_timeout())
                 response.raise_for_status()
         except (ConnectionError, RetryError, RequestException) as e:
-            reason = str(e.__cause__ or e).split('\n')[0]
+            response_obj = getattr(e, "response", None)
+            if response_obj is not None and response_obj.status_code == 500:
+                reason = "GROBID could not process this PDF (HTTP 500)"
+            else:
+                reason = str(e.__cause__ or e).split('\n')[0]
             logger.error(f"GROBID request failed: {reason}")
             parsed_url = urlparse(grobid_server_url)
             hostname = parsed_url.netloc or parsed_url.path
