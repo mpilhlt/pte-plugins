@@ -185,6 +185,8 @@ For each document the route:
 
 The resulting ZIP mirrors `grobid-trainer/resources/dataset/` and can be unpacked directly into that directory.
 
+**Documents GROBID cannot process:** when `/api/createTraining` fails for a document, the route skips it and continues with the next one. An HTTP 500 is not retried, since it is a processing error inside GROBID that repeats for the same PDF; 429, 502, 503 and 504 are retried with backoff. If other documents succeed, the ZIP is returned with a top-level `skipped-documents.txt` that lists each skipped document and the reason, and a warning notification names the skipped documents. If no document succeeds, the route returns HTTP 502 with a `detail` naming them, which the editor shows as the download error.
+
 **Query parameters:**
 
 | Parameter | Default | Description |
