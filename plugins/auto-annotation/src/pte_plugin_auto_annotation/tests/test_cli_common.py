@@ -29,18 +29,18 @@ CLEAN_ENV = {k: v for k, v in os.environ.items() if k not in ("API_TOKEN", "API_
 
 @mock.patch.dict(os.environ, CLEAN_ENV, clear=True)
 class ConnectionFromArgsTest(unittest.TestCase):
-    def test_token_from_env_file_is_preferred_over_password(self):
-        result = connection([], "API_TOKEN=pte_x\nAPI_USER=alice\nAPI_PASSWORD=pw\n")
+    def test_token_from_env_file(self):
+        result = connection([], "API_TOKEN=pte_x\n")
         self.assertEqual(result, Connection("http://localhost:8000", token="pte_x"))
 
     def test_token_option_overrides_env_file(self):
         self.assertEqual(connection(["--token", "pte_cli"], "API_TOKEN=pte_x\n").token, "pte_cli")
 
-    def test_password_without_token(self):
-        result = connection([], "API_USER=alice\nAPI_PASSWORD=pw\n")
-        self.assertEqual(result, Connection("http://localhost:8000", user="alice", password="pw"))
+    def test_username_and_password_are_not_accepted(self):
+        with mock.patch("sys.stderr"), self.assertRaises(SystemExit):
+            connection([], "API_USER=alice\nAPI_PASSWORD=pw\n")
 
-    def test_no_credentials_exits(self):
+    def test_no_token_exits(self):
         with mock.patch("sys.stderr"), self.assertRaises(SystemExit):
             connection([])
 
@@ -54,12 +54,6 @@ class ConnectTest(unittest.TestCase):
         self.assertEqual(session.session_id, "sid")
         self.assertEqual(post.call_args.args[0], "http://host/api/v1/auth/token-login")
         self.assertEqual(post.call_args.kwargs["headers"], {"Authorization": "Bearer pte_x"})
-
-    def test_password_connection_uses_login(self):
-        sentinel = ApiSession("http://host", "sid")
-        with mock.patch.object(ApiSession, "login", return_value=sentinel) as login:
-            self.assertIs(ApiSession.connect(Connection("http://host", user="alice", password="pw")), sentinel)
-        self.assertEqual(login.call_args.args[:3], ("http://host", "alice", "pw"))
 
 
 if __name__ == "__main__":
