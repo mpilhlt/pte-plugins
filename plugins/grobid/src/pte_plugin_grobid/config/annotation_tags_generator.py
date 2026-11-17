@@ -23,4 +23,4 @@ def generate_annotation_tags(variant_id: str, schema_path: Path) -> list[Annotat
     scope = ANNOTATION_TAG_SCOPE.get(variant_id)
     if scope is None:
         return []
-    return generate_tags_from_schema(schema_path, scope["root"], scope["exclude"])
+    return generate_tags_from_schema(schema_path, scope["root"], scope["exclude"], read_only=scope.get("read_only", set()))
