@@ -11,6 +11,8 @@ import zipfile
 from pathlib import Path
 from unittest import mock
 
+from pte_plugin_grobid.config import has_layout_api
+
 from pte_plugin_grobid.layout import (
     FeatureRow,
     align,
@@ -85,6 +87,7 @@ class TestRows(unittest.TestCase):
         self.assertIsNone(line_layout_from_rows(["a", "b", "c"], [FeatureRow("x", True), FeatureRow("y", False)]))
 
 
+@unittest.skipUnless(has_layout_api(), "needs the editor's layout API (plugin API 1.5)")
 class TestProvider(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

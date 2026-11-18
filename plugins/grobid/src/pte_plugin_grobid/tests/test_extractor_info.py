@@ -10,6 +10,7 @@ endpoint, because extraction.py's router has no per-extractor error isolation.
 import unittest
 
 from fastapi_app.lib.models.models_extraction import ExtractorInfo
+from pte_plugin_grobid.config import has_layout_api
 
 
 class TestExtractorInfoValidation(unittest.TestCase):
@@ -24,6 +25,7 @@ class TestExtractorInfoValidation(unittest.TestCase):
         self.assertEqual(info["reviewUnits"]["grobid.training.references"], ".//listBibl/bibl")
         self.assertTrue(set(info["reviewUnits"]) <= set(info["variants"]))
 
+    @unittest.skipUnless(has_layout_api(), "needs the editor's layout API (plugin API 1.5)")
     def test_segmentation_is_reviewed_by_page(self):
         from pte_plugin_grobid.extractor import GrobidTrainingExtractor
         info = GrobidTrainingExtractor.get_info()

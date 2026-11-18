@@ -57,6 +57,9 @@ except ImportError:  # editor older than the two-layer document rules (pdf-tei-e
 
 logger = logging.getLogger(__name__)
 
+# Documents are only checked and read, never expanded: no entities, no DTDs from the network
+_XML_PARSER = etree.XMLParser(resolve_entities=False, no_network=True, load_dtd=False)
+
 TEI_NS = "http://www.tei-c.org/ns/1.0"
 
 _TEXT_ELEMENT_RE = re.compile(r"<text\b[^>]*>.*</text\s*>", re.DOTALL)
@@ -126,7 +129,7 @@ def extract_text_content(xml_string: str) -> str:
             <text> element.
     """
     try:
-        root = etree.fromstring(xml_string.encode("utf-8"))
+        root = etree.fromstring(xml_string.encode("utf-8"), _XML_PARSER)
     except etree.XMLSyntaxError as e:
         raise ValueError(f"Document is not well-formed XML: {e}") from e
 
@@ -210,7 +213,7 @@ def review_source(xml_string: str, scope: str | None = None) -> tuple[str, str]:
     if not scope.strip() or scope not in xml_string:
         raise ValueError("The node to review is not part of the document")
     try:
-        etree.fromstring(xml_string.encode("utf-8"))
+        etree.fromstring(xml_string.encode("utf-8"), _XML_PARSER)
     except etree.XMLSyntaxError as e:
         raise ValueError(f"Document is not well-formed XML: {e}") from e
     return scope, xml_string
@@ -231,7 +234,7 @@ def zone_source(
     if labels is None:
         return None
     try:
-        etree.fromstring(xml_string.encode("utf-8"))
+        etree.fromstring(xml_string.encode("utf-8"), _XML_PARSER)
     except etree.XMLSyntaxError as e:
         raise ValueError(f"Document is not well-formed XML: {e}") from e
     if scope is not None:

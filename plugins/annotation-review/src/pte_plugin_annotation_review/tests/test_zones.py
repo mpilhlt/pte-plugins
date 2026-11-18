@@ -22,7 +22,12 @@ from fastapi_app.lib.core.database import DatabaseManager
 from fastapi_app.lib.core.dependencies import get_document_rules_store, get_file_repository, require_authenticated_user
 from fastapi_app.lib.doc_rules.storage import DocumentRulesStore
 from fastapi_app.lib.llm import LLMModel, LLMProvider, LLMProviderRegistry
-from fastapi_app.plugin_api import LineLayout, register_layout_provider, unregister_layout_provider, zone_lines
+import pytest
+
+try:
+    from fastapi_app.plugin_api import LineLayout, register_layout_provider, unregister_layout_provider, zone_lines
+except ImportError:  # editor before plugin API 1.5
+    pytest.skip("needs the editor's layout API (plugin API 1.5)", allow_module_level=True)
 
 from pte_plugin_annotation_review import routes as routes_module
 from pte_plugin_annotation_review import zones
