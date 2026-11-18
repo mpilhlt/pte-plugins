@@ -56,6 +56,12 @@ class RuleResponse(BaseModel):
     url: str
 
 
+class ZoneLayoutResponse(BaseModel):
+    labels: list[dict[str, object]]
+    line_pages: list[int]
+    hints: list[list[str]]
+
+
 class EvalSourceResponse(BaseModel):
     doc_id: str
     reference_stable_id: str
@@ -69,6 +75,8 @@ class EvalSourceResponse(BaseModel):
     input_xml: str
     rules: list[RuleResponse]
     segmenting: bool = False
+    # Zone documents: {labels, line_pages, hints} (see zones.ZoneLayout)
+    zones: ZoneLayoutResponse | None = None
 
 
 class ResolveModelRequest(BaseModel):
@@ -115,6 +123,7 @@ def eval_source(
         input_stable_id=source.input_stable_id, input_choice=source.input_choice, input_is_extraction=source.input_is_extraction, variant=source.variant, unit_path=source.unit_path,
         gold_xml=source.gold_xml, input_xml=source.input_xml,
         rules=[RuleResponse(category=c, text=t, url=u) for c, t, u in source.rules], segmenting=source.segmenting,
+        zones=ZoneLayoutResponse(labels=source.zones.labels, line_pages=source.zones.line_pages, hints=source.zones.hints) if source.zones else None,
     )
 
 

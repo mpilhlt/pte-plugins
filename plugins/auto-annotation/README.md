@@ -21,6 +21,8 @@ The Tools menu item (section "Annotation") is for annotators, reviewers and admi
 
 If the model changes nothing, no version is created. If the run is cancelled or a request fails (after retries), the user can save the corrections made so far; the change then records the unprocessed units. In every case that saves nothing, the job's lock is released and the source can be edited again.
 
+Documents reviewed by page (zone documents, see [Zone documents](#zone-documents)) are corrected in windows of four pages; the progress counts pages. The item is disabled, with the reason as tooltip, when the layout of such a document is missing.
+
 ## Test model with current document
 
 Two items in the Tools menu (section "Inference") run the model probe in the editor. They are shown to reviewers and admins only.
@@ -28,7 +30,7 @@ Two items in the Tools menu (section "Inference") run the model probe in the edi
 **Test model with current document** tests a model on the open version. That version is the reference that the model's corrections are scored against, and the model corrects an earlier extraction of the same document, chosen as by the probe's `--doc` (see below). The item is disabled when no document is open, when the document has no machine-readable rule reference, or when no model is available.
 
 1. If the open version is not a gold version, a warning asks for confirmation, since the scores are then measured against annotations that may contain errors.
-2. A form asks for the model (preselected: the default model of Tools > Inference), the batch sizes (`units:1` to `units:32`, plus further `units:N` or `chars:N` specs), the output modes, the repetitions, the requests in parallel, the retries, the temperature, a limit to the first units for a quick test, the version to correct (automatic or another version of the same variant), and whether to start even if the model is reported as busy. It shows the number of runs: batch sizes × modes × repetitions, each sending all units once.
+2. A form asks for the model (preselected: the default model of Tools > Inference), the batch sizes (`units:1` to `units:32`, plus further `units:N` or `chars:N` specs; for zone documents `pages:1` to `pages:all`), the output modes, the repetitions, the requests in parallel, the retries, the temperature, a limit to the first units for a quick test, the version to correct (automatic or another version of the same variant), and whether to start even if the model is reported as busy. It shows the number of runs: batch sizes × modes × repetitions, each sending all units once.
 3. The server checks the parameters, the model (access, key, busy status) and the documents, and starts the test as a job of the worker that received the request. Errors open an error alert. A message confirms the start, and a minimized progress widget shows the runs done; its cancel button stops the test after the request under way. Each user can run one test at a time.
 4. When the test is done or was cancelled after a finished run, its results open in the plugin result dialog. Errors (all requests of a run failed, the server restarted) open an error alert, and the results of the finished runs are kept.
 
@@ -54,7 +56,7 @@ The installed package also provides the command `pte-model-probe` with the same 
 - `--model`: a model as configured in the app: `default`, `<provider>`, or `<provider>/<model>`. `<provider>` is a provider id (`kisski`, `endpoint-ollama`), its label (an inference endpoint's name) or an endpoint id without the `endpoint-` prefix; `<model>` is a model id or label. With `<provider>` alone, the provider's only model or the default model is used.
 - `--doc`: a document id. Its gold version of `--variant` (required with `--doc`, e.g. `grobid.training.references`) is the reference the model's corrections are scored against. The version the model corrects is the extraction the reference was derived from (the oldest extraction among the versions' parents), else the earliest extraction of the same document and variant (ties by creation time); without an extraction, the probe stops and asks for `--input`. A version counts as an extraction if its revision history starts with the extraction and has only metadata changes after it (renamed, document rules updated); label and status are not reliable (`versions.py`). The report says how the input was chosen, and marks a given `--input` that is not an extraction.
 - `--reference`: the stable id of a version to score against instead of the gold version, e.g. for a document without a gold version yet; the report marks it as "not the gold version". Its document and variant are used, so `--doc` and `--variant` can be left out.
-- `--batches`: batch specs, `units:N` (at most N units per request) or `chars:N` (at most N characters of unit XML).
+- `--batches`: batch specs, `units:N` (at most N units per request) or `chars:N` (at most N characters of unit XML); for zone documents `pages:N` or `pages:all` (see [Zone documents](#zone-documents)), which are also the default for them.
 - `--modes`: `all` (the model returns every unit) or `changed` (only the units it changed).
 - `--retries`: how often a request is repeated after a provider overload or timeout (HTTP 503), with exponential backoff from 2 s (default 4). Rate limits are handled by the editor: it waits out a wait of up to a minute, and a longer wait or an exhausted quota ends the request with HTTP 429 and the time to try again, which then appears in the batch's error. Until that time, all requests of that model fail at once, without calling the service. Requests that still fail are reported as errors and left out of the scores, since they say nothing about the model.
 - `--force-busy`: start even if a model is reported as busy. Without it, `probe` and `annotate` refuse to start while one of their models is `busy` or `very_busy` in the provider's status, because most requests to a busy model time out. Models whose provider reports no status count as free. In `annotate`, `--force` is unrelated: it re-annotates documents annotated before.
@@ -80,6 +82,17 @@ For variants that their extractor declares as segmenting (`segmentingVariants` i
 - The prompt allows a unit to be returned as several `<bibl>` elements, or empty when its text moves into a neighbouring unit.
 - A returned unit must consist of `<bibl>` elements with only whitespace between them. Its text is checked first per unit; a unit whose own text changed is accepted when the batch as a whole keeps its text and no unit of the batch failed otherwise.
 - Units are not matched one-to-one. Input and reference version are read as one text stream (whitespace removed), each element becomes a field with its start and end position in that stream, and the reference's fields are mapped onto the input's text where the two agree. A field is credited to the input unit in which it starts; input units whose text the reference does not share entirely are left out and counted as unmatched. Edits are then counted as above.
+
+#### Zone documents
+
+Variants whose extractor declares zone labels (`zoneLabels` in the extractor info, next to `reviewUnits`; the GROBID plugin declares them for `grobid.training.segmentation`) are documents whose `<text>` is divided into zones (`<front>`, `<body>`, `<note place="headnote">`, ...) that partition one text stream. Their review units are the pages of the document's line layout, which the editor provides through its layout API (plugin API 1.5; `zones.py` and the editor's `fastapi_app/lib/tei/zone_lines.py`):
+
+- The model gets windows of whole pages (`pages:N`, `pages:all`, or `chars:N` measured on the listing) as numbered lines with zone labels and layout hints, with five lines of context before and after the window, and the rules, the label table and the hint table. It answers in the line form: `0413-0420 body` gives a range of lines one label, `0412 | [page]12 [note:headnote]Running title` gives a line whose text lies in several zones its pieces. In mode `all` the answer covers every line of the window, in mode `changed` only the lines whose labels change, or `NO CHANGES`.
+- The model never writes XML, so an answer cannot be malformed. A page fails with `text_changed` when the text of one of its piece lines differs from the line, and with `bad_labels` when the answer uses unknown labels or overlapping changes, leaves out lines of the page (mode `all`) or cannot be read. A window whose pages fail is split in half and retried: by pages, then a single page by lines.
+- The label changes of all pages are applied in one step, which rebuilds the zone elements and keeps the text and the `<lb/>` elements byte for byte.
+- Scoring (`zone_scoring.py`): input and reference are aligned on their text characters (whitespace removed) and compared by character. **Label acc.** is the share of characters whose proposed label is the reference's; an edit is a stretch of characters whose label changes to the same new label; **Boundary F1** (in place of field F1) compares the positions where the label changes. **Exact %** counts pages all of whose characters carry the reference's label.
+- The probe compares `pages:1`, `pages:2`, `pages:4`, `pages:8` and `pages:all` by default, in the editor's form and in the command line tool.
+- Without the layout (no cached feature file for the document's extraction), the correction and the probe refuse with the reason; a fresh extraction provides it. The annotation pipeline does not process zone documents.
 
 ## Annotation pipeline
 
@@ -135,6 +148,8 @@ The modules `plugin.py`, `routes.py`, `sources.py`, `models.py`, `annotation.py`
 | `evaluation.py` | Sweeps of batch specs and modes on one gold document, summaries |
 | `report.py` | CSV, JSONL, JSON and Markdown output |
 | `segmentation.py` | Scoring of segmenting variants on text positions; which variants are segmenting |
+| `zones.py` | Zone documents: pages as units, prompts, checks of the line answers, correcting page windows, applying the changes |
+| `zone_scoring.py` | Scoring of zone documents by character: label accuracy, edits, zone boundaries |
 | `versions.py` | Telling extractions from annotated versions by their revision history |
 | `arbitration.py` | Comparing proposals, candidates and prompt of the arbiter |
 | `pipeline.py` | The pipeline: `annotate_units()` runs A and B, then the arbiter; a decision per unit |
@@ -160,8 +175,8 @@ The modules `plugin.py`, `routes.py`, `sources.py`, `models.py`, `annotation.py`
 
 For annotators, reviewers and admins, used by the Tools menu action (`<job>` is `{"job_id", "stable_id"}`):
 
-- `POST /api/plugins/auto-annotation/correct/start` `{"stable_id", "provider_id", "model_id", "batch"}`: checks the version and the model, takes over the lock and returns the job id, the number of units and the unit indices of each batch; 423 if another session holds the lock.
-- `POST /api/plugins/auto-annotation/correct/batch` `{<job>, "provider_id", "model_id", "units", "retries"}`: corrects the given units; per unit its status and the corrected XML if it changed. A failed request is reported in `error`. 409 if the job no longer holds the lock.
+- `POST /api/plugins/auto-annotation/correct/start` `{"stable_id", "provider_id", "model_id", "batch"}`: checks the version and the model, takes over the lock and returns the job id, the number of units, what they are (`unit_name`: `units`, or `pages` for zone documents) and the unit indices of each batch; 423 if another session holds the lock, 422 for a zone document without layout. `batch` defaults to `units:16`, for zone documents `pages:4`.
+- `POST /api/plugins/auto-annotation/correct/batch` `{<job>, "provider_id", "model_id", "units", "retries"}`: corrects the given units; per unit its status and the corrected XML if it changed (for the pages of zone documents: their label changes in the line form). A failed request is reported in `error`. 409 if the job no longer holds the lock.
 - `POST /api/plugins/auto-annotation/correct/heartbeat` `<job>`: refreshes the lock (409 if it was lost).
 - `POST /api/plugins/auto-annotation/correct/finish` `{<job>, "provider_id", "model_id", "model_label", "corrections": [{"index", "xml"}], "processed", "invalid", "errors", "seconds"}`: checks the corrections and returns the document with them and the revision change; it does not save.
 - `POST /api/plugins/auto-annotation/correct/release` `<job>`: releases the lock and sends `lockReleased` to the other sessions.
@@ -178,7 +193,7 @@ The plugin endpoint `probe_results` (not in the menu) returns the URL of a test'
 
 For reviewers and admins, used by the CLIs:
 
-- `GET /api/plugins/auto-annotation/eval-source?doc=<doc id>&variant=<variant>[&reference=<id>][&input=<id>][&rules=false]`: reference (the document's gold version of the variant, or `reference`) and input XML, variant, unit path, and the rules; with `reference`, `doc` and `variant` may be left out. Rules are the machine refs of the reference version's `editorialDecl`, else human refs, without user overrides.
+- `GET /api/plugins/auto-annotation/eval-source?doc=<doc id>&variant=<variant>[&reference=<id>][&input=<id>][&rules=false]`: reference (the document's gold version of the variant, or `reference`) and input XML, variant, unit path, the rules, and for zone documents `zones` (zone labels, page of every line, layout hints); with `reference`, `doc` and `variant` may be left out. Rules are the machine refs of the reference version's `editorialDecl`, else human refs, without user overrides.
 - `POST /api/plugins/auto-annotation/resolve-model` `{"model": "<name>"}`: provider and model id, after checking model access.
 - `POST /api/plugins/auto-annotation/complete` `{"provider_id", "model_id", "system_prompt", "user_prompt", "temperature"}`: one completion with the same model access rules as the LLM Reviewer.
 - `GET /api/plugins/auto-annotation/targets?variant=<variant>&collection=<id>` or `&doc=<id>` (repeatable): per document, the version the pipeline would annotate and its state (`ready`, `annotated`, `gold`, `no-version`).

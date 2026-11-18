@@ -127,6 +127,14 @@ precision when the model changed nothing.</p>
 precision = fields of the proposal found in the reference / fields of the proposal, field recall = the same / fields of the reference. The
 input row (and "Input field F1") scores the input against the reference, which shows how much there was to correct. <b>Exact %</b>: units
 whose proposal has exactly the fields of the reference.</p>
+<p class="note"><b>Documents reviewed by page.</b> For zone documents such as segmentation documents, the review units are the pages of the
+document's layout, and the model is given windows of whole pages (batch sizes <code>pages:N</code>, <code>pages:all</code>) as numbered lines
+with zone labels, which it answers with label changes. Input and reference are read as one text and aligned on its characters without
+whitespace. <i>Label acc.</i> is the share of the characters whose proposed label is the reference's. An <i>edit</i> is a stretch of
+consecutive characters whose label changes to the same new label; a made edit is correct if the reference needs the same stretch with
+the same label. <i>Boundary F1</i> takes the place of Field F1: precision and recall of the positions where the label changes between two
+characters. <b>Exact %</b>: pages all of whose characters carry the reference's label. A page fails when the answer changes the text of a
+line, uses unknown labels or overlapping changes, or (in mode "all") leaves out lines of the page.</p>
 <p class="note"><b>Failures and errors.</b> A <i>failure</i> is a unit the model answered without a usable proposal: missing from the answer
 (in mode "all"), not well-formed, a different outermost element, or changed text (the model must not change the text). Failed units are
 scored as if the input were kept, i.e. as making no edits, so they lower recall. In mode "changed", a unit the model does not return counts
@@ -141,9 +149,11 @@ the counts over the latest finished test on each reference version, so every doc
 
 
 SUMMARY_HEADERS = ["Batching", "Mode", "Runs", "Calls", "Retries", "Errors %", "Failures %", "Exact %", "Edit P", "Edit R", "Edit F1", "Field F1", "Edit R by quarter", "Seconds"]
+# Zone documents (pages): label accuracy after Exact %, and the zone boundaries in place of the fields
+ZONE_SUMMARY_HEADERS = [*SUMMARY_HEADERS[:8], "Label acc. %", *SUMMARY_HEADERS[8:11], "Boundary F1", *SUMMARY_HEADERS[12:]]
 
 
-def _summary_row(s: Mapping[str, object], css: str = "") -> str:
+def _summary_row(s: Mapping[str, object], css: str = "", zones: bool = False) -> str:
     quarters = s.get("edit_recall_by_quarter")
     quarter_text = " / ".join(_pct(q) for q in quarters) if isinstance(quarters, list) and s.get("calls") else "–"
     seconds = s.get("seconds")
@@ -151,6 +161,7 @@ def _summary_row(s: Mapping[str, object], css: str = "") -> str:
         f'<td class="text">{_text(s.get("batching"))}</td>', f'<td class="text">{_text(s.get("mode"))}</td>',
         f"<td>{_text(s.get('repeats'))}</td>", f"<td>{_text(s.get('calls'))}</td>", f"<td>{_text(s.get('retries'))}</td>",
         f"<td>{_pct(s.get('error_rate'))}</td>", f"<td>{_pct(s.get('failure_rate'))}</td>", f"<td>{_pct(s.get('exact_rate'))}</td>",
+        *([f"<td>{_pct(s.get('label_accuracy'))}</td>"] if zones else []),
         f"<td>{_pct(s.get('edit_precision'))}</td>", f"<td>{_pct(s.get('edit_recall'))}</td>", f"<td>{_pct(s.get('edit_f1'))}</td>",
         f"<td>{_pct(s.get('field_f1'))}</td>", f"<td>{quarter_text}</td>",
         f"<td>{seconds:.1f}</td>" if isinstance(seconds, (int, float)) else "<td>–</td>",
@@ -158,10 +169,13 @@ def _summary_row(s: Mapping[str, object], css: str = "") -> str:
     return f'<tr class="{css}">{"".join(cells)}</tr>'
 
 
-def _summary_table(rows: Sequence[Mapping[str, object]], baseline: Mapping[str, object] | None, best: Mapping[str, object] | None) -> str:
-    head = "".join(f'<th class="{"text" if i < 2 else ""}">{h}</th>' for i, h in enumerate(SUMMARY_HEADERS))
-    body = [_summary_row({**baseline, "batching": "GROBID (input)", "mode": "–"}, "baseline")] if baseline else []
-    body += [_summary_row(s, "best" if best is not None and s is best else "") for s in rows]
+def _summary_table(
+    rows: Sequence[Mapping[str, object]], baseline: Mapping[str, object] | None, best: Mapping[str, object] | None, zones: bool = False,
+) -> str:
+    headers = ZONE_SUMMARY_HEADERS if zones else SUMMARY_HEADERS
+    head = "".join(f'<th class="{"text" if i < 2 else ""}">{h}</th>' for i, h in enumerate(headers))
+    body = [_summary_row({**baseline, "batching": "GROBID (input)", "mode": "–"}, "baseline", zones)] if baseline else []
+    body += [_summary_row(s, "best" if best is not None and s is best else "", zones) for s in rows]
     return f"<table><thead><tr>{head}</tr></thead><tbody>{''.join(body)}</tbody></table>"
 
 
@@ -249,7 +263,8 @@ def render_run_page(
 
     parts.append("<h2>Scores of this test</h2>")
     if item.summaries:
-        parts.append(_summary_table(item.summaries, item.baseline, item.best))
+        zones = any(isinstance(s, Mapping) and s.get("label_accuracy") is not None for s in item.summaries)
+        parts.append(_summary_table(item.summaries, item.baseline, item.best, zones))
         parts.append(
             '<p class="note">The first row scores the input itself; the highlighted row has the highest edit F1. '
             '<a href="#method">How the scores are computed</a>.</p>'

@@ -15,6 +15,10 @@ the user's session, so that it opens read-only everywhere, also in the user's ow
 expires like any other lock if the client stops sending requests (LOCK_TIMEOUT_SECONDS). Once the
 new version is saved, the source is frozen by the editor since a version was derived from it.
 
+Zone documents (see zones.py) are corrected by page: the units are the pages of the document's
+line layout, a unit's correction is its label changes in the line form, and /finish applies the
+changes of all pages at once. Without the layout, /start refuses with the reason.
+
 For annotators, reviewers and admins.
 """
 
@@ -50,11 +54,12 @@ from fastapi_app.plugin_api import get_settings
 from .annotation import load_input
 from .batching import BatchSpec
 from .correction import ProviderChatClient, RetryPolicy
-from .document import write_corrections
+from .document import write_corrections, write_zone_corrections
 from .models import ModelResolutionError, ensure_model_access, provider_for_user
-from .single import CorrectionSummary, check_corrections, correct_batch, plan_batches
-from .sources import SourceError, gather_rules, is_segmenting_variant, review_unit_path
+from .single import CorrectionSummary, check_corrections, correct_batch, correct_page_batch, plan_batches
+from .sources import SourceError, gather_rules, is_segmenting_variant, review_unit_path, zone_layout
 from .units import Unit, document_units
+from .zones import DEFAULT_PAGE_BATCH, ZoneDoc, apply_page_changes, read_zone_doc
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +85,7 @@ def job_holder(job_id: str) -> str:
 
 @dataclass
 class CorrectionSource:
-    """The version to correct, its review units and the rules."""
+    """The version to correct, its review units and the rules; for zone documents, its pages as units."""
 
     file: FileMetadata
     xml: str
@@ -88,23 +93,31 @@ class CorrectionSource:
     units: list[Unit]
     rules: list[tuple[str, str, str]]
     segmenting: bool
+    zone: ZoneDoc | None = None
 
 
 def load_source(stable_id: str, user: dict[str, object], repo: FileRepository, storage: FileStorage, with_rules: bool = True) -> CorrectionSource:
     """
     Raises:
-        SourceError: the version is missing, not readable, a gold version, has no review units, or no rules.
+        SourceError: the version is missing, not readable, a gold version, has no review units, or no
+            rules; a zone document without layout.
     """
     file, xml = load_input(repo, storage, stable_id, user)
     unit_path = review_unit_path(file.variant)
+    layout = zone_layout([xml], file.doc_id, file.variant)
+    zone: ZoneDoc | None = None
     try:
-        units = document_units(xml, unit_path)
+        if layout is not None:
+            zone = read_zone_doc(xml, layout)
+            units = zone.units
+        else:
+            units = document_units(xml, unit_path)
     except ValueError as e:
         raise SourceError(f"{stable_id}: {e}") from e
     if not units:
         raise SourceError("The document has no units to correct" + (f" ({unit_path})" if unit_path else ""))
     rules = gather_rules(xml, UrlCache(get_settings().annotation_rules_cache_dir)) if with_rules else []
-    return CorrectionSource(file, xml, unit_path, units, rules, is_segmenting_variant(file.variant))
+    return CorrectionSource(file, xml, unit_path, units, rules, is_segmenting_variant(file.variant), zone)
 
 
 def _source(stable_id: str, user: dict[str, object], repo: FileRepository, storage: FileStorage, with_rules: bool = True) -> CorrectionSource:
@@ -130,7 +143,8 @@ class StartRequest(BaseModel):
     stable_id: str
     provider_id: str
     model_id: str
-    batch: str = "units:16"
+    # Default: units:16, for zone documents pages:4
+    batch: str | None = None
 
 
 class StartResponse(BaseModel):
@@ -140,6 +154,8 @@ class StartResponse(BaseModel):
     unit_count: int
     # Unit indices of each batch, to be sent to /batch in turn
     batches: list[list[int]]
+    # What the units are: "units", or "pages" for zone documents
+    unit_name: str = "units"
 
 
 class JobRequest(BaseModel):
@@ -209,15 +225,17 @@ def start(
     another session holds it) and return the batches.
     """
     try:
-        spec = BatchSpec.parse(body.batch)
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e)) from e
-    try:
         provider = provider_for_user(body.provider_id, str(current_user["username"]))
         ensure_model_access(provider, body.model_id, current_user)
     except ModelResolutionError as e:
         raise _model_http_error(e) from e
     source = _source(body.stable_id, current_user, repo, storage)
+    try:
+        spec = BatchSpec.parse(body.batch or (DEFAULT_PAGE_BATCH if source.zone else "units:16"))
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    if spec.is_pages and source.zone is None:
+        raise HTTPException(status_code=422, detail=f"{spec.label} applies to documents reviewed by page only")
     stable_id = source.file.stable_id
     db_dir = get_settings().db_dir
     job_id = uuid.uuid4().hex
@@ -228,7 +246,7 @@ def start(
     logger.info(f"auto-annotation: correction {job_id} of {stable_id} started by {current_user['username']} with {body.provider_id}/{body.model_id}")
     return StartResponse(
         job_id=job_id, doc_id=source.file.doc_id, variant=source.file.variant, unit_count=len(source.units),
-        batches=plan_batches(source.units, spec),
+        batches=plan_batches(source.units, spec), unit_name="pages" if source.zone else "units",
     )
 
 
@@ -251,10 +269,13 @@ async def batch(
     unknown = [i for i in body.units if i not in by_index]
     if unknown:
         raise HTTPException(status_code=422, detail=f"No units with the indices {unknown}")
-    result = await correct_batch(
-        ProviderChatClient(provider, body.model_id), [(c, t) for c, t, _ in source.rules], [by_index[i] for i in body.units],
-        segmenting=source.segmenting, retry=RetryPolicy(retries=body.retries),
-    )
+    client = ProviderChatClient(provider, body.model_id)
+    rules = [(c, t) for c, t, _ in source.rules]
+    units = [by_index[i] for i in body.units]
+    if source.zone is not None:
+        result = await correct_page_batch(client, rules, source.zone, units, retry=RetryPolicy(retries=body.retries))
+    else:
+        result = await correct_batch(client, rules, units, segmenting=source.segmenting, retry=RetryPolicy(retries=body.retries))
     _keep_lock(body.stable_id, body.job_id)
     return BatchResponse(
         units=[UnitCorrectionResponse(index=u.index, status=u.status.value, xml=u.xml) for u in result.units],
@@ -283,19 +304,29 @@ def finish(
     _keep_lock(body.stable_id, body.job_id)
     source = _source(body.stable_id, current_user, repo, storage, with_rules=False)
     corrections = {item.index: item.xml for item in body.corrections}
-    problems = check_corrections(source.units, corrections, source.segmenting)
+    zone_xml: str | None = None
+    if source.zone is not None:
+        zone_xml, problems = apply_page_changes(source.zone, corrections)
+    else:
+        problems = check_corrections(source.units, corrections, source.segmenting)
     if problems:
         raise HTTPException(status_code=422, detail="; ".join(problems[:5]))
     summary = CorrectionSummary(
         units=len(source.units), processed=min(body.processed, len(source.units)), changed=len(corrections),
-        invalid=body.invalid, errors=body.errors,
+        invalid=body.invalid, errors=body.errors, unit_name="pages" if source.zone else "units",
     )
     when = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     try:
-        xml = write_corrections(
-            source.xml, source.unit_path, corrections, body.provider_id, body.model_id, summary, when, body.seconds,
-            segmenting=source.segmenting, status=body.status, label=body.label, model_label=body.model_label,
-        )
+        if zone_xml is not None:
+            xml = write_zone_corrections(
+                zone_xml, body.provider_id, body.model_id, summary, when, body.seconds,
+                status=body.status, label=body.label, model_label=body.model_label,
+            )
+        else:
+            xml = write_corrections(
+                source.xml, source.unit_path, corrections, body.provider_id, body.model_id, summary, when, body.seconds,
+                segmenting=source.segmenting, status=body.status, label=body.label, model_label=body.model_label,
+            )
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
     logger.info(f"auto-annotation: correction {body.job_id} of {body.stable_id} finished ({summary})")

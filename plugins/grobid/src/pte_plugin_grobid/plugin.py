@@ -24,7 +24,8 @@ from fastapi_app.plugin_api import (
 )
 from pte_plugin_grobid.annotation_rules import GrobidRulesProvider
 from fastapi_app.plugins.tei_wizard.plugin import TeiWizardPlugin
-from .config import init_plugin_config
+from .config import has_layout_api, init_plugin_config
+from .layout import SEGMENTATION, segmentation_layout
 
 from .cache import get_cache_dir
 from .extractor import GrobidTrainingExtractor
@@ -108,6 +109,10 @@ class GrobidPlugin(Plugin):
         register_document_rules_provider("GROBID", "grobid", GrobidRulesProvider())
         register_schema_config(GROBID_RNG_URL, timeout=10, reason="Grobid RelaxNG schema is complex and may be slow")
         register_gc_handler(self.metadata["id"], lambda: clear_directory(get_cache_dir()))
+        if has_layout_api():
+            from fastapi_app.plugin_api import register_layout_provider
+
+            register_layout_provider(SEGMENTATION, self.metadata["id"], segmentation_layout)
 
         # Register event handler for file deletion cache cleanup
         event_bus = get_event_bus()
@@ -136,6 +141,10 @@ class GrobidPlugin(Plugin):
         unregister_document_rules_provider("GROBID")
         unregister_schema_config(GROBID_RNG_URL)
         unregister_gc_handler(self.metadata["id"])
+        if has_layout_api():
+            from fastapi_app.plugin_api import unregister_layout_provider
+
+            unregister_layout_provider(SEGMENTATION)
 
         # Unregister event handler
         event_bus = get_event_bus()

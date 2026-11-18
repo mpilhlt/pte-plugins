@@ -27,6 +27,8 @@ from fastapi_app.lib.utils.annotation_rules_utils import (
 )
 
 from .chunking import split_into_chunks
+from . import zones
+from .zones import ZoneSource
 from .prompts import (
     Finding,
     UnusableResponseError,
@@ -54,6 +56,9 @@ except ImportError:  # editor older than the two-layer document rules (pdf-tei-e
         return store.get_selected_override_text("interpretation-ref", normalize_resource_key(rep_ref["target"]), owner)
 
 logger = logging.getLogger(__name__)
+
+# Documents are only checked and read, never expanded: no entities, no DTDs from the network
+_XML_PARSER = etree.XMLParser(resolve_entities=False, no_network=True, load_dtd=False)
 
 TEI_NS = "http://www.tei-c.org/ns/1.0"
 
@@ -124,7 +129,7 @@ def extract_text_content(xml_string: str) -> str:
             <text> element.
     """
     try:
-        root = etree.fromstring(xml_string.encode("utf-8"))
+        root = etree.fromstring(xml_string.encode("utf-8"), _XML_PARSER)
     except etree.XMLSyntaxError as e:
         raise ValueError(f"Document is not well-formed XML: {e}") from e
 
@@ -208,23 +213,55 @@ def review_source(xml_string: str, scope: str | None = None) -> tuple[str, str]:
     if not scope.strip() or scope not in xml_string:
         raise ValueError("The node to review is not part of the document")
     try:
-        etree.fromstring(xml_string.encode("utf-8"))
+        etree.fromstring(xml_string.encode("utf-8"), _XML_PARSER)
     except etree.XMLSyntaxError as e:
         raise ValueError(f"Document is not well-formed XML: {e}") from e
     return scope, xml_string
 
 
-def count_chunks(xml_string: str, scope: str | None = None) -> int:
+def zone_source(
+    xml_string: str, doc_id: str | None, scope: str | None = None, window_pages: int = zones.DEFAULT_WINDOW_PAGES
+) -> ZoneSource | None:
     """
-    Number of chunks the document's <text> (or the given scope) is reviewed in.
+    The page windows of a zone document (see zones.py), or None if the document is not one (or
+    the editor has no layout API), or the scope lies outside its <text> (reviewed as XML).
+
+    Raises:
+        zones.MissingLayoutError: the document's layout is missing.
+        ValueError: the document is not well-formed or cannot be read as zones.
+    """
+    labels = zones.zone_labels_of(xml_string)
+    if labels is None:
+        return None
+    try:
+        etree.fromstring(xml_string.encode("utf-8"), _XML_PARSER)
+    except etree.XMLSyntaxError as e:
+        raise ValueError(f"Document is not well-formed XML: {e}") from e
+    if scope is not None:
+        start = xml_string.find(scope)
+        text = _TEXT_ELEMENT_RE.search(xml_string)
+        if start == -1 or text is None or not (text.start() < start and start + len(scope) <= text.end()):
+            return None
+    from fastapi_app.lib.doc_rules.rules_providers import extract_extractor_provenance
+
+    provenance = extract_extractor_provenance(xml_string)
+    return zones.prepare(xml_string, labels, doc_id, provenance[1] if provenance else None, scope, window_pages)
+
+
+def count_chunks(xml_string: str, scope: str | None = None, zone: ZoneSource | None = None) -> int:
+    """
+    Number of chunks the document's <text> (or the given scope) is reviewed in; for a zone
+    document, the number of page windows.
 
     Raises:
         ValueError: see review_source().
     """
+    if zone is not None:
+        return len(zone.windows)
     return len(split_into_chunks(review_source(xml_string, scope)[0]))
 
 
-def chunk_range(xml_string: str, chunk_index: int, scope: str | None = None) -> tuple[int, int] | None:
+def chunk_range(xml_string: str, chunk_index: int, scope: str | None = None, zone: ZoneSource | None = None) -> tuple[int, int] | None:
     """
     Position of a chunk in the document string, as (start, end) offsets in UTF-16 code units, so
     that the editor can use them directly on the text it sent. The editor uses them to mark the
@@ -232,9 +269,13 @@ def chunk_range(xml_string: str, chunk_index: int, scope: str | None = None) -> 
     is not a substring of the document (the rare fallback in extract_text_content()) or the index
     is out of range.
 
+    For a zone document, the position of the text of the page window.
+
     Raises:
         ValueError: see review_source().
     """
+    if zone is not None:
+        return zones.window_range(zone, zone.windows[chunk_index]) if 0 <= chunk_index < len(zone.windows) else None
     review_text = review_source(xml_string, scope)[0]
     base = xml_string.find(review_text)
     chunks = split_into_chunks(review_text)
@@ -258,6 +299,7 @@ async def run_review(
     owner: str,
     chunk_index: int = 0,
     scope: str | None = None,
+    zone: ZoneSource | None = None,
 ) -> tuple[list[Finding], int, int]:
     """
     Review one chunk of the document's <text>: gather rule excerpts, build the
@@ -272,10 +314,16 @@ async def run_review(
     call is repeated once with the discarded snippets quoted back to it;
     smaller models often paraphrase "old" instead of copying it verbatim.
 
+    For a zone document (see zones.py), the chunk is a page window, the model answers with label
+    changes, and they are turned into findings; the discarded count is the number of changes
+    that were dropped.
+
     Raises:
         ValueError: see review_source(), or chunk_index is out of range.
         NoRuleExcerptsError: no rule excerpt could be resolved for any category.
     """
+    if zone is not None:
+        return await _run_zone_review(zone, provider, model_id, cache, store, owner, chunk_index)
     review_text, validation_text = review_source(xml_string, scope)
     chunks = split_into_chunks(review_text)
     if not 0 <= chunk_index < len(chunks):
@@ -298,3 +346,33 @@ async def run_review(
         except UnusableResponseError:
             logger.warning("annotation-review: retry returned no usable JSON list, keeping the first attempt's result")
     return findings, len(chunks), len(unmatched)
+
+
+async def _run_zone_review(
+    zone: ZoneSource,
+    provider: LLMProvider,
+    model_id: str,
+    cache: UrlCache,
+    store: DocumentRulesStore,
+    owner: str,
+    chunk_index: int,
+) -> tuple[list[Finding], int, int]:
+    """Review one page window of a zone document (see run_review())."""
+    if not 0 <= chunk_index < len(zone.windows):
+        raise ValueError(f"chunk_index {chunk_index} out of range (document has {len(zone.windows)} page windows)")
+    rule_excerpts = await asyncio.to_thread(gather_rule_excerpts, zone.xml, cache, store, owner)
+    if not rule_excerpts:
+        raise NoRuleExcerptsError("No rule excerpts could be resolved for this document")
+    window = zone.windows[chunk_index]
+    system_prompt = zones.build_system_prompt()
+    user_prompt = zones.build_user_prompt(rule_excerpts, zone, window, (chunk_index + 1, len(zone.windows)))
+    raw_response = await provider.chat_completion(model_id, system_prompt, user_prompt)
+    changes, problems = zones.parse_changes(raw_response, zone, window)
+    if not changes and problems:
+        logger.info(f"annotation-review: all {len(problems)} zone change(s) dropped, retrying once with feedback")
+        retry_response = await provider.chat_completion(model_id, system_prompt, user_prompt + zones.build_retry_note(problems))
+        try:
+            changes, problems = zones.parse_changes(retry_response, zone, window)
+        except UnusableResponseError:
+            logger.warning("annotation-review: retry returned no usable JSON list, keeping the first attempt's result")
+    return zones.findings_from_changes(zone, changes), len(zone.windows), len(problems)

@@ -4,7 +4,8 @@ Evaluating one model on one document (against a reference, normally its gold ver
 The input is an EvalSource: the reference version, the version the model corrects (normally GROBID's
 first extraction of the same document), the unit path and the rules, all fixed for the run. For
 every (batch spec, output mode, repetition) the aligned input units are corrected with
-correct_units() and every outcome is scored against its gold unit.
+correct_units() and every outcome is scored against its gold unit. Zone documents are corrected
+by page with zones.correct_pages() and scored by text position (zone_scoring.py).
 
 Pure module.
 """
@@ -22,6 +23,8 @@ from .prompts import PROMPT_VERSION, OutputMode
 from .scoring import Alignment, UnitScore, align_documents, f1, ratio, score_unit
 from .segmentation import SegmentAlignment, align_segments, proposal_fields, unit_scores
 from .units import Unit
+from .zone_scoring import ZoneAlignment, align_zones, page_scores, proposed_labels
+from .zones import ZoneLayout, correct_pages
 
 
 @dataclass(frozen=True)
@@ -44,6 +47,8 @@ class EvalSource:
     # Whether units may be split and merged (scored on text positions, see segmentation.py), as the
     # variant's extractor declares
     segmenting: bool = False
+    # Zone documents: the zone labels and the line layout; their units are pages (see zones.py)
+    zones: ZoneLayout | None = None
 
     @property
     def rules_hash(self) -> str:
@@ -90,6 +95,8 @@ class UnitRecord:
     gold_fields: int
     proposal_fields: int
     correct_fields: int
+    positions: int = 0
+    correct_positions: int = 0
 
 
 @dataclass
@@ -122,6 +129,8 @@ class Summary:
     seconds: float
     prompt_chars: int
     response_chars: int
+    # Zone documents: share of the aligned text characters with the reference's label (fields are zone boundaries)
+    label_accuracy: float | None = None
 
 
 @dataclass
@@ -130,7 +139,7 @@ class EvaluationResult:
 
     model: str
     source: EvalSource
-    alignment: Alignment | SegmentAlignment
+    alignment: Alignment | SegmentAlignment | ZoneAlignment
     units: list[UnitRecord] = field(default_factory=list)
     batches: list[dict[str, object]] = field(default_factory=list)
     summaries: list[Summary] = field(default_factory=list)
@@ -162,6 +171,7 @@ class EvaluationResult:
             "planned_runs": self.planned_runs,
             "finished_runs": self.finished_runs,
             "segmenting": self.source.segmenting,
+            "zones": self.source.zones is not None,
             "aligned_units": len(aligned_units(self.alignment)),
             "unmatched_input_units": self.alignment.unmatched_input,
             "unmatched_gold_units": self.alignment.unmatched_gold,
@@ -206,16 +216,23 @@ def summarize(
         edit_recall_by_quarter=quarters,
         seconds=sum(b.seconds for b in batches), prompt_chars=sum(b.prompt_chars for b in batches),
         response_chars=sum(b.response_chars for b in batches),
+        label_accuracy=ratio(total("correct_positions"), total("positions")),
     )
 
 
-def aligned_units(alignment: Alignment | SegmentAlignment) -> list[Unit]:
+def aligned_units(alignment: Alignment | SegmentAlignment | ZoneAlignment) -> list[Unit]:
     """The input units that are evaluated."""
-    return alignment.units if isinstance(alignment, SegmentAlignment) else [pair.input for pair in alignment.pairs]
+    if isinstance(alignment, (SegmentAlignment, ZoneAlignment)):
+        return alignment.units
+    return [pair.input for pair in alignment.pairs]
 
 
-def _scores(alignment: Alignment | SegmentAlignment, run: CorrectionRun | None) -> dict[int, UnitScore]:
+def _scores(alignment: Alignment | SegmentAlignment | ZoneAlignment, run: CorrectionRun | None) -> dict[int, UnitScore]:
     """Scores of the evaluated units by unit index; without a run, of the input itself (baseline)."""
+    if isinstance(alignment, ZoneAlignment):
+        if run is None:
+            return page_scores(alignment, None)
+        return page_scores(alignment, proposed_labels(alignment, {o.unit.index: o.proposal for o in run.outcomes}))
     if isinstance(alignment, SegmentAlignment):
         return unit_scores(alignment, proposal_fields(alignment, run) if run is not None else None)
     if run is None:
@@ -224,7 +241,7 @@ def _scores(alignment: Alignment | SegmentAlignment, run: CorrectionRun | None) 
     return {o.unit.index: score_unit(o.unit.xml, gold_by_input[o.unit.index].xml, o.proposal) for o in run.outcomes}
 
 
-def _records(model: str, source: EvalSource, config: RunConfig, alignment: Alignment | SegmentAlignment, run: CorrectionRun) -> list[UnitRecord]:
+def _records(model: str, source: EvalSource, config: RunConfig, alignment: Alignment | SegmentAlignment | ZoneAlignment, run: CorrectionRun) -> list[UnitRecord]:
     scores = _scores(alignment, run)
     records: list[UnitRecord] = []
     for outcome in run.outcomes:
@@ -237,15 +254,19 @@ def _records(model: str, source: EvalSource, config: RunConfig, alignment: Align
     return records
 
 
-def align_source(source: EvalSource, max_units: int | None = None) -> Alignment | SegmentAlignment:
+def align_source(source: EvalSource, max_units: int | None = None) -> Alignment | SegmentAlignment | ZoneAlignment:
     """
     Align the input units with the reference units; with max_units, only the first aligned units.
 
     Raises:
         ValueError: a document is not well-formed, the unit path is invalid, or no unit could be aligned.
     """
-    alignment: Alignment | SegmentAlignment
-    if source.segmenting:
+    alignment: Alignment | SegmentAlignment | ZoneAlignment
+    if source.zones is not None:
+        alignment = align_zones(source.input_xml, source.gold_xml, source.zones)
+        if max_units is not None:
+            alignment = alignment.truncated(max_units)
+    elif source.segmenting:
         alignment = align_segments(source.input_xml, source.gold_xml, source.unit_path)
         if max_units is not None:
             alignment = alignment.truncated(max_units)
@@ -301,9 +322,12 @@ async def evaluate(
     for number, config in enumerate(configs, start=1):
         if progress:
             progress(number, len(configs), config)
-        run = await correct_units(
-            client, source.rules, units, config.spec, config.mode, concurrency=concurrency, retry=retry, segmenting=source.segmenting,
-        )
+        if isinstance(alignment, ZoneAlignment):
+            run = await correct_pages(client, source.rules, alignment.zdoc, units, config.spec, config.mode, concurrency=concurrency, retry=retry)
+        else:
+            run = await correct_units(
+                client, source.rules, units, config.spec, config.mode, concurrency=concurrency, retry=retry, segmenting=source.segmenting,
+            )
         records = _records(model, source, config, alignment, run)
         result.units.extend(records)
         for batch in run.batches:

@@ -53,6 +53,8 @@ describe('helpers', () => {
     assert.deepStrictEqual(parseBatchSpecs(['units:1', 'units:4'], ' chars:4000, units:4 '), ['units:1', 'units:4', 'chars:4000']);
     assert.throws(() => parseBatchSpecs([], 'units:0'), /not a batch size/);
     assert.throws(() => parseBatchSpecs([], 'lines:3'), /not a batch size/);
+    assert.deepStrictEqual(parseBatchSpecs(['pages:1'], 'pages:all, pages:16'), ['pages:1', 'pages:all', 'pages:16']);
+    assert.throws(() => parseBatchSpecs([], 'chars:all'), /not a batch size/);
   });
 
   it('build the start request and the progress label', () => {

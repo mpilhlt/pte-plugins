@@ -155,3 +155,25 @@ describe('AutoAnnotationExtension.runCorrection', () => {
     assert.strictEqual(ext._running.size, 0);
   });
 });
+
+describe('AutoAnnotationExtension layout check', () => {
+  it('disables the menu item when the layout of a zone document is missing', async () => {
+    const ext = new AutoAnnotationExtension({});
+    ext._menuItem = { disabled: false, title: '' };
+    ext.state = { xml: 'z1', user: { roles: ['annotator'] } };
+    const guides = [{ refs: [{ subtype: 'machine' }] }];
+    let status = 'missing';
+    ext._deps = {
+      'acl-utils': { userHasRole: () => true },
+      xmleditor: { getXmlTree: () => ({}) },
+      'tei-utils': { getEditorialDeclGuides: () => guides },
+      client: { apiClient: { filesGetLayout: async () => ({ status, message: 'The layout information of this document is missing.' }) } },
+    };
+    await ext._checkLayout();
+    assert.strictEqual(ext._menuItem.disabled, true);
+    assert.match(ext._menuItem.title, /layout information/);
+    status = 'ok';
+    await ext.onXmlChange('z1');
+    assert.strictEqual(ext._menuItem.disabled, false);
+  });
+});

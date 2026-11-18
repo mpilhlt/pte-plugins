@@ -67,6 +67,9 @@ class UnitScore:
     gold_fields: int
     proposal_fields: int
     correct_fields: int
+    # Zone documents (zone_scoring.py): text characters aligned with the reference, and those with its label
+    positions: int = 0
+    correct_positions: int = 0
 
 
 def score_unit(input_xml: str, gold_xml: str, proposal_xml: str | None) -> UnitScore:
