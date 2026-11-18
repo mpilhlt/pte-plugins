@@ -205,19 +205,20 @@ def first_token(text: str) -> str | None:
 def segmentation_layout(xml: str, doc_id: str):  # -> LineLayout | None (core type, imported lazily)
     """
     Layout provider of `grobid.training.segmentation`: the line layout of a document from the
-    cached feature file of its extraction (revision and flavor from its encodingDesc), or None.
+    cached feature file of its extraction (revision, flavor and PDF hash from its encodingDesc), or None.
     """
     from fastapi_app.plugin_api import LineLayout, zone_lines
 
-    from pte_plugin_grobid.cache import get_cache_dir, get_cache_key
+    from pte_plugin_grobid.cache import get_cache_zip
     from pte_plugin_grobid.config import get_feature_suffix
     from pte_plugin_grobid.sync import parse_encoding_labels
 
     labels = parse_encoding_labels(xml)
-    revision = labels.get("revision")
-    if not revision or labels.get("variant-id", SEGMENTATION) != SEGMENTATION:
+    if labels.get("variant-id", SEGMENTATION) != SEGMENTATION:
         return None
-    zip_path = get_cache_dir() / get_cache_key(doc_id, revision, labels.get("flavor", "default")) / "training.zip"
+    zip_path = get_cache_zip(doc_id, labels)
+    if zip_path is None:
+        return None
     rows = read_feature_rows(zip_path, get_feature_suffix(SEGMENTATION))
     if rows is None:
         return None

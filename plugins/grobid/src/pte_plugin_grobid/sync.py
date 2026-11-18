@@ -20,7 +20,7 @@ def parse_encoding_labels(xml_content: str) -> dict[str, str]:
     Extract label values from the extractor application in encodingDesc.
 
     Returns a dict with whichever of these keys are present:
-    ``model``, ``flavor``, ``variant-id``, ``revision``.
+    ``model``, ``flavor``, ``variant-id``, ``revision``, ``pdf-hash``.
     """
     parser = etree.XMLParser(recover=True)
     try:
@@ -35,7 +35,7 @@ def parse_encoding_labels(xml_content: str) -> dict[str, str]:
         return {}
 
     result: dict[str, str] = {}
-    for key in ("model", "flavor", "variant-id", "revision"):
+    for key in ("model", "flavor", "variant-id", "revision", "pdf-hash"):
         el = app.find(f"label[@type='{key}']") or app.find(f"{{{_NS}}}label[@type='{key}']")
         if el is not None and el.text:
             result[key] = el.text
@@ -60,6 +60,22 @@ def set_revision_label(xml_content: str, old_revision: str, new_revision: str) -
         return xml_content
     new_element = f'<label type="revision">{new_revision}</label>'
     return xml_content.replace(old_element, new_element, 1)
+
+
+def set_pdf_hash_label(xml_content: str, pdf_hash: str) -> str:
+    """
+    Set the extractor's ``pdf-hash`` label in encodingDesc: replace its text, or insert the
+    label after the ``revision`` label, by a targeted string substitution as in
+    set_revision_label(). Returns *xml_content* unchanged if neither label is found.
+    """
+    existing = re.search(r'<label type="pdf-hash">[^<]*</label>', xml_content)
+    new_element = f'<label type="pdf-hash">{pdf_hash}</label>'
+    if existing:
+        return xml_content[:existing.start()] + new_element + xml_content[existing.end():]
+    revision = re.search(r'([ \t]*)<label type="revision">[^<]*</label>', xml_content)
+    if not revision:
+        return xml_content
+    return xml_content[:revision.end()] + "\n" + revision.group(1) + new_element + xml_content[revision.end():]
 
 
 def extract_feature_tokens(zip_path: Path, suffix: str) -> list[str] | None:

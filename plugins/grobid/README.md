@@ -10,7 +10,7 @@ The plugin provides two complementary workflows:
 
 **Full-text / reference extraction** — submits a PDF to GROBID's fulltext or references service endpoints and stores the result as a TEI document.
 
-Extracted training data is cached per document and GROBID revision so that subsequent extractions for the same document are served from cache without re-contacting the server (see [Cache](#cache-cachepy) below). The cache is invalidated automatically when a PDF is deleted.
+Extracted training data is cached per document, GROBID revision, flavor and PDF content so that subsequent extractions for the same document are served from cache without re-contacting the server (see [Cache](#cache-cachepy) below). The cache is invalidated automatically when a PDF is deleted.
 
 Reviewers can download a complete training package for a collection as a ZIP file that mirrors the `grobid-trainer/resources/dataset/` directory structure and can be dropped directly into that directory.
 
@@ -63,11 +63,16 @@ These map to the config keys `plugin.grobid.server.url`, `plugin.grobid.server.t
 Raw GROBID output (the ZIP returned by `/api/createTraining`) is cached at:
 
 ```text
-data/plugins/grobid/extractions/{doc_id}_{grobid_revision}/
-data/plugins/grobid/extractions/{doc_id}_{grobid_revision}_{flavor}/   (non-default flavor)
+data/plugins/grobid/extractions/{doc_id}_{grobid_revision}_pdf-{pdf_hash}/
+data/plugins/grobid/extractions/{doc_id}_{grobid_revision}_{flavor}_pdf-{pdf_hash}/   (non-default flavor)
+data/plugins/grobid/extractions/{doc_id}_{grobid_revision}[_{flavor}]/               (documents without pdf-hash label)
 ```
 
 The flavor is part of the key (via `cache.get_cache_key()`) because different flavors make GROBID emit different feature columns; without it, re-extracting or re-downloading a document under a different flavor than the one already cached would silently serve the wrong flavor's feature file (#480). The `default` flavor keeps the plain `{doc_id}_{grobid_revision}` key for backward compatibility with existing cache directories.
+
+The PDF's content hash (SHA-256, the editor's file id of the PDF; the first 16 characters) is part of the key because text recognition replaces the PDF of a document while keeping its `doc_id`. Without it, an extraction after text recognition would be served the training data of the earlier PDF, and refreshing the entry would remove the feature file that the versions extracted from the earlier PDF need. Every training extraction records the full hash in the `pdf-hash` label of its `encodingDesc` extractor application (after `revision`), and everything that reads the cache for a stored document finds its entry from its labels (`cache.get_cache_zip()`): the layout of segmentation documents, the sync check and the training download. Documents extracted before the label was recorded use the entry without hash.
+
+The training download pairs each gold file with the feature file of the PDF it was extracted from (`cache.package_lookups()`): for a gold file whose `pdf-hash` differs from the current PDF, only the cache is used, since the current PDF's feature files do not match its text; if the entry is gone, the file is left out and listed in `skipped-documents.txt`.
 
 The directory is created automatically. To force a fresh extraction for a document, delete its cache directory, set `GROBID_DISABLE_CACHE=true` to disable caching globally, or use the `force_refresh=true` query parameter on the download endpoint.
 
@@ -120,9 +125,9 @@ Backend-plugin endpoint `reload_feature_file` (`GrobidPlugin.reload_feature_file
 
 (Re-deriving a document's annotation rules reference/schema PI is now the core, extractor-agnostic "Refresh document rules" action — see `fastapi_app/lib/doc_rules/rules_refresh.py` and `POST /api/v1/document-rules/refresh/{preview,execute}`. GROBID participates in it via `GrobidRulesProvider` in `annotation_rules.py`, registered in `GrobidPlugin.initialize()`.)
 
-The training-data cache ([Cache](#cache-cachepy)) is keyed by `{doc_id}_{grobid_revision}` (plus the flavor, for non-default flavors), where `grobid_revision` comes from GROBID's `/api/version`. If a custom model is retrained/swapped without that version string changing, the cache is never invalidated and the sync-check lint (see [Frontend extension](#frontend-extension-extensionsgrobid-syncjs)) keeps comparing against the stale feature file.
+The training-data cache ([Cache](#cache-cachepy)) is keyed by `{doc_id}_{grobid_revision}` (plus the flavor and the PDF hash), where `grobid_revision` comes from GROBID's `/api/version`. If a custom model is retrained/swapped without that version string changing, the cache is never invalidated and the sync-check lint (see [Frontend extension](#frontend-extension-extensionsgrobid-syncjs)) keeps comparing against the stale feature file.
 
-The underlying operation re-fetches the training package from GROBID for the current document and overwrites the cache entry for the *current* revision — without re-running extraction, so the gold-standard `<text>` content and any human corrections are untouched. If the current GROBID revision differs from the one recorded in the TEI's `encodingDesc/revision` label, that label is patched in place (same stable_id, same file record, no new version) so future lookups resolve to the freshly cached data.
+The underlying operation re-fetches the training package from GROBID for the current document and overwrites the cache entry for the *current* revision and PDF — without re-running extraction, so the gold-standard `<text>` content and any human corrections are untouched. If the current GROBID revision differs from the one recorded in the TEI's `encodingDesc/revision` label, that label is patched in place (same stable_id, same file record, no new version) so future lookups resolve to the freshly cached data; a document without `pdf-hash` label gets the hash of the current PDF the same way. The action is refused for a document whose `pdf-hash` differs from the current PDF (the PDF was replaced, e.g. by text recognition): the current PDF's feature file would not match its text, so the document has to be extracted again.
 
 **Confirmation flow:** this is an infrequently-needed, easy-to-trigger-by-accident action, so it follows the [Preview-then-Execute pattern](../../../docs/code-assistant/backend-plugins.md#3-preview-then-execute-pattern-for-operations-requiring-confirmation) instead of running immediately:
 
@@ -214,10 +219,10 @@ The resulting ZIP mirrors `grobid-trainer/resources/dataset/` and can be unpacke
 
 ### Cache (`cache.py`)
 
-Raw GROBID training packages (the ZIP from `/api/createTraining`) are stored in `data/plugins/grobid/extractions/` keyed by `{doc_id}_{grobid_revision}`. The revision string comes from GROBID's `/api/version` endpoint, ensuring that a model update invalidates existing cache entries. When the GROBID version cannot be determined, the key falls back to `{doc_id}` alone.
+Raw GROBID training packages (the ZIP from `/api/createTraining`) are stored in `data/plugins/grobid/extractions/` keyed by `{doc_id}_{grobid_revision}`, plus the flavor and the PDF's content hash (see [Cache location](#cache-location)). The revision string comes from GROBID's `/api/version` endpoint, ensuring that a model update invalidates existing cache entries. When the GROBID version cannot be determined, the key falls back to `{doc_id}` alone.
 
 Cache entries are cleaned up automatically via the `file.deleted` event bus handler when a PDF is deleted and no other TEI files for the same document remain.
 
 ### Page layout of segmentation documents (`layout.py`)
 
-Segmentation documents (`grobid.training.segmentation`) are reviewed by page: the plugin declares `reviewUnits = "pages"` and the zone labels of the variant (`zoneLabels`, `config/review_units.py`), and registers a layout provider with the editor (plugin API 1.5). The provider reads the segmentation feature file from the cached `training.zip` of the document's extraction (revision and flavor from its `encodingDesc`), maps its rows to the `<lb/>`-delimited lines of `<text>` by their first token (the forward scan of the feature-file lint), and returns the page of every line (a page starts at every `PAGESTART` row) and its layout hints: position on the page, repeated on other pages, larger or smaller font, bold, italic, figure around, outside the main area, block start. Without a cached feature file, or when fewer than half of the lines match a row, the document has no layout; a fresh extraction provides it. On editors without the layout API, segmentation documents are reviewed by zone (`./*`).
+Segmentation documents (`grobid.training.segmentation`) are reviewed by page: the plugin declares `reviewUnits = "pages"` and the zone labels of the variant (`zoneLabels`, `config/review_units.py`), and registers a layout provider with the editor (plugin API 1.5). The provider reads the segmentation feature file from the cached `training.zip` of the document's extraction (revision, flavor and PDF hash from its `encodingDesc`), maps its rows to the `<lb/>`-delimited lines of `<text>` by their first token (the forward scan of the feature-file lint), and returns the page of every line (a page starts at every `PAGESTART` row) and its layout hints: position on the page, repeated on other pages, larger or smaller font, bold, italic, figure around, outside the main area, block start. Without a cached feature file, or when fewer than half of the lines match a row, the document has no layout; a fresh extraction provides it. On editors without the layout API, segmentation documents are reviewed by zone (`./*`).

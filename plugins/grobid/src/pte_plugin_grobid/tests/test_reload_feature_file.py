@@ -158,6 +158,21 @@ class ResolveReloadTargetTestCase(unittest.TestCase):
         self.assertEqual(target.flavor, "default")
         self.assertEqual(target.old_revision, "rev-1")
         self.assertEqual(target.pdf_path, Path("/fake/doc.pdf"))
+        self.assertEqual(target.pdf_hash, "pdf-hash")
+        self.assertTrue(target.adds_pdf_hash)
+
+    def test_raises_when_the_pdf_was_replaced(self):
+        meta, content = make_tei_file(revision="rev-1")
+        content = content.replace(
+            b'<label type="revision">rev-1</label>',
+            b'<label type="revision">rev-1</label><label type="pdf-hash">old-pdf-hash</label>',
+        )
+        self.file_repo.get_file_by_stable_id.return_value = meta
+        self.file_storage.read_file.return_value = content
+        self.file_repo.get_pdf_for_document.return_value = make_pdf_file()
+        self.file_storage.get_file_path.return_value = Path("/fake/doc.pdf")
+        with self.assertRaisesRegex(ReloadPreconditionError, "PDF of this document was replaced"):
+            self.resolve()
 
 
 class PerformReloadTestCase(unittest.TestCase):
@@ -216,8 +231,26 @@ class PerformReloadTestCase(unittest.TestCase):
 
         self.assertEqual(result.grobid_revision, "new-rev-2")
         mocks["cache_training_data"].assert_called_once_with(
-            "doc-1", "new-rev-2", "default", "/tmp/fake-temp-dir", ["doc-1.training.segmentation"]
+            "doc-1", "new-rev-2", "default", "/tmp/fake-temp-dir", ["doc-1.training.segmentation"], pdf_hash=None
         )
+
+    def test_caches_under_the_pdf_hash_and_adds_the_label(self):
+        target = self._make_target(revision="new-rev-2")
+        target.pdf_hash = "pdf-hash"
+        target.adds_pdf_hash = True
+        mocks = self._patch_network(grobid_revision="new-rev-2")
+        file_repo = mock.Mock()
+        file_storage = mock.Mock()
+        file_storage.save_file.return_value = ("hash-new", Path("/fake/hash-new.tei.xml"))
+
+        result = self.run_async(
+            perform_reload(target, "http://grobid.example", file_repo, file_storage)
+        )
+
+        self.assertEqual(mocks["cache_training_data"].call_args.kwargs["pdf_hash"], "pdf-hash")
+        self.assertTrue(result.updated_label)
+        saved_bytes = file_storage.save_file.call_args[0][0]
+        self.assertIn(b'<label type="revision">new-rev-2</label>\n          <label type="pdf-hash">pdf-hash</label>', saved_bytes)
 
     def test_patches_revision_label_in_place_when_revision_changed(self):
         target = self._make_target(revision="rev-1")
@@ -273,7 +306,7 @@ class ReloadResultMessageTestCase(unittest.TestCase):
 
     def test_message_with_label_update(self):
         result = ReloadResult(grobid_revision="rev-9", updated_label=True)
-        self.assertIn("Document revision label updated to match.", result.message)
+        self.assertIn("Document labels (GROBID revision, PDF hash) updated to match.", result.message)
 
 
 class RenderHtmlTestCase(unittest.TestCase):

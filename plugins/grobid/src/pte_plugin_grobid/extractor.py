@@ -151,7 +151,7 @@ class GrobidTrainingExtractor(BaseExtractor):
         is_training_variant = variant_id.startswith("grobid.training.")
 
         if is_training_variant:
-            from pte_plugin_grobid.cache import check_cache, cache_training_data
+            from pte_plugin_grobid.cache import cache_training_data, check_cache, pdf_content_hash
 
             # Get doc_id from options or PDF filename
             doc_id = options.get('doc_id')
@@ -159,8 +159,9 @@ class GrobidTrainingExtractor(BaseExtractor):
                 pdf_name = os.path.basename(pdf_path)
                 doc_id = os.path.splitext(pdf_name)[0]
 
-            # Check cache
-            cached_data = check_cache(doc_id, grobid_revision, flavor, force_refresh=is_grobid_cache_disabled())
+            # Check cache (per PDF content: text recognition replaces the PDF of a document)
+            pdf_hash = pdf_content_hash(pdf_path)
+            cached_data = check_cache(doc_id, grobid_revision, flavor, force_refresh=is_grobid_cache_disabled(), pdf_hash=pdf_hash)
 
             if cached_data:
                 # Use cached data - find the specific variant file
@@ -186,7 +187,7 @@ class GrobidTrainingExtractor(BaseExtractor):
                 )
 
                 # Cache the training data
-                cache_training_data(doc_id, grobid_revision, flavor, temp_dir, extracted_files)
+                cache_training_data(doc_id, grobid_revision, flavor, temp_dir, extracted_files, pdf_hash=pdf_hash)
 
                 # Find and read the specific variant file
                 suffix = f'.{variant_id.removeprefix("grobid.")}.tei.xml'
@@ -201,6 +202,7 @@ class GrobidTrainingExtractor(BaseExtractor):
                     raise RuntimeError(f"Could not find '*{suffix}' file in GROBID output.")
         else:
             # Non-training variants (fulltext, references) - no caching
+            pdf_hash = None
             raw_tei_content = handler.fetch_tei(pdf_path, grobid_server_url, variant_id, flavor, options)
 
         # Log raw GROBID response for debugging
@@ -281,6 +283,7 @@ class GrobidTrainingExtractor(BaseExtractor):
             grobid_revision=grobid_revision,
             variant_id=variant_id,
             flavor=flavor,
+            pdf_hash=pdf_hash,
         )
         tei_header.append(encodingDesc)
 
@@ -365,6 +368,7 @@ class GrobidTrainingExtractor(BaseExtractor):
         grobid_revision: str,
         variant_id: str,
         flavor: str,
+        pdf_hash: str | None = None,
     ) -> etree._Element:
         """
         Build the GROBID-specific encodingDesc for an extracted document.
@@ -378,6 +382,9 @@ class GrobidTrainingExtractor(BaseExtractor):
         The editorialDecl entries are always looked up using `variant_id`
         (e.g. "grobid.training.segmentation") - never `enc_variant_id`, which
         is None for training variants.
+
+        Training variants record the content hash of the PDF in a `pdf-hash` label, which finds
+        the cached training package of the extraction (see cache.py).
         """
         schema_url = get_schema_url(variant_id)
         if variant_id.startswith("grobid.training."):
@@ -389,6 +396,8 @@ class GrobidTrainingExtractor(BaseExtractor):
                 ("variant-id", variant_id),
                 ("revision", grobid_revision),
             ]
+            if pdf_hash:
+                enc_labels.append(("pdf-hash", pdf_hash))
         else:
             enc_variant_id = variant_id
             enc_labels = [

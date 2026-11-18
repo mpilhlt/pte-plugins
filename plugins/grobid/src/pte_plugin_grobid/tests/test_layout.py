@@ -96,8 +96,8 @@ class TestProvider(unittest.TestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
 
-    def write_zip(self, features: str) -> None:
-        target = Path(self.tmp.name) / "doc1_abc123"
+    def write_zip(self, features: str, key: str = "doc1_abc123") -> None:
+        target = Path(self.tmp.name) / key
         target.mkdir()
         with zipfile.ZipFile(target / "training.zip", "w") as zf:
             zf.writestr("doc1.training.segmentation", features)
@@ -112,6 +112,15 @@ class TestProvider(unittest.TestCase):
         self.assertEqual(layout.hints[4], ["block", "top", "repeated"])
         self.assertEqual(layout.hints[7], ["margin"])
         self.assertEqual(len(read_feature_rows(Path(self.tmp.name) / "doc1_abc123" / "training.zip")), 7)
+
+    def test_layout_of_the_pdf_the_document_was_extracted_from(self):
+        # text recognition replaced the PDF: the entry of the document's PDF hash is used
+        doc = DOC.replace('<label type="revision">abc123</label>', f'<label type="revision">abc123</label><label type="pdf-hash">{"a" * 64}</label>')
+        self.assertIsNone(segmentation_layout(doc, "doc1"))
+        self.write_zip(FEATURES, f"doc1_abc123_pdf-{'a' * 16}")
+        layout = segmentation_layout(doc, "doc1")
+        self.assertIsNotNone(layout)
+        self.assertEqual(layout.pages, [0, 0, 0, 0, 1, 1, 1, 1])
 
     def test_no_cache(self):
         self.assertIsNone(segmentation_layout(DOC, "doc1"))

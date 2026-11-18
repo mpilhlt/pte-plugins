@@ -33,7 +33,7 @@ from fastapi_app.plugin_api import (
 )
 from fastapi_app.lib.sse.sse_service import SSEService
 from fastapi_app.lib.sse.sse_utils import ProgressBar, send_notification
-from pte_plugin_grobid.cache import check_cache, cache_training_data
+from pte_plugin_grobid.cache import cache_training_data, check_cache, package_lookups
 from pte_plugin_grobid.config import get_grobid_server_url, get_model_path, get_grobid_server_timeout, is_grobid_cache_disabled
 
 logger = logging.getLogger(__name__)
@@ -145,7 +145,7 @@ async def get_feature_tokens(
         cache is missing or the TEI lacks extractable labels.
     """
     from fastapi_app.lib.repository.file_repository import FileRepository
-    from pte_plugin_grobid.cache import get_cache_dir, get_cache_key
+    from pte_plugin_grobid.cache import get_cache_zip
     from pte_plugin_grobid.config import get_feature_suffix, LINE_BASED_VARIANTS
     from pte_plugin_grobid.sync import extract_feature_tokens, parse_encoding_labels
 
@@ -161,14 +161,14 @@ async def get_feature_tokens(
     labels = parse_encoding_labels(content_bytes.decode("utf-8"))
     variant_id = labels.get("variant-id")
     revision = labels.get("revision")
-    flavor = labels.get("flavor", "default")
     doc_id = file_meta.doc_id
 
     if not variant_id or not revision or not doc_id:
         return {"status": "no_feature_file", "tokens": [], "count": 0}
 
-    cache_key = get_cache_key(doc_id, revision, flavor)
-    zip_path = get_cache_dir() / cache_key / "training.zip"
+    zip_path = get_cache_zip(doc_id, labels)
+    if zip_path is None:
+        return {"status": "no_feature_file", "tokens": [], "count": 0}
     suffix = get_feature_suffix(variant_id)
 
     logger.debug(
@@ -595,29 +595,49 @@ async def download_training_package(
                             doc_flavor = tei_flavor
                             break
 
-                    # Check cache first
-                    cached_data = check_cache(doc_id, grobid_revision, doc_flavor, force_refresh or is_grobid_cache_disabled())
-
-                    if cached_data:
-                        temp_dir = cached_data["temp_dir"]
-                        extracted_files = cached_data["files"]
-                    else:
-                        try:
-                            # Run blocking GROBID fetch in thread pool to allow SSE events
-                            temp_dir, extracted_files = await asyncio.to_thread(
-                                training_handler._fetch_training_package,
-                                str(pdf_path), grobid_server_url, doc_flavor
-                            )
-                            # Cache the training data
-                            cache_training_data(doc_id, grobid_revision, doc_flavor, temp_dir, extracted_files)
-                        except Exception as e:
-                            logger.warning(f"Failed to fetch training data for {doc_id}: {e}")
-                            grobid_failures.append((doc_id, str(e)))
-                            documents_skipped += 1
-                            continue
-
+                    # The training package of each gold file: the PDF may have been replaced
+                    # (text recognition) after a gold file was extracted, whose feature files
+                    # then only exist in the cache (see cache.package_lookups()).
+                    current_pdf_hash = pdf_file.id  # the editor's file id is the SHA-256 of the content
+                    refresh = force_refresh or is_grobid_cache_disabled()
+                    packages: dict[tuple[tuple[str, str | None], ...], tuple[str, list[str]]] = {}
+                    temp_dirs: list[str] = []
+                    variants_written = 0
                     try:
                         for variant in variants_to_process:
+                            lookups, may_fetch = package_lookups(grobid_revision, current_pdf_hash, parse_encoding_labels(gold_by_variant[variant]))
+                            memo_key = tuple(lookups)
+                            if memo_key not in packages:
+                                cached = None
+                                if not (refresh and may_fetch):
+                                    for lookup_revision, lookup_hash in lookups:
+                                        cached = check_cache(doc_id, lookup_revision, doc_flavor, pdf_hash=lookup_hash)
+                                        if cached:
+                                            break
+                                if cached:
+                                    packages[memo_key] = (cached["temp_dir"], cached["files"])
+                                    temp_dirs.append(cached["temp_dir"])
+                                elif not may_fetch:
+                                    reason = f"{variant}: the PDF was replaced after this version was extracted (e.g. by text recognition), and the feature file of the earlier PDF is not cached"
+                                    logger.warning(f"Training download: {doc_id}: {reason}")
+                                    grobid_failures.append((doc_id, reason))
+                                    continue
+                                else:
+                                    try:
+                                        # Run blocking GROBID fetch in thread pool to allow SSE events
+                                        fetched_dir, fetched_files = await asyncio.to_thread(
+                                            training_handler._fetch_training_package,
+                                            str(pdf_path), grobid_server_url, doc_flavor
+                                        )
+                                    except Exception as e:
+                                        logger.warning(f"Failed to fetch training data for {doc_id}: {e}")
+                                        grobid_failures.append((doc_id, str(e)))
+                                        break
+                                    cache_training_data(doc_id, grobid_revision, doc_flavor, fetched_dir, fetched_files, pdf_hash=current_pdf_hash)
+                                    packages[memo_key] = (fetched_dir, fetched_files)
+                                    temp_dirs.append(fetched_dir)
+                            temp_dir, extracted_files = packages[memo_key]
+
                             grobid_suffix = variant.removeprefix("grobid.")
                             tei_content = denormalize_grobid_content(gold_by_variant[variant], variant)
                             base_path = _corpus_base_path(tei_content, variant, doc_flavor)
@@ -639,13 +659,18 @@ async def download_training_package(
                                 raw_path = os.path.join(temp_dir, raw_file)
                                 if os.path.exists(raw_path):
                                     zf.write(raw_path, f"{zip_stem}/{base_path}/raw/{doc_id}.{grobid_suffix}")
-
-                        documents_processed += 1
+                            variants_written += 1
 
                     finally:
-                        # Clean up temp directory in production mode
-                        if settings.application_mode == "production" and not cached_data:
-                            shutil.rmtree(temp_dir, ignore_errors=True)
+                        # Clean up temp directories in production mode
+                        if settings.application_mode == "production":
+                            for temp_dir in temp_dirs:
+                                shutil.rmtree(temp_dir, ignore_errors=True)
+
+                    if variants_written:
+                        documents_processed += 1
+                    else:
+                        documents_skipped += 1
 
                 if grobid_failures and documents_processed > 0:
                     zf.writestr(f"{zip_stem}/skipped-documents.txt", _skipped_documents_report(grobid_failures))
