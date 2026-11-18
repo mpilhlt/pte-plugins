@@ -5,6 +5,7 @@ Automated annotation of TEI documents produced by any extractor: an LLM corrects
 It contains:
 
 - the **Correct annotations in new version** action in the editor's Tools menu, which corrects the open document with one model and saves the result as a new version;
+- the **Transfer annotations from another version** action in the same menu, which applies the annotation decisions of another version of the document to the text of the open one, e.g. after text recognition replaced the PDF's text layer, and saves the result as a new version;
 - the **model probe**, which measures how well a single model corrects the annotation of gold documents, and how that changes with the number of review units sent in one request; in the editor as **Test model with current document** in the Tools menu, and as a command line tool;
 - the **annotation pipeline**, which annotates documents or a whole collection with two models and an arbiter and saves the result as a new version.
 
@@ -22,6 +23,22 @@ The Tools menu item (section "Annotation") is for annotators, reviewers and admi
 If the model changes nothing, no version is created. If the run is cancelled or a request fails (after retries), the user can save the corrections made so far; the change then records the unprocessed units. In every case that saves nothing, the job's lock is released and the source can be edited again.
 
 Documents reviewed by page (zone documents, see [Zone documents](#zone-documents)) are corrected in windows of four pages; the progress counts pages. The item is disabled, with the reason as tooltip, when the layout of such a document is missing.
+
+## Transfer annotations from another version
+
+The second Tools menu item (section "Annotation") applies the annotation of an earlier version (the source) to the open version (the target), typically a new extraction after the PDF's text layer was replaced by text recognition. The target's text is never changed. The item has the same requirements as "Correct annotations in new version" and is also disabled for gold versions and when the document has no other version of the same variant.
+
+1. A dialog asks for the source (the other versions of the same document and variant; preselected: the gold version, else the most recently changed annotated version) and whether to mark the units where the model disagrees with the source's decisions. For the selected source it shows how many units are copied, sent to the model or kept as extracted.
+2. The server aligns the texts of the two versions by character (words first, then the characters inside differing words; `alignment.py`; ligatures, long s, soft hyphens and similar characters compare as their plain forms). It refuses when less than half of the source's text is found in the target.
+3. Every review unit of the target is planned (`transfer.py`):
+   - **copied**: the source's decision applies without the model. A unit of a unit document is copied when it corresponds to exactly one source unit with the same text and line breaks and the source unit's XML passes the checks against it. A page of a zone document is copied when every character gets a label from its aligned source character (inserted text takes the label of its neighbours).
+   - **model**: the unit is sent to the model together with the corresponding part of the source (for zone documents: the source's lines, prefixed with `S`), and the model reproduces the source's decisions on the target's text. Batches of 8 units or 2 pages, consecutive in the document; the answers are checked as in the correction.
+   - **unmatched**: less than half of the unit's characters are aligned; the unit is kept as extracted.
+4. With marks, the model adds a short rationale where it is sure that the source's decision violates the rules, and the copied units are sent in a doubts-only mode (batches of 16 units or 4 pages). The doubts are recorded in the new version as not-OK marks of the model in unit review mode, under the LLM Reviewer's reviewer id `llm-<provider id>-<model id>`. Unit comments of the source are not transferred.
+5. The new version gets a `revisionDesc/change` by `#auto-annotation` with label `Annotation transfer` and the status of the source's last revision change (`extraction` if it has none). Its `desc` names the source as `<name type="version" key="<stable id>">` with the version's label as text, the model as in the correction, the counts as `<measure type="transferred-units" subtype="copied|transferred|unmatched|invalid|error|unprocessed|doubted" ...>` and the duration.
+6. The new version is saved and loaded as in the correction; with marks it is always loaded, since the marks are set in the editor.
+
+Locking, progress, cancelling and saving a partial result work as in [Correct annotations in new version](#correct-annotations-in-new-version). The plan is deterministic and computed again for every request of a job, so nothing is stored on the server.
 
 ## Test model with current document
 
@@ -158,8 +175,10 @@ The modules `plugin.py`, `routes.py`, `sources.py`, `models.py`, `annotation.py`
 | `document.py` | Writing a pipeline result or a single model's corrections into the TEI document: units, revision change (server) |
 | `annotation.py` | Annotating a stored version, finding the versions of a collection to annotate (server) |
 | `single.py` | Correcting one batch of units with a single model, checking the corrections a client sends back |
-| `correction_routes.py` | Routes of the "Correct annotations in new version" action, the job's lock (server) |
-| `extensions/auto-annotation.js` | The Tools menu action (frontend extension) |
+| `alignment.py` | Character alignment of two texts that differ, by words, then by characters |
+| `transfer.py` | Transferring the annotation of another version: plan per unit (copied, model, unmatched), prompts with the source's fragment, doubts, checks of the results |
+| `correction_routes.py` | Routes of the "Correct annotations in new version" and "Transfer annotations from another version" actions, the job's lock (server) |
+| `extensions/auto-annotation.js` | The two Tools menu actions (frontend extension) |
 | `probe_store.py` | Storage of the editor's model tests: run directories, status, heartbeat, result files |
 | `probe_job.py` | Running a model test as a server job, cancelling it |
 | `probe_compare.py` | Comparing stored tests: other documents of the model (pooled scores), other models on the document |
@@ -180,6 +199,13 @@ For annotators, reviewers and admins, used by the Tools menu action (`<job>` is 
 - `POST /api/plugins/auto-annotation/correct/heartbeat` `<job>`: refreshes the lock (409 if it was lost).
 - `POST /api/plugins/auto-annotation/correct/finish` `{<job>, "provider_id", "model_id", "model_label", "corrections": [{"index", "xml"}], "processed", "invalid", "errors", "seconds"}`: checks the corrections and returns the document with them and the revision change; it does not save.
 - `POST /api/plugins/auto-annotation/correct/release` `<job>`: releases the lock and sends `lockReleased` to the other sessions.
+
+For a transfer, the same routes take further fields:
+
+- `start` `{..., "source_stable_id", "marks"}`: also returns `transfer` (`{"copied", "model", "unmatched"}`) and, with `marks`, `doubt_batches`; `batches` then holds the units for the model only. 422 if the source is not another version of the same document and variant or the texts do not correspond. `batch` defaults to `units:8`, for zone documents `pages:2`.
+- `batch` `{..., "source_stable_id", "marks", "mode": "transfer"|"doubts"}`: per unit also `doubt`, the model's rationale or null.
+- `finish` `{..., "source_stable_id", "doubts": [{"index", "comment"}]}`: adds the copied units and returns `marks` (`[{"fingerprint", "comment"}]`, the units of the new document to mark as not OK).
+- `GET /api/plugins/auto-annotation/correct/transfer-preview?target=<stable id>&source=<stable id>`: the number of units, `unit_name` and `transfer` without starting a job, for the dialog.
 
 For reviewers and admins, used by "Test model with current document" (`<run>` is `{"run_id"}`):
 
