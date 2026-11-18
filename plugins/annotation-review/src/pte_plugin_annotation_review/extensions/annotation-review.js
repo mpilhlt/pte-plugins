@@ -10,7 +10,11 @@
  * set), the "LLM Review" button of focus mode reviews only the navigated-to node; the
  * menu item always reviews the whole document. While the editor's unit review mode is
  * on, the model also records its result as a reviewer: the review units of each chunk
- * are marked OK, or not OK with the rationale of the findings in them. See
+ * are marked OK, or not OK with the rationale of the findings in them. Zone documents
+ * (such as GROBID's segmentation training data) are reviewed in page windows: the
+ * server shows the model the pages as numbered lines with zone labels and turns its
+ * label changes into findings of the same form, and every page of a window is marked.
+ * Without the document's page layout, the review of zone documents is disabled. See
  * docs/superpowers/specs/2026-09-24-llm-annotation-review-design.md
  * for the design rationale.
  *
@@ -53,20 +57,25 @@ const UNIT_COMMENT_MAX = 200;
 /**
  * Unit review marks for one reviewed chunk: each review unit whose text lies in the chunk is
  * not OK if a finding falls into it (with the findings' rationales as comment), OK otherwise.
+ * Pages (units of zone documents, which are text ranges) are located by the chunk's range
+ * instead of by its text.
  * @param {ReviewUnit[]} units - Review units with positions in docText
  * @param {string} docText - Current editor text
  * @param {string} chunkText - Text of the reviewed chunk
  * @param {Finding[]} findings - Findings of the chunk
+ * @param {{start: number, end: number}} [chunkRange] - Position of the chunk in docText
  * @returns {UnitMark[]}
  */
-export function unitMarksForChunk(units, docText, chunkText, findings) {
+export function unitMarksForChunk(units, docText, chunkText, findings, chunkRange) {
   const ranges = findings
     .map(finding => ({ finding, range: locateFinding(finding, docText) }))
     .filter(entry => entry.range !== null);
   /** @type {UnitMark[]} */
   const marks = [];
   for (const unit of units) {
-    if (!chunkText.includes(docText.slice(unit.from, unit.to))) continue;
+    if (unit.name === 'page' && chunkRange) {
+      if (unit.from < chunkRange.start || unit.to > chunkRange.end) continue;
+    } else if (!chunkText.includes(docText.slice(unit.from, unit.to))) continue;
     const rationales = ranges
       .filter(({ range }) => range.from < unit.to && range.to > unit.from)
       .map(({ finding }) => finding.rationale);
@@ -204,6 +213,11 @@ export default class AnnotationReviewExtension extends FrontendExtensionPlugin {
     this._rendering = false;
     /** @type {HTMLElement|undefined} The Tools-menu item, created in start(). */
     this._menuItem = undefined;
+    /**
+     * @type {string|null} Why the open document cannot be reviewed: a zone document without
+     *   its page layout; null otherwise.
+     */
+    this._layoutMissing = null;
     /** @type {number} Debounce (ms) before dropping findings whose text was edited away. */
     this._pruneDelayMs = 300;
     /** @type {ReturnType<typeof setTimeout>|undefined} */
@@ -247,6 +261,7 @@ export default class AnnotationReviewExtension extends FrontendExtensionPlugin {
     // restore usually happens in onXmlChange(); this covers content loaded later
     xmleditor.on('editorAfterLoad', () => this._restoreFindings());
     this._restoreFindings();
+    this._checkLayout();
     this.getDependency('lint-utils').addDismissListener(dismissed => this._forgetDismissed(dismissed));
   }
 
@@ -391,6 +406,35 @@ export default class AnnotationReviewExtension extends FrontendExtensionPlugin {
     this._docId = null;
     this.clearFindings();
     this._restoreFindings();
+    this._layoutMissing = null;
+    this._updateMenuState();
+    await this._checkLayout();
+  }
+
+  /**
+   * Find out whether the open document is a zone document without page layout, which cannot
+   * be reviewed (`GET /api/v1/files/{stable_id}/layout`), and update the menu item.
+   * @returns {Promise<void>}
+   */
+  async _checkLayout() {
+    const stableId = this.state?.xml || null;
+    let missing = null;
+    let apiClient = null;
+    try {
+      apiClient = stableId ? this.getDependency('client').apiClient : null;
+    } catch {
+      // no API client (e.g. in tests)
+    }
+    if (apiClient && typeof apiClient.filesGetLayout === 'function') {
+      try {
+        const layout = await apiClient.filesGetLayout(stableId);
+        if (layout.status === 'missing') missing = layout.message || 'The layout information of this document is missing.';
+      } catch {
+        // the review reports the problem
+      }
+    }
+    if (this.state?.xml !== stableId) return;
+    this._layoutMissing = missing;
     this._updateMenuState();
   }
 
@@ -403,8 +447,8 @@ export default class AnnotationReviewExtension extends FrontendExtensionPlugin {
   _updateMenuState() {
     if (!this._menuItem) return;
     const tree = this.getDependency('xmleditor').getXmlTree();
-    this._menuItem.disabled = !tree || !this.hasReviewableRules(tree);
-    this._menuItem.title = this._menuItem.disabled ? 'Requires an open document whose editorialDecl has machine-readable annotation rules (a ref with subtype="machine").' : '';
+    this._menuItem.disabled = !tree || !this.hasReviewableRules(tree) || this._layoutMissing !== null;
+    this._menuItem.title = this._layoutMissing ?? (this._menuItem.disabled ? 'Requires an open document whose editorialDecl has machine-readable annotation rules (a ref with subtype="machine").' : '');
     this.getDependency('xmleditor').setFocusAction(SOURCE, this._menuItem.disabled ? null : this._focusAction);
   }
 
@@ -545,7 +589,8 @@ export default class AnnotationReviewExtension extends FrontendExtensionPlugin {
     if (!unitReview?.isEnabled?.()) return;
     const docText = this.getDependency('xmleditor').getView().state.doc.toString();
     const chunkText = xml.slice(response.chunk_start, response.chunk_end);
-    const marks = unitMarksForChunk(unitReview.getUnits(), docText, chunkText, response.findings);
+    const chunkRange = docText === xml ? { start: response.chunk_start, end: response.chunk_end } : undefined;
+    const marks = unitMarksForChunk(unitReview.getUnits(), docText, chunkText, response.findings, chunkRange);
     if (!marks.length) return;
     let name = model.modelId;
     try {
@@ -585,6 +630,11 @@ export default class AnnotationReviewExtension extends FrontendExtensionPlugin {
       return null;
     }
 
+    if (this._layoutMissing) {
+      this.getDependency('sl-utils').notify(this._layoutMissing, 'warning', 'exclamation-triangle');
+      return null;
+    }
+
     const resolved = override ?? this.getDependency('inference-settings').getDefaultModel();
     if (!resolved) {
       this.getDependency('sl-utils').notify(
@@ -596,8 +646,10 @@ export default class AnnotationReviewExtension extends FrontendExtensionPlugin {
     }
 
     let xml = xmleditorApi.getEditorContent();
-    /** @type {{scope?: string}} */
+    /** @type {{scope?: string, stable_id?: string}} */
     const scoped = {};
+    // zone documents are reviewed by page, which needs the layout of the saved document
+    if (this.state?.xml) scoped.stable_id = this.state.xml;
     if (hooks.xpath) {
       // positions of the syntax tree refer to the editor text, so slice and send that
       xml = xmleditorApi.getView().state.doc.toString();

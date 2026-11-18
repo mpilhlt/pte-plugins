@@ -444,6 +444,36 @@ describe('menu item', () => {
     assert.strictEqual(menuAdds[0].items[0].disabled, false);
   });
 
+  it('disables the item of a zone document without page layout, with the reason as title', async () => {
+    const { ext, menuAdds, focusActions } = buildExtension({
+      getEditorialDeclGuides: () => [{ category: 'p', refs: [{ target: 'x', contentType: null, subtype: 'machine' }] }],
+      state: { xml: 'seg1' },
+    });
+    const requested = [];
+    ext._deps.client = { apiClient: { filesGetLayout: async (id) => { requested.push(id); return { status: 'missing', pages: [], hints: [], message: 'The layout information of this document is missing.' }; } } };
+    await ext.start();
+    await ext.onXmlChange('seg1');
+    assert.deepStrictEqual(requested.slice(-1), ['seg1']);
+    assert.strictEqual(menuAdds[0].items[0].disabled, true);
+    assert.match(menuAdds[0].items[0].title, /layout information/);
+    assert.strictEqual(focusActions['annotation-review'], null);
+    ext._deps.client.apiClient.filesGetLayout = async () => ({ status: 'ok', pages: [0], hints: [[]] });
+    await ext.onXmlChange('seg1');
+    assert.strictEqual(menuAdds[0].items[0].disabled, false);
+  });
+
+  it('sends the stable id with the plan request, so that zone documents are reviewed by page', async () => {
+    const bodies = [];
+    const { ext } = buildExtension({
+      getEditorialDeclGuides: () => [{ category: 'p', refs: [{ target: 'x', contentType: null, subtype: 'machine' }] }],
+      defaultModel: { providerId: 'p', modelId: 'm' },
+      state: { xml: 'seg1' },
+      callPluginApiImpl: async (endpoint, method, body) => { bodies.push(body); return { findings: [], chunk_count: 1 }; },
+    });
+    await ext.review();
+    assert.strictEqual(bodies[0].stable_id, 'seg1');
+  });
+
   it('keeps the item disabled when there is no machine rule ref', async () => {
     const { ext, menuAdds, handlers } = buildExtension({ getEditorialDeclGuides: () => [] });
     await ext.start();
@@ -753,6 +783,25 @@ describe('unit review marks', () => {
     assert.deepStrictEqual(marks, [
       { fingerprint: 'a', state: 'ok', comment: '' },
       { fingerprint: 'b', state: 'not-ok', comment: 'missing level' },
+    ]);
+  });
+
+  it('marks the pages of a zone document by the range of the page window', () => {
+    const zoneDoc = '<TEI><text><body>Page one <lb/></body><body>Page two <lb/>more <lb/></body><body>Page three <lb/></body></text></TEI>';
+    /** @param {string} needle @param {string} fingerprint */
+    const page = (needle, fingerprint) => {
+      const from = zoneDoc.indexOf(needle);
+      return { fingerprint, from, to: from + needle.length, name: 'page' };
+    };
+    const pages = [page('Page one <lb/>', 'p1'), page('Page two <lb/>more <lb/>', 'p2'), page('Page three <lb/>', 'p3')];
+    const start = zoneDoc.indexOf('Page one');
+    const end = zoneDoc.indexOf('more <lb/>') + 'more <lb/>'.length;
+    const marks = unitMarksForChunk(pages, zoneDoc, zoneDoc.slice(start, end), [
+      { id: 0, old: '<body>Page two <lb/>more <lb/></body>', new: '<listBibl>Page two <lb/>more <lb/></listBibl>', rationale: 'references' },
+    ], { start, end });
+    assert.deepStrictEqual(marks, [
+      { fingerprint: 'p1', state: 'ok', comment: '' },
+      { fingerprint: 'p2', state: 'not-ok', comment: 'references' },
     ]);
   });
 

@@ -16,7 +16,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from fastapi_app.plugin_api import get_settings, LLMProviderError, LLMProviderRegistry, LLMRateLimitError, rate_limit_http_error
-from fastapi_app.lib.core.dependencies import get_document_rules_store, require_authenticated_user
+from fastapi_app.lib.core.dependencies import get_document_rules_store, get_file_repository, require_authenticated_user
+from fastapi_app.lib.permissions.access_control import check_file_access
+from fastapi_app.lib.repository.file_repository import FileRepository
 from fastapi_app.lib.core.url_cache import UrlCache
 from fastapi_app.lib.doc_rules.storage import DocumentRulesStore
 from fastapi_app.lib.llm.model_access import ModelAccessDenied, check_model_access
@@ -27,7 +29,9 @@ from pte_plugin_annotation_review.review_logic import (
     chunk_range,
     count_chunks,
     run_review,
+    zone_source,
 )
+from pte_plugin_annotation_review.zones import MissingLayoutError, ZoneSource
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +57,8 @@ class ReviewRequest(BaseModel):
     chunk_index: int = 0
     # Raw XML of a single element of `xml` to review instead of the whole <text> (node navigation)
     scope: str | None = None
+    # The document's stable id: zone documents need its line layout (page windows)
+    stable_id: str | None = None
 
 
 class FindingResponse(BaseModel):
@@ -76,20 +82,38 @@ class ReviewResponse(BaseModel):
 class PlanRequest(BaseModel):
     xml: str
     scope: str | None = None
+    stable_id: str | None = None
 
 
 class PlanResponse(BaseModel):
     chunk_count: int
+    # "pages" if the document is reviewed in page windows (zone documents), else "xml"
+    mode: str = "xml"
+
+
+def _zone_source(xml: str, stable_id: str | None, scope: str | None, user: dict, repo: FileRepository) -> ZoneSource | None:
+    """The page windows of a zone document (None for other documents); 422 if the layout is missing."""
+    doc_id = None
+    if stable_id:
+        file = repo.get_file_by_stable_id(stable_id)
+        if file is not None and check_file_access(file, user, "read"):
+            doc_id = file.doc_id
+    try:
+        return zone_source(xml, doc_id, scope)
+    except (MissingLayoutError, ValueError) as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
 
 
 @router.post("/plan", response_model=PlanResponse)
 async def plan(
     body: PlanRequest,
     current_user: dict = Depends(require_authenticated_user),
+    repo: FileRepository = Depends(get_file_repository),
 ) -> PlanResponse:
-    """Report how many chunks /review will need for the given document (no LLM call)."""
+    """Report how many chunks (page windows for zone documents) /review will need for the given document (no LLM call)."""
+    zone = _zone_source(body.xml, body.stable_id, body.scope, current_user, repo)
     try:
-        return PlanResponse(chunk_count=count_chunks(body.xml, body.scope))
+        return PlanResponse(chunk_count=count_chunks(body.xml, body.scope, zone), mode="pages" if zone else "xml")
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
 
@@ -99,6 +123,7 @@ async def review(
     body: ReviewRequest,
     current_user: dict = Depends(require_authenticated_user),
     store: DocumentRulesStore = Depends(get_document_rules_store),
+    repo: FileRepository = Depends(get_file_repository),
 ) -> ReviewResponse:
     """
     Review one chunk of the given (possibly unsaved) document content against
@@ -114,12 +139,13 @@ async def review(
         raise HTTPException(status_code=428, detail=secret_required_detail(e)) from e
 
     cache = UrlCache(get_settings().annotation_rules_cache_dir)
+    zone = _zone_source(body.xml, body.stable_id, body.scope, current_user, repo)
 
     try:
         # may list the provider's models, so its connection errors are handled below
         check_model_access(provider, body.model_id, current_user)
         findings, chunk_count, discarded = await run_review(
-            body.xml, provider, body.model_id, cache, store, current_user["username"], body.chunk_index, body.scope
+            body.xml, provider, body.model_id, cache, store, current_user["username"], body.chunk_index, body.scope, zone
         )
     except ModelAccessDenied as e:
         raise HTTPException(status_code=403, detail=str(e)) from e
@@ -138,7 +164,7 @@ async def review(
         logger.warning(f"annotation-review: provider '{body.provider_id}' request failed: {e}")
         raise HTTPException(status_code=502, detail=f"LLM provider request failed: {_upstream_error_message(e)}") from e
 
-    position = chunk_range(body.xml, body.chunk_index, body.scope)
+    position = chunk_range(body.xml, body.chunk_index, body.scope, zone)
     return ReviewResponse(
         findings=[FindingResponse(**f) for f in findings],
         chunk_count=chunk_count,
