@@ -83,6 +83,23 @@ class TestBuildEncodingDesc(unittest.TestCase):
         self.assertEqual(ref.get("target"), "https://example.org/guide")
 
     @patch("pte_plugin_grobid.extractor.build_editorial_decl_entries")
+    def test_training_variant_records_the_pdf_hash(self, mock_build):
+        """The content hash of the PDF finds the cached training package of the extraction."""
+        mock_build.return_value = []
+        extractor = GrobidTrainingExtractor()
+        encoding_desc = extractor._build_encoding_desc(
+            timestamp="2026-01-01T00:00:00Z",
+            grobid_version="0.8.0",
+            grobid_revision="rev-1",
+            variant_id="grobid.training.segmentation",
+            flavor="default",
+            pdf_hash="a" * 64,
+        )
+        labels = {el.get("type"): el.text for el in encoding_desc.iter("label") if el.get("type")}
+        self.assertEqual(labels["pdf-hash"], "a" * 64)
+        self.assertEqual(labels["revision"], "rev-1")
+
+    @patch("pte_plugin_grobid.extractor.build_editorial_decl_entries")
     def test_non_training_variant_also_uses_variant_id_for_guide_lookup(self, mock_build):
         """
         Non-training variants pass variant_id through as enc_variant_id too,

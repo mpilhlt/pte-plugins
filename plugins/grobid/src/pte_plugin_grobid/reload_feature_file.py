@@ -23,7 +23,7 @@ from fastapi_app.plugin_api import FileRepository, FileStorage
 from pte_plugin_grobid.cache import cache_training_data
 from pte_plugin_grobid.extractor import GrobidTrainingExtractor
 from pte_plugin_grobid.handlers.training import TrainingHandler
-from pte_plugin_grobid.sync import parse_encoding_labels, set_revision_label
+from pte_plugin_grobid.sync import parse_encoding_labels, set_pdf_hash_label, set_revision_label
 
 
 class ReloadPreconditionError(Exception):
@@ -41,6 +41,10 @@ class ReloadTarget:
     flavor: str
     old_revision: str | None
     pdf_path: Path
+    # Content hash (file id) of the current PDF; the cache entry is stored under it
+    pdf_hash: str | None = None
+    # Whether the document has no `pdf-hash` label yet (extracted before it was recorded)
+    adds_pdf_hash: bool = False
 
 
 @dataclass
@@ -54,7 +58,7 @@ class ReloadResult:
     def message(self) -> str:
         message = f"Feature file refreshed for GROBID revision '{self.grobid_revision}'."
         if self.updated_label:
-            message += " Document revision label updated to match."
+            message += " Document labels (GROBID revision, PDF hash) updated to match."
         return message
 
 
@@ -97,6 +101,11 @@ def resolve_reload_target(
     pdf_path = file_storage.get_file_path(pdf_file.id, "pdf")
     if not pdf_path:
         raise ReloadPreconditionError("PDF file not found in storage.")
+    recorded_hash = labels.get("pdf-hash")
+    if recorded_hash and recorded_hash != pdf_file.id:
+        raise ReloadPreconditionError(
+            "The PDF of this document was replaced (for example by text recognition) after this version was extracted, so the feature file of the current PDF does not match its text. Extract the document again to get a version that matches the current PDF."
+        )
 
     return ReloadTarget(
         file_meta=file_meta,
@@ -106,6 +115,8 @@ def resolve_reload_target(
         flavor=labels.get("flavor", "default"),
         old_revision=labels.get("revision"),
         pdf_path=pdf_path,
+        pdf_hash=pdf_file.id,
+        adds_pdf_hash=recorded_hash is None,
     )
 
 
@@ -125,10 +136,11 @@ async def perform_reload(
     """
     Re-fetch the training package from GROBID and refresh the cache entry.
 
-    Overwrites the training-data cache for (doc_id, current GROBID revision).
-    If that revision differs from the one recorded in the TEI, patches the
-    `revision` label in place (same stable_id, no new version) - the
-    `<text>` content and any human corrections are never touched.
+    Overwrites the training-data cache for (doc_id, current GROBID revision,
+    current PDF). If that revision differs from the one recorded in the TEI,
+    patches the `revision` label in place, and adds the `pdf-hash` label if the
+    document has none (same stable_id, no new version) - the `<text>` content
+    and any human corrections are never touched.
 
     Raises RuntimeError if GROBID is unreachable or the fetch fails.
     """
@@ -142,24 +154,27 @@ async def perform_reload(
         target.flavor,
     )
     try:
-        cache_training_data(target.doc_id, grobid_revision, target.flavor, temp_dir, extracted_files)
+        cache_training_data(target.doc_id, grobid_revision, target.flavor, temp_dir, extracted_files, pdf_hash=target.pdf_hash)
     finally:
         shutil.rmtree(temp_dir, ignore_errors=True)
 
     updated_label = False
+    new_content = target.tei_content
     if target.old_revision and target.old_revision != grobid_revision:
-        new_content = set_revision_label(target.tei_content, target.old_revision, grobid_revision)
-        if new_content != target.tei_content:
-            new_bytes = new_content.encode("utf-8")
-            saved_hash, _ = file_storage.save_file(
-                new_bytes, target.file_meta.file_type, increment_ref=False
+        new_content = set_revision_label(new_content, target.old_revision, grobid_revision)
+    if target.pdf_hash and target.adds_pdf_hash:
+        new_content = set_pdf_hash_label(new_content, target.pdf_hash)
+    if new_content != target.tei_content:
+        new_bytes = new_content.encode("utf-8")
+        saved_hash, _ = file_storage.save_file(
+            new_bytes, target.file_meta.file_type, increment_ref=False
+        )
+        if saved_hash != target.file_meta.id:
+            file_repo.update_file(
+                target.file_meta.id,
+                FileUpdate(id=saved_hash, file_size=len(new_bytes)),
             )
-            if saved_hash != target.file_meta.id:
-                file_repo.update_file(
-                    target.file_meta.id,
-                    FileUpdate(id=saved_hash, file_size=len(new_bytes)),
-                )
-                updated_label = True
+            updated_label = True
 
     return ReloadResult(grobid_revision=grobid_revision, updated_label=updated_label)
 
@@ -214,6 +229,8 @@ def render_preview_html(
             if will_update
             else "<p>The document's revision label is already current and will not change.</p>"
         )
+        if target.adds_pdf_hash:
+            revision_html += "<p>The document has no PDF hash label yet (it was extracted before the hash was recorded); the hash of the current PDF will be added.</p>"
 
     body = (
         "<div class='notice'><strong>This is a special-case action.</strong> "

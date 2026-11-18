@@ -13,7 +13,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent.parent))
 
-from pte_plugin_grobid.sync import set_revision_label
+from pte_plugin_grobid.sync import parse_encoding_labels, set_pdf_hash_label, set_revision_label
 
 SAMPLE_TEI = """<TEI xmlns="http://www.tei-c.org/ns/1.0">
   <teiHeader>
@@ -79,6 +79,23 @@ class TestSetRevisionLabel(unittest.TestCase):
     def test_returns_unchanged_content_when_old_value_does_not_match(self):
         result = set_revision_label(SAMPLE_TEI, "does-not-match", "new-rev-456")
         self.assertEqual(result, SAMPLE_TEI)
+
+
+class TestSetPdfHashLabel(unittest.TestCase):
+
+    def test_inserts_the_label_after_the_revision_label(self):
+        result = set_pdf_hash_label(SAMPLE_TEI, "abc")
+        self.assertIn('<label type="revision">old-rev-123</label>\n          <label type="pdf-hash">abc</label>', result)
+        self.assertEqual(parse_encoding_labels(result)["pdf-hash"], "abc")
+        self.assertEqual(result.replace('\n          <label type="pdf-hash">abc</label>', ""), SAMPLE_TEI)
+
+    def test_replaces_an_existing_label(self):
+        once = set_pdf_hash_label(SAMPLE_TEI, "abc")
+        self.assertEqual(set_pdf_hash_label(once, "def"), once.replace(">abc<", ">def<"))
+
+    def test_without_revision_label_nothing_changes(self):
+        xml = SAMPLE_TEI.replace('<label type="revision">old-rev-123</label>', "")
+        self.assertEqual(set_pdf_hash_label(xml, "abc"), xml)
 
 
 if __name__ == "__main__":
