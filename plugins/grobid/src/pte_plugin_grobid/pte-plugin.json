@@ -1,5 +1,5 @@
 {
-  "version": "1.4.3",
+  "version": "1.5.0",
   "readme": "https://github.com/mpilhlt/pte-plugins/tree/main/plugins/grobid#readme",
   "engines": {
     "pte": ">=0.83.0",
