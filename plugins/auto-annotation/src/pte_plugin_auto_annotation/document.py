@@ -11,6 +11,7 @@ Writing a pipeline result or a single model's corrections into the TEI document 
 - for a correction by a single model (single.py), the change records the model as
   `<name type="model" subtype="<provider id>" key="<provider id>/<model id>">` and the number of
   changed, unchanged, invalid, failed and unprocessed units as `measure` elements of type `corrected-units`
+  (for zone documents, the units are pages and their changes are applied with zones.apply_page_changes())
 """
 
 from __future__ import annotations
@@ -194,12 +195,13 @@ def correction_description_xml(provider_id: str, model_id: str, summary: Correct
     """
     model = f"{provider_id}/{model_id}"
     counts = ", ".join(_measure("corrected-units", key, value, model) for key, value in summary.measures())
-    stopped = f" Stopped after {summary.processed} of {summary.units} units." if summary.processed < summary.units else ""
+    name = summary.unit_name
+    stopped = f" Stopped after {summary.processed} of {summary.units} {name}." if summary.processed < summary.units else ""
     iso, text = iso_duration(seconds)
     return (
         f"Annotation corrected by {model_name_xml(provider_id, model_id, model_label)}: "
-        f"{summary.units} units, {summary.changed} changed.{stopped} "
-        f"Units: {counts}. Completed in <time dur=\"{iso}\">{text}</time>."
+        f"{summary.units} {name}, {summary.changed} changed.{stopped} "
+        f"{name.capitalize()}: {counts}. Completed in <time dur=\"{iso}\">{text}</time>."
     )
 
 
@@ -227,6 +229,28 @@ def write_corrections(
     root = parse_document(xml)
     replace_units(root, unit_path, replacements, segmenting=segmenting)
     return _record_change(root, xml, correction_description_xml(provider_id, model_id, summary, seconds, model_label), when, status, label)
+
+
+def write_zone_corrections(
+    corrected_xml: str,
+    provider_id: str,
+    model_id: str,
+    summary: CorrectionSummary,
+    when: str,
+    seconds: float,
+    status: str = "extraction",
+    label: str | None = "Auto-annotation",
+    model_label: str | None = None,
+) -> str:
+    """
+    A zone document whose label changes are applied already (zones.apply_page_changes) with the
+    revision change by `#auto-annotation`.
+
+    Raises:
+        ValueError: the document is not well-formed.
+    """
+    root = parse_document(corrected_xml)
+    return _record_change(root, corrected_xml, correction_description_xml(provider_id, model_id, summary, seconds, model_label), when, status, label)
 
 
 def _record_change(root: etree._Element, xml: str, desc_xml: str, when: str, status: str, label: str | None) -> str:

@@ -22,7 +22,7 @@ from .correction import CorrectionRun, ProviderChatClient
 from .document import CHANGE_WHO, write_result
 from .models import resolve_model_for_user
 from .pipeline import PipelineConfig, PipelineResult, annotate_units
-from .sources import SourceError, gather_rules, is_segmenting_variant, read_tei, review_unit_path, tei_file
+from .sources import SourceError, gather_rules, is_segmenting_variant, read_tei, review_unit_path, tei_file, zone_label_entries
 from .units import document_units
 
 logger = logging.getLogger(__name__)
@@ -167,11 +167,14 @@ async def annotate_file(
     overridden).
 
     Raises:
-        SourceError: see load_input() and gather_rules(), or the version has no review units.
+        SourceError: see load_input() and gather_rules(), the version has no review units, or it is
+            a zone document (see zones.py), which the pipeline does not process.
         ModelResolutionError: a model cannot be used.
     """
     started = time.monotonic()
     file, xml = load_input(repo, storage, stable_id, user)
+    if zone_label_entries(file.variant) is not None:
+        raise SourceError(f"The annotation pipeline does not process documents reviewed by page ({file.variant}); use \"Correct annotations in new version\" instead")
     unit_path = review_unit_path(file.variant)
     try:
         units = document_units(xml, unit_path)

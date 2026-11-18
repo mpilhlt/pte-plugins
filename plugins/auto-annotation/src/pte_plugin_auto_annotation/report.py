@@ -34,23 +34,29 @@ def markdown_report(results: Sequence[EvaluationResult]) -> str:
     lines = ["# Model probe report", ""]
     for result in results:
         meta = result.meta
+        zones = bool(meta.get("zones"))
         lines += [
             f"## {result.model} on {meta['doc_id'] or meta['reference_stable_id']}",
             "",
             *([] if result.complete else [f"**Incomplete:** {result.finished_runs} of {result.planned_runs} runs finished.", ""]),
             f"Reference version `{meta['reference_stable_id']}` ({'gold' if meta['reference_is_gold'] else 'not the gold version'}), input version `{meta['input_stable_id']}` ({INPUT_CHOICES.get(str(meta['input_choice']), meta['input_choice'])}{'' if meta['input_is_extraction'] else '; NOT an extraction'}), variant `{meta['variant']}`, unit path `{meta['unit_path']}`, "
             f"rules `{meta['rules_hash']}` ({', '.join(c for c, _ in result.source.rules)}), prompt v{meta['prompt_version']}. "
-            f"{meta['aligned_units']} units aligned, {meta['unmatched_input_units']} input and {meta['unmatched_gold_units']} reference units unmatched."
-            + (" Segmenting variant: units may be split and merged; fields are scored by their position in the shared text, input units are those whose text the reference version shares." if meta.get("segmenting") else ""),
+            + (
+                f"{meta['aligned_units']} pages, {meta['unmatched_input_units']} input and {meta['unmatched_gold_units']} reference text characters unmatched. Zone document: pages are corrected as numbered lines with zone labels; labels are scored per text character, edits are stretches of text whose label changes, Boundary F1 scores the zone boundaries."
+                if zones else
+                f"{meta['aligned_units']} units aligned, {meta['unmatched_input_units']} input and {meta['unmatched_gold_units']} reference units unmatched."
+            )
+            + (" Segmenting variant: units may be split and merged; fields are scored by their position in the shared text, input units are those whose text the reference version shares." if meta.get("segmenting") and not zones else ""),
             "",
-            "| Batching | Mode | Runs | Calls | Retries | Errors % | Failures % | Exact % | Edit P | Edit R | Edit F1 | Field F1 | Edit R by quarter | Seconds | Prompt chars | Answer chars |",
-            "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+            f"| Batching | Mode | Runs | Calls | Retries | Errors % | Failures % | Exact % |{' Label acc. % |' if zones else ''} Edit P | Edit R | Edit F1 | {'Boundary F1' if zones else 'Field F1'} | Edit R by quarter | Seconds | Prompt chars | Answer chars |",
+            "| --- | --- | --- | --- | --- | --- | --- | --- |" + (" --- |" if zones else "") + " --- | --- | --- | --- | --- | --- | --- | --- |",
         ]
         rows: list[Summary] = ([result.baseline] if result.baseline else []) + result.summaries
         for s in rows:
             quarters = " / ".join(_pct(q) for q in s.edit_recall_by_quarter) if s.calls else "–"
             lines.append(
                 f"| {s.batching} | {s.mode} | {s.repeats} | {s.calls} | {s.retries} | {_pct(s.error_rate)} | {_pct(s.failure_rate)} | {_pct(s.exact_rate)} | "
+                + (f"{_pct(s.label_accuracy)} | " if zones else "") +
                 f"{_pct(s.edit_precision)} | {_pct(s.edit_recall)} | {_pct(s.edit_f1)} | {_pct(s.field_f1)} | {quarters} | "
                 f"{s.seconds:.1f} | {s.prompt_chars} | {s.response_chars} |"
             )

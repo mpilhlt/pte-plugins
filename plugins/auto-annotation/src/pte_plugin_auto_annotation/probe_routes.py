@@ -189,7 +189,7 @@ async def start(
         unit_path=resolved.unit_path, gold_xml=resolved.gold_xml, input_xml=resolved.input_xml,
         rules=[(category, text) for category, text, _ in resolved.rules], doc_id=resolved.doc_id,
         reference_is_gold=resolved.reference_is_gold, input_choice=resolved.input_choice,
-        input_is_extraction=resolved.input_is_extraction, segmenting=resolved.segmenting,
+        input_is_extraction=resolved.input_is_extraction, segmenting=resolved.segmenting, zones=resolved.zones,
     )
     try:
         units = len(aligned_units(align_source(source, body.max_units)))

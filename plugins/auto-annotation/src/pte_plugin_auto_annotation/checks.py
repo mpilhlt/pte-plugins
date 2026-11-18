@@ -21,6 +21,7 @@ class ProposalStatus(StrEnum):
     MALFORMED = "malformed"  # not well-formed XML
     WRONG_ROOT = "wrong_root"  # not exactly one element, or a different outermost element
     TEXT_CHANGED = "text_changed"  # the text (ignoring whitespace) differs from the input
+    BAD_LABELS = "bad_labels"  # zone documents: unknown labels, overlapping changes or lines left out (zones.py)
     ERROR = "error"  # the request failed (provider error, also after retries): no answer to judge
 
     @property

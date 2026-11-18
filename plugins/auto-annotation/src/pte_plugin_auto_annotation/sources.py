@@ -6,6 +6,7 @@ variant, or any version given by its stable id), the version the model corrects 
 extraction the reference was derived from, else the earliest extraction of the same document and
 variant; see versions.is_extraction), the variant's unit path (from the extractors' `reviewUnits`) and the rules (the machine refs of the
 reference version's editorialDecl, without user overrides, so that every model sees the same text).
+For zone documents (see zones.py), also the zone labels and the line layout.
 """
 
 from __future__ import annotations
@@ -26,6 +27,12 @@ from fastapi_app.lib.storage.file_storage import FileStorage
 from fastapi_app.lib.utils.annotation_rules_utils import extract_annotation_rule_refs, fetch_rule_excerpt
 
 from .versions import is_extraction
+from .zones import ZONES_AVAILABLE, ZoneLayout
+
+try:
+    from fastapi_app.plugin_api import MISSING_LAYOUT_MESSAGE, get_line_layout
+except ImportError:  # editor older than plugin API 1.5: no zone documents
+    MISSING_LAYOUT_MESSAGE = ""
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +60,8 @@ class ResolvedSource:
     input_xml: str
     rules: list[tuple[str, str, str]]  # (category, text, url)
     segmenting: bool = False
+    # For zone documents: the zone labels and the line layout (see zones.py)
+    zones: ZoneLayout | None = None
 
 
 def is_safe_fetch_url(url: str) -> bool:
@@ -96,6 +105,40 @@ def is_segmenting_variant(variant: str | None, registry: ExtractorRegistry | Non
         variant in (info.get("segmentingVariants") or [])
         for info in (registry or ExtractorRegistry.get_instance()).list_extractors(available_only=False)
     )
+
+
+def zone_label_entries(variant: str | None, registry: ExtractorRegistry | None = None) -> list[dict[str, object]] | None:
+    """
+    The zone labels an extractor declares for the variant (`zoneLabels` in its info), or None if it
+    is not a zone document or the editor cannot read zone documents (before plugin API 1.5).
+    """
+    if not variant or not ZONES_AVAILABLE:
+        return None
+    for info in (registry or ExtractorRegistry.get_instance()).list_extractors(available_only=False):
+        entries = (info.get("zoneLabels") or {}).get(variant)
+        if isinstance(entries, list):
+            return [dict(e) for e in entries]
+    return None
+
+
+def zone_layout(
+    xmls: list[str], doc_id: str, variant: str | None, registry: ExtractorRegistry | None = None
+) -> ZoneLayout | None:
+    """
+    The zone labels and line layout of a zone document, from the first of its versions `xmls` whose
+    layout the editor finds; None if the variant is not a zone document.
+
+    Raises:
+        SourceError: the layout is missing.
+    """
+    labels = zone_label_entries(variant, registry)
+    if labels is None:
+        return None
+    for xml in xmls:
+        layout = get_line_layout(xml, doc_id, variant)
+        if layout is not None:
+            return ZoneLayout(labels, list(layout.pages), [list(h) for h in layout.hints])
+    raise SourceError(MISSING_LAYOUT_MESSAGE)
 
 
 def gather_rules(
@@ -267,6 +310,7 @@ def resolve_source(
             raise SourceError(f"No read access to {source.stable_id}", 403)
 
     gold_xml = read_tei(storage, reference)
+    zones = zone_layout([input_xml, gold_xml], reference.doc_id, reference.variant)
     return ResolvedSource(
         doc_id=reference.doc_id,
         reference_stable_id=reference.stable_id,
@@ -280,4 +324,5 @@ def resolve_source(
         input_xml=input_xml,
         rules=gather_rules(gold_xml, cache) if with_rules else [],
         segmenting=is_segmenting_variant(reference.variant),
+        zones=zones,
     )

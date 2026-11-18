@@ -33,6 +33,8 @@ from .prompts import OUTPUT_MODES, OutputMode
 from .report import markdown_report, write_results
 
 DEFAULT_BATCHES = "units:1,units:4,units:8,units:16,units:32"
+# For documents reviewed by page (zone documents, see zones.py)
+DEFAULT_PAGE_BATCHES = "pages:1,pages:2,pages:4,pages:8,pages:all"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -45,7 +47,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--variant", help="Variant of the reference and input versions (required with --doc; default with --reference: its variant)")
     parser.add_argument("--reference", help="Stable id of the version to score against instead of the document's gold version (only with at most one --doc)")
     parser.add_argument("--input", help="Stable id of the version to correct (only with a single document); default: the earliest version of the same variant")
-    parser.add_argument("--batches", default=DEFAULT_BATCHES, help=f"Comma-separated batch specs units:N or chars:N (default: {DEFAULT_BATCHES})")
+    parser.add_argument("--batches", help=f"Comma-separated batch specs units:N, pages:N, pages:all or chars:N (default: {DEFAULT_BATCHES}; for documents reviewed by page {DEFAULT_PAGE_BATCHES})")
     parser.add_argument("--modes", default="all", help="Comma-separated output modes: all, changed (default: all)")
     parser.add_argument("--repeats", type=int, default=1, help="Repetitions of each configuration (default: 1)")
     parser.add_argument("--concurrency", type=int, default=1, help="Requests in flight per run (default: 1)")
@@ -79,10 +81,12 @@ async def run_probe(
     input_id: str | None, configs: Sequence[RunConfig], concurrency: int, temperature: float, rules_text: str | None,
     max_units: int | None, retry: RetryPolicy | None = None,
     on_update: Callable[[list[EvaluationResult]], None] | None = None,
+    page_configs: Sequence[RunConfig] | None = None,
 ) -> list[EvaluationResult]:
     """
     Evaluate every model on every document (a single None document with --reference). After each
-    run, on_update gets all results so far, the current one partial.
+    run, on_update gets all results so far, the current one partial. Documents reviewed by page
+    are run with `page_configs` if given.
     """
     results: list[EvaluationResult] = []
     sources = [
@@ -99,8 +103,9 @@ async def run_probe(
             def update(partial: EvaluationResult) -> None:
                 if on_update:
                     on_update([*results, partial])
+            source_configs = page_configs if page_configs is not None and source.zones is not None else configs
             results.append(await evaluate(
-                client, label, source, configs, concurrency, progress, max_units=max_units, retry=retry, on_update=update,
+                client, label, source, source_configs, concurrency, progress, max_units=max_units, retry=retry, on_update=update,
             ))
     return results
 
@@ -115,7 +120,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     if (args.input or args.reference) and len(args.doc) > 1:
         parser.error("--input and --reference can only be used with a single document")
     try:
-        specs = [BatchSpec.parse(s) for s in args.batches.split(",") if s.strip()]
+        specs = [BatchSpec.parse(s) for s in (args.batches or DEFAULT_BATCHES).split(",") if s.strip()]
+        page_specs = None if args.batches else [BatchSpec.parse(s) for s in DEFAULT_PAGE_BATCHES.split(",")]
         modes = parse_modes(args.modes)
     except ValueError as e:
         parser.error(str(e))
@@ -137,6 +143,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         results = asyncio.run(run_probe(
             session, args.model, args.doc or [None], args.variant, args.reference, args.input, sweep(specs, modes, args.repeats),
             args.concurrency, args.temperature, rules_text, args.max_units, RetryPolicy(retries=max(0, args.retries)), on_update=save,
+            page_configs=sweep(page_specs, modes, args.repeats) if page_specs else None,
         ))
     except (ApiError, ValueError, requests.RequestException, KeyboardInterrupt) as e:
         print("Interrupted" if isinstance(e, KeyboardInterrupt) else f"Error: {e}", file=sys.stderr)

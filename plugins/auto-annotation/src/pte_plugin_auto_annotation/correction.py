@@ -152,6 +152,45 @@ def _accept_moved_text(outcomes: list[UnitOutcome]) -> list[UnitOutcome]:
     return outcomes
 
 
+async def send_request(
+    client: ChatClient,
+    system_prompt: str,
+    user_prompt: str,
+    retry: RetryPolicy | None,
+    sleep: Sleep,
+    out_of_time: Callable[[], bool],
+    time_budget: float | None,
+) -> tuple[str, str | None, int, float]:
+    """
+    One request, retried after TransientError as `retry` allows (the wait does not count towards
+    the seconds). Not sent once `out_of_time()` is true.
+
+    Returns:
+        (raw answer, error or None, retries, seconds)
+    """
+    error: str | None = None
+    raw = ""
+    retries = 0
+    seconds = 0.0
+    while True:
+        if out_of_time() and retries == 0:
+            return "", f"TimeBudgetExceeded: the time budget of {time_budget or 0:.0f} s is used up, the request was not sent", 0, 0.0
+        started = time.monotonic()
+        try:
+            raw = await client.complete(system_prompt, user_prompt)
+            error = None
+        except Exception as e:  # noqa: BLE001 - a failed request is a measured outcome, not a crash
+            error = f"{type(e).__name__}: {e}"
+            transient = isinstance(e, TransientError)
+        else:
+            transient = False
+        seconds += time.monotonic() - started
+        if not (transient and retry is not None and retries < retry.retries and not out_of_time()):
+            return raw, error, retries, seconds
+        retries += 1
+        await sleep(retry.delay(retries))
+
+
 async def correct_units(
     client: ChatClient,
     rules: Sequence[tuple[str, str]],
@@ -206,29 +245,8 @@ async def correct_units(
     async def process(batch: list[Unit], split_from: int | None) -> None:
         ids = list(range(1, len(batch) + 1))
         user_prompt = build_user_prompt(rules, batch, ids, render) if render else build_user_prompt(rules, batch, ids)
-        error: str | None = None
-        raw = ""
-        retries = 0
-        seconds = 0.0
         async with semaphore:
-            while True:
-                if out_of_time() and retries == 0:
-                    error = f"TimeBudgetExceeded: the time budget of {time_budget:.0f} s is used up, the request was not sent"
-                    break
-                started = time.monotonic()
-                try:
-                    raw = await client.complete(system_prompt, user_prompt)
-                    error = None
-                except Exception as e:  # noqa: BLE001 - a failed request is a measured outcome, not a crash
-                    error = f"{type(e).__name__}: {e}"
-                    transient = isinstance(e, TransientError)
-                else:
-                    transient = False
-                seconds += time.monotonic() - started
-                if not (transient and retry is not None and retries < retry.retries and not out_of_time()):
-                    break
-                retries += 1
-                await sleep(retry.delay(retries))
+            raw, error, retries, seconds = await send_request(client, system_prompt, user_prompt, retry, sleep, out_of_time, time_budget)
         async with lock:
             batch_index = len(run.batches)
             run.batches.append(BatchRecord(

@@ -22,6 +22,9 @@ const PROBE_ROLES = ['reviewer', 'admin'];
 /** Batch sizes offered in the form (all checked by default). */
 const BATCH_SIZES = ['units:1', 'units:4', 'units:8', 'units:16', 'units:32'];
 
+/** Batch sizes offered for documents reviewed by page (zone documents such as segmentation documents). */
+const PAGE_BATCH_SIZES = ['pages:1', 'pages:2', 'pages:4', 'pages:8', 'pages:all'];
+
 /** Output modes offered in the form. */
 const OUTPUT_MODES = [
   { value: 'all', label: 'all units', checked: true },
@@ -39,7 +42,7 @@ const MAX_POLL_FAILURES = 5;
 
 const FINAL_STATES = new Set(['done', 'failed', 'cancelled', 'interrupted']);
 
-const BATCH_SPEC = /^(units|chars):[1-9]\d*$/;
+const BATCH_SPEC = /^((units|pages|chars):[1-9]\d*|(units|pages):all)$/;
 
 /**
  * @typedef {{providerId: string, modelId: string, label: string}} ModelChoice
@@ -115,12 +118,12 @@ export function inputChoices(fileData, stableId) {
  * @param {string[]} checked
  * @param {string} extra
  * @returns {string[]}
- * @throws {Error} An extra spec is not of the form units:N or chars:N
+ * @throws {Error} An extra spec is not of the form units:N, pages:N, pages:all or chars:N
  */
 export function parseBatchSpecs(checked, extra) {
   const specs = [...checked];
   for (const item of (extra ?? '').split(',').map(s => s.trim()).filter(Boolean)) {
-    if (!BATCH_SPEC.test(item)) throw new Error(`"${item}" is not a batch size; use units:N or chars:N`);
+    if (!BATCH_SPEC.test(item)) throw new Error(`"${item}" is not a batch size; use units:N, pages:N, pages:all or chars:N`);
     specs.push(item);
   }
   return [...new Set(specs)];
@@ -307,7 +310,7 @@ export default class AutoAnnotationModelTestExtension extends FrontendExtensionP
       );
       if (!go) return;
     }
-    const values = await this.openForm(inputChoices(this.state?.fileData ?? [], referenceId));
+    const values = await this.openForm(inputChoices(this.state?.fileData ?? [], referenceId), await this._isPaged(referenceId));
     if (!values) return;
     /** @type {ProbeStartResult} */
     let started;
@@ -399,11 +402,31 @@ export default class AutoAnnotationModelTestExtension extends FrontendExtensionP
   }
 
   /**
+   * Whether the version is a zone document, whose review units are pages of its line layout
+   * (`GET /api/v1/files/{stable_id}/layout` answers other than "unsupported").
+   * @param {string} stableId
+   * @returns {Promise<boolean>}
+   */
+  async _isPaged(stableId) {
+    try {
+      const apiClient = this.getDependency('client').apiClient;
+      if (typeof apiClient?.filesGetLayout !== 'function') return false;
+      const layout = await apiClient.filesGetLayout(stableId);
+      return layout.status !== 'unsupported';
+    } catch {
+      return false;
+    }
+  }
+
+  /**
    * Ask for the parameters of the test.
    * @param {VersionChoice[]} inputs - Versions that can be corrected instead of the automatic choice
+   * @param {boolean} [paged] - The document is reviewed by page: offer page windows as batch sizes
    * @returns {Promise<ProbeFormValues|null>} null if cancelled
    */
-  openForm(inputs) {
+  openForm(inputs, paged = false) {
+    const sizes = paged ? PAGE_BATCH_SIZES : BATCH_SIZES;
+    const unitName = paged ? 'pages' : 'units';
     const settings = this.getDependency('inference-settings');
     /** @type {ModelChoice[]} */
     const models = settings.getModels();
@@ -429,11 +452,11 @@ export default class AutoAnnotationModelTestExtension extends FrontendExtensionP
           ${models.map((m, i) => `<sl-option value="${i}">${escapeHtml(m.label)}</sl-option>`).join('')}
         </sl-select>
         <div>
-          <div class="mt-group-label">Batch sizes (review units per request)</div>
+          <div class="mt-group-label">Batch sizes (${paged ? 'pages' : 'review units'} per request)</div>
           <div class="mt-checks">
-            ${BATCH_SIZES.map(b => `<sl-checkbox name="batch" value="${b}" checked>${b.split(':')[1]}</sl-checkbox>`).join('')}
+            ${sizes.map(b => `<sl-checkbox name="batch" value="${b}" checked>${b.split(':')[1]}</sl-checkbox>`).join('')}
           </div>
-          <sl-input name="extraBatches" size="small" placeholder="More sizes, e.g. units:64, chars:4000" style="margin-top: 0.4rem"></sl-input>
+          <sl-input name="extraBatches" size="small" placeholder="More sizes, e.g. ${paged ? 'pages:16, chars:20000' : 'units:64, chars:4000'}" style="margin-top: 0.4rem"></sl-input>
         </div>
         <div>
           <div class="mt-group-label">Output modes</div>
@@ -448,7 +471,7 @@ export default class AutoAnnotationModelTestExtension extends FrontendExtensionP
           <sl-input name="temperature" type="number" label="Temperature" value="0" min="0" max="2" step="0.1"></sl-input>
         </div>
         <div class="mt-row">
-          <sl-input name="maxUnits" type="number" label="Only the first units" placeholder="all" min="1" help-text="For a quick test"></sl-input>
+          <sl-input name="maxUnits" type="number" label="Only the first ${unitName}" placeholder="all" min="1" help-text="For a quick test"></sl-input>
           <sl-select name="input" label="Version to correct" value="auto" hoist style="flex: 2 1 12rem"
             help-text="Automatic: the extraction the current version derives from, else the earliest extraction">
             <sl-option value="auto">Automatic</sl-option>
@@ -479,7 +502,7 @@ export default class AutoAnnotationModelTestExtension extends FrontendExtensionP
       let batches = 0;
       try { batches = parseBatchSpecs(checkedValues('batch'), field('extraBatches').value).length; } catch { batches = checkedValues('batch').length; }
       const runs = batches * checkedValues('mode').length * Math.max(1, numberValue('repeats', 1));
-      estimate.textContent = `${runs} run(s); each run sends all units of the document to the model once.`;
+      estimate.textContent = `${runs} run(s); each run sends all ${unitName} of the document to the model once.`;
     };
     form.addEventListener('sl-change', updateEstimate);
     form.addEventListener('sl-input', updateEstimate);

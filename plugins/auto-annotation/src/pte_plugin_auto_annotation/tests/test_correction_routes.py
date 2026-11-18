@@ -25,7 +25,13 @@ from pte_plugin_auto_annotation import sources as sources_module
 from pte_plugin_auto_annotation.routes import router
 from pte_plugin_auto_annotation.units import document_units
 
+from pte_plugin_auto_annotation.zones import ZONES_AVAILABLE
+
 from .fixtures import GOLD_UNITS, GOLD_XML, INPUT_XML, OracleClient, gold_mapping
+from .test_zones import LAYOUT as ZONE_LAYOUT
+from .test_zones import XML as ZONE_XML
+from .test_zones import OracleClient as ZoneOracle
+from .test_zones import gold_xml as zone_gold_xml
 
 PREFIX = "/api/plugins/auto-annotation/correct"
 UNIT_PATH = ".//listBibl/bibl"
@@ -91,7 +97,7 @@ class TestCorrectionRoutes(unittest.TestCase):
             (models_module, "check_model_access", None), (models_module, "get_default_model", None),
             (annotation_module, "check_file_access", True), (sources_module, "is_safe_fetch_url", True),
             (sources_module, "fetch_rule_excerpt", "RULES"), (correction_routes, "review_unit_path", UNIT_PATH),
-            (correction_routes, "is_segmenting_variant", False),
+            (correction_routes, "is_segmenting_variant", False), (correction_routes, "zone_layout", None),
         ):
             patcher = mock.patch.object(target, name, return_value=value)
             self.addCleanup(patcher.stop)
@@ -179,6 +185,56 @@ class TestCorrectionRoutes(unittest.TestCase):
         self.assertEqual(response.status_code, 422)
         self.assertIn("text_changed", response.text)
         self.assertEqual(self.post("batch", **ids, provider_id="pa", model_id="m", units=[7]).status_code, 422)
+
+
+@unittest.skipUnless(ZONES_AVAILABLE, "needs the editor's zone_lines module")
+class TestZoneCorrectionRoutes(unittest.TestCase):
+    """Zone documents are corrected by page (zones.py)."""
+
+    post = TestCorrectionRoutes.post
+
+    def setUp(self):
+        TestCorrectionRoutes.setUp(self)  # type: ignore[arg-type]
+        FILES["z1"] = SimpleNamespace(**{**vars(_file("z1")), "variant": "grobid.training.segmentation"})
+        CONTENT["hash-z1"] = ZONE_XML
+        self.addCleanup(FILES.pop, "z1")
+        self.addCleanup(CONTENT.pop, "hash-z1")
+        patcher = mock.patch.object(correction_routes, "zone_layout", return_value=ZONE_LAYOUT)
+        self.addCleanup(patcher.stop)
+        self.zone_layout = patcher.start()
+        # the sample has no editorialDecl
+        patcher = mock.patch.object(correction_routes, "gather_rules", return_value=[("segmentation", "RULES", "https://example.org/rules")])
+        self.addCleanup(patcher.stop)
+        patcher.start()
+        LLMProviderRegistry.get_instance().register(ClientProvider("pz", ZoneOracle(zone_gold_xml())))
+
+    def test_correction_by_page(self):
+        job = self.post("start", stable_id="z1", provider_id="pz", model_id="m").json()
+        self.assertEqual((job["unit_count"], job["unit_name"], job["batches"]), (4, "pages", [[0, 1, 2, 3]]))
+        ids = {"job_id": job["job_id"], "stable_id": "z1"}
+        body = self.post("batch", **ids, provider_id="pz", model_id="m", units=[0, 1, 2, 3]).json()
+        self.assertEqual([(u["status"], u["xml"]) for u in body["units"]], [("ok", "0002 front"), ("ok", None), ("ok", "0016 listBibl"), ("ok", None)])
+        corrections = [{"index": u["index"], "xml": u["xml"]} for u in body["units"] if u["xml"]]
+        response = self.post("finish", **ids, provider_id="pz", model_id="m", corrections=corrections, processed=4)
+        self.assertEqual(response.status_code, 200, response.text)
+        xml = response.json()["xml"]
+        self.assertIn("<listBibl>Smith, J. (2020). A book. <lb/>Miller, K. (2021). Another book. <lb/>stray text outside <lb/></listBibl>", xml)
+        self.assertIn("4 pages, 2 changed", xml)
+
+    def test_finish_checks_the_changes(self):
+        job = self.post("start", stable_id="z1", provider_id="pz", model_id="m", batch="pages:1").json()
+        self.assertEqual(job["batches"], [[0], [1], [2], [3]])
+        ids = {"job_id": job["job_id"], "stable_id": "z1"}
+        response = self.post("finish", **ids, provider_id="pz", model_id="m", corrections=[{"index": 0, "xml": "0011 body"}], processed=4)
+        self.assertEqual(response.status_code, 422)
+        self.assertIn("outside", response.text)
+
+    def test_missing_layout(self):
+        self.zone_layout.side_effect = sources_module.SourceError("The layout information of this document is missing.")
+        response = self.post("start", stable_id="z1", provider_id="pz", model_id="m")
+        self.assertEqual(response.status_code, 422)
+        self.assertIn("layout information", response.text)
+        self.assertEqual(self.post("start", stable_id="v1", provider_id="pa", model_id="m", batch="pages:2").status_code, 422)
 
 
 if __name__ == "__main__":

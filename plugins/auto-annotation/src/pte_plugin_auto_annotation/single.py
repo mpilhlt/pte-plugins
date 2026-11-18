@@ -20,7 +20,9 @@ from .arbitration import segments_key, valid_proposal
 from .batching import BatchSpec, make_batches
 from .checks import ProposalStatus, check_proposal, check_segments, unit_text
 from .correction import ChatClient, RetryPolicy, Sleep, correct_units
+from .prompts import OutputMode
 from .units import Unit
+from .zones import CORRECTION_MODE, ZoneDoc, correct_pages
 
 
 @dataclass(frozen=True)
@@ -55,6 +57,8 @@ class CorrectionSummary:
     changed: int
     invalid: int  # answers that failed the checks or were missing
     errors: int  # units of requests that failed
+    # What the units are: "units", or "pages" for zone documents
+    unit_name: str = "units"
 
     def measures(self) -> list[tuple[str, int]]:
         """(subtype, quantity) of the `measure` elements of the revision change."""
@@ -92,6 +96,33 @@ async def correct_batch(
         proposal = valid_proposal(outcome)
         changed = proposal is not None and segments_key(proposal) != segments_key(outcome.unit.xml)
         results.append(UnitCorrection(outcome.unit.index, outcome.status, proposal if changed else None))
+    error = next((b.error for b in run.batches if b.error), None)
+    return BatchCorrection(
+        results, error, calls=len(run.batches), retries=sum(b.retries for b in run.batches),
+        seconds=round(sum(b.seconds for b in run.batches), 2),
+    )
+
+
+async def correct_page_batch(
+    client: ChatClient,
+    rules: Sequence[tuple[str, str]],
+    zdoc: ZoneDoc,
+    pages: Sequence[Unit],
+    mode: OutputMode = CORRECTION_MODE,
+    split_on_failure: float | None = 0.25,
+    retry: RetryPolicy | None = None,
+    sleep: Sleep = asyncio.sleep,
+) -> BatchCorrection:
+    """
+    Send the pages of a zone document to the model as one window (split in half and retried where
+    too many of its pages fail, see zones.correct_pages); a page's correction is its label changes
+    in the line form, None if it has none or failed.
+    """
+    run = await correct_pages(
+        client, rules, zdoc, pages, BatchSpec(whole=True, unit_name="pages"), mode,
+        split_on_failure=split_on_failure, retry=retry if retry is not None else RetryPolicy(), sleep=sleep,
+    )
+    results = [UnitCorrection(o.unit.index, o.status, o.proposal or None) for o in run.outcomes]
     error = next((b.error for b in run.batches if b.error), None)
     return BatchCorrection(
         results, error, calls=len(run.batches), retries=sum(b.retries for b in run.batches),

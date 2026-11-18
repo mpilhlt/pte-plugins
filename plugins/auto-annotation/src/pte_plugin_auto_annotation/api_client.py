@@ -20,6 +20,7 @@ from .correction import TransientError
 # Values of a flat JSON request body
 JsonScalar = str | int | float | bool | None
 from .evaluation import EvalSource
+from .zones import ZoneLayout
 
 # Completions of large batches on slow models take minutes
 DEFAULT_TIMEOUT = 900.0
@@ -39,6 +40,16 @@ class ModelsBusyError(ApiError):
 
 # A 429 is not among them: the editor waits out short rate limits itself, so a 429 means a long wait or an exhausted quota
 TRANSIENT_STATUSES = frozenset({503})
+
+
+def _zone_layout(data: object) -> ZoneLayout | None:
+    """The zone layout of an /eval-source answer (`zones`), or None."""
+    if not isinstance(data, dict):
+        return None
+    labels, pages, hints = data.get("labels"), data.get("line_pages"), data.get("hints")
+    if not isinstance(labels, list) or not isinstance(pages, list) or not isinstance(hints, list):
+        return None
+    return ZoneLayout([dict(entry) for entry in labels], [int(p) for p in pages], [[str(h) for h in line] for line in hints])
 
 
 def _check(response: requests.Response) -> dict[str, object]:
@@ -103,6 +114,7 @@ class ApiSession:
             rules=[(str(r["category"]), str(r["text"])) for r in rules],
             doc_id=str(data["doc_id"]), reference_is_gold=bool(data["reference_is_gold"]), input_choice=str(data["input_choice"]), input_is_extraction=bool(data["input_is_extraction"]),
             segmenting=bool(data.get("segmenting", False)),
+            zones=_zone_layout(data.get("zones")),
         )
 
     def resolve_model(self, spec: str) -> tuple[str, str]:

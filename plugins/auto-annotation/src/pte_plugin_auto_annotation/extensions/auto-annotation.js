@@ -7,7 +7,9 @@
  * batch of units per request behind a cancellable progress widget. Meanwhile the document is
  * locked for the job on the server, so it opens read-only everywhere. When the new version is
  * saved, it is loaded if the source document is still open; otherwise the user is asked whether to
- * load it. Routes: correction_routes.py.
+ * load it. Documents reviewed by page (zone documents such as segmentation documents) are corrected
+ * page by page; without their layout, the menu item is disabled with the reason. Routes:
+ * correction_routes.py.
  *
  * @import { PluginContext } from '../../../../app/src/modules/plugin-context.js'
  */
@@ -19,18 +21,18 @@ const LOCK_REFRESH_SECONDS = 30;
 const ALLOWED_ROLES = ['annotator', 'reviewer', 'admin'];
 
 /** Statuses of units whose answer failed the checks (see checks.py). */
-const INVALID_STATUSES = new Set(['missing', 'malformed', 'wrong_root', 'text_changed']);
+const INVALID_STATUSES = new Set(['missing', 'malformed', 'wrong_root', 'text_changed', 'bad_labels']);
 
 /**
  * @typedef {{index: number, status: string, xml: string|null}} UnitResult
  * @typedef {{units: UnitResult[], error: string|null, calls: number, retries: number, seconds: number}} BatchResult
- * @typedef {{job_id: string, doc_id: string, variant: string|null, unit_count: number, batches: number[][]}} StartResult
+ * @typedef {{job_id: string, doc_id: string, variant: string|null, unit_count: number, batches: number[][], unit_name?: string}} StartResult
  */
 
 /**
  * The outcome of a correction run.
  * @typedef {object} CorrectionOutcome
- * @property {Map<number, string>} corrections - Corrected unit XML by unit index
+ * @property {Map<number, string>} corrections - Corrected unit XML (for pages: label changes in the line form) by unit index
  * @property {number} processed - Units sent to the model
  * @property {number} invalid - Units whose answer failed the checks
  * @property {number} errors - Units of failed requests
@@ -104,6 +106,8 @@ export default class AutoAnnotationExtension extends FrontendExtensionPlugin {
     this._running = new Set();
     /** @type {number} */
     this._lockRefreshMs = LOCK_REFRESH_SECONDS * 1000;
+    /** @type {string|null} Why the open document cannot be corrected: its page layout is missing */
+    this._layoutMissing = null;
   }
 
   /**
@@ -119,6 +123,7 @@ export default class AutoAnnotationExtension extends FrontendExtensionPlugin {
     this.getDependency('tools').addMenuItems([item], 'annotation');
     this.getDependency('xmleditor').on('editorReady', () => this._updateMenuState());
     this._updateMenuState();
+    await this._checkLayout();
   }
 
   /**
@@ -126,6 +131,35 @@ export default class AutoAnnotationExtension extends FrontendExtensionPlugin {
    * @returns {Promise<void>}
    */
   async onXmlChange(_doc) {
+    this._layoutMissing = null;
+    this._updateMenuState();
+    await this._checkLayout();
+  }
+
+  /**
+   * Find out whether the open document is a zone document without page layout, which cannot be
+   * corrected (`GET /api/v1/files/{stable_id}/layout`), and update the menu item.
+   * @returns {Promise<void>}
+   */
+  async _checkLayout() {
+    const stableId = this.state?.xml || null;
+    let missing = null;
+    let apiClient = null;
+    try {
+      apiClient = stableId ? this.getDependency('client').apiClient : null;
+    } catch {
+      // no API client (e.g. in tests)
+    }
+    if (apiClient && typeof apiClient.filesGetLayout === 'function') {
+      try {
+        const layout = await apiClient.filesGetLayout(stableId);
+        if (layout.status === 'missing') missing = layout.message || 'The layout information of this document is missing.';
+      } catch {
+        // the correction reports the problem
+      }
+    }
+    if ((this.state?.xml || null) !== stableId) return;
+    this._layoutMissing = missing;
     this._updateMenuState();
   }
 
@@ -149,6 +183,7 @@ export default class AutoAnnotationExtension extends FrontendExtensionPlugin {
     const tree = this.getDependency('xmleditor').getXmlTree();
     if (!xml || !tree) return 'Requires an open document.';
     if (this._running.has(xml)) return 'The annotations of this document are being corrected.';
+    if (this._layoutMissing) return this._layoutMissing;
     const guides = this.getDependency('tei-utils').getEditorialDeclGuides(tree);
     if (!guides.some(g => g.refs.some(r => r.subtype === 'machine'))) {
       return 'Requires a document whose editorialDecl has machine-readable annotation rules (a ref with subtype="machine").';
@@ -228,12 +263,13 @@ export default class AutoAnnotationExtension extends FrontendExtensionPlugin {
     }
 
     const jobBody = { job_id: job.job_id, stable_id: sourceId };
+    const unitName = job.unit_name ?? 'units';
     const progress = this.getDependency('progress');
     const progressId = `auto-annotation-${job.job_id}`;
     const heading = `Correcting annotations${title ? ` of "${title}"` : ''} using ${label}…`;
     let cancelled = false;
     let lockLost = false;
-    progress.show(progressId, { label: `${heading} (0 of ${job.unit_count} units)`, value: 0, cancellable: true, onCancel: () => { cancelled = true; } });
+    progress.show(progressId, { label: `${heading} (0 of ${job.unit_count} ${unitName})`, value: 0, cancellable: true, onCancel: () => { cancelled = true; } });
     const refresher = setInterval(() => {
       this.callPluginApi('/api/plugins/auto-annotation/correct/heartbeat', 'POST', jobBody).catch(() => { lockLost = true; });
     }, this._lockRefreshMs);
@@ -250,7 +286,7 @@ export default class AutoAnnotationExtension extends FrontendExtensionPlugin {
           isCancelled: () => cancelled || lockLost,
           onProgress: (processed, total, changed) => {
             progress.setValue(progressId, Math.round((processed / total) * 100));
-            progress.setLabel(progressId, `${heading} (${processed} of ${total} units, ${changed} changed)`);
+            progress.setLabel(progressId, `${heading} (${processed} of ${total} ${unitName}, ${changed} changed)`);
           },
         }
       );
@@ -272,7 +308,7 @@ export default class AutoAnnotationExtension extends FrontendExtensionPlugin {
       if (outcome.state !== 'done') {
         const reason = outcome.state === 'cancelled' ? 'was cancelled' : `failed (${escapeHtml(outcome.error ?? '')})`;
         const keep = await dialog.confirm(
-          `The correction ${reason} after ${outcome.processed} of ${job.unit_count} units. Save the ${outcome.corrections.size} corrected unit(s) so far as a new version?`,
+          `The correction ${reason} after ${outcome.processed} of ${job.unit_count} ${unitName}. Save the ${outcome.corrections.size} corrected ${unitName === 'pages' ? 'page' : 'unit'}(s) so far as a new version?`,
           'Correct annotations in new version'
         );
         if (!keep) return;
@@ -290,7 +326,7 @@ export default class AutoAnnotationExtension extends FrontendExtensionPlugin {
       savedId = saved.file_id;
       await this._release(jobBody);
       await this.getDependency('file-selection').reload({ refresh: true });
-      const summary = `${changed} of ${job.unit_count} unit(s) changed`;
+      const summary = `${changed} of ${job.unit_count} ${unitName === 'pages' ? 'page' : 'unit'}(s) changed`;
       if (this.state?.xml === sourceId) {
         await this.getDependency('services').load({ xml: savedId });
         notify(`The corrected version was saved and loaded (${summary}).`, 'success', 'check-circle');
