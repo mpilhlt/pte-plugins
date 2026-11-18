@@ -24,6 +24,23 @@ class TestExtractorInfoValidation(unittest.TestCase):
         self.assertEqual(info["reviewUnits"]["grobid.training.references"], ".//listBibl/bibl")
         self.assertTrue(set(info["reviewUnits"]) <= set(info["variants"]))
 
+    def test_segmentation_is_reviewed_by_page(self):
+        from pte_plugin_grobid.extractor import GrobidTrainingExtractor
+        info = GrobidTrainingExtractor.get_info()
+        self.assertEqual(info["reviewUnits"]["grobid.training.segmentation"], "pages")
+        codes = [label["code"] for label in info["zoneLabels"]["grobid.training.segmentation"]]
+        self.assertIn("note:headnote", codes)
+        self.assertTrue(set(info["zoneLabels"]) <= set(info["variants"]))
+
+    def test_segmentation_falls_back_to_zones_without_layout_api(self):
+        from unittest import mock
+
+        from pte_plugin_grobid.extractor import GrobidTrainingExtractor
+        with mock.patch("pte_plugin_grobid.config.has_layout_api", return_value=False):
+            info = GrobidTrainingExtractor.get_info()
+        self.assertEqual(info["reviewUnits"]["grobid.training.segmentation"], "./*")
+        self.assertEqual(info["zoneLabels"], {})
+
     def test_segmenting_variants_are_variants(self):
         from pte_plugin_grobid.extractor import GrobidTrainingExtractor
         info = GrobidTrainingExtractor.get_info()

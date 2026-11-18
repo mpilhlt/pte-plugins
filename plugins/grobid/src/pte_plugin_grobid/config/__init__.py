@@ -23,7 +23,7 @@ from pte_plugin_grobid.config.annotation_tags_scope import ANNOTATION_TAG_SCOPE
 from pte_plugin_grobid.config.content_locations import VARIANT_CONTENT_LOCATIONS, VariantContentLocations
 from pte_plugin_grobid.config.form_options import FORM_OPTIONS, FormOptions
 from pte_plugin_grobid.config.navigation import NAVIGATION_XPATH, NavigationXPath
-from pte_plugin_grobid.config.review_units import REVIEW_UNITS, SEGMENTING_VARIANTS, ReviewUnits
+from pte_plugin_grobid.config.review_units import REVIEW_UNITS, SEGMENTING_VARIANTS, ZONE_FALLBACK_UNIT_PATH, ZONE_LABELS, ReviewUnits, ZoneLabels
 from pte_plugin_grobid.config.variants import PROCESSING_FLAVORS, SUPPORTED_VARIANTS
 
 logger = logging.getLogger(__name__)
@@ -246,9 +246,26 @@ def get_navigation_xpath() -> NavigationXPath:
     return copy.deepcopy(NAVIGATION_XPATH)
 
 
+def has_layout_api() -> bool:
+    """Whether the editor has the line layout API (plugin API 1.5): zone documents are then reviewed by page."""
+    try:
+        from fastapi_app.plugin_api import register_layout_provider  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
 def get_review_units() -> ReviewUnits:
     """Return the path of the review units below TEI/text for each variant (unit review mode)."""
-    return dict(REVIEW_UNITS)
+    units = dict(REVIEW_UNITS)
+    if not has_layout_api():
+        units.update({variant: ZONE_FALLBACK_UNIT_PATH for variant in ZONE_LABELS})
+    return units
+
+
+def get_zone_labels() -> ZoneLabels:
+    """Return the zone labels of the zone document variants ({} in editors without the layout API)."""
+    return {variant: [dict(label) for label in labels] for variant, labels in ZONE_LABELS.items()} if has_layout_api() else {}
 
 
 def get_segmenting_variants() -> list[str]:
