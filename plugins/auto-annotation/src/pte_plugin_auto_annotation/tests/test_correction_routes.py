@@ -27,11 +27,12 @@ from pte_plugin_auto_annotation.units import document_units
 
 from pte_plugin_auto_annotation.zones import ZONES_AVAILABLE
 
-from .fixtures import GOLD_UNITS, GOLD_XML, INPUT_XML, OracleClient, gold_mapping
+from .fixtures import CORRECTED, EXTRACTION, GOLD_UNITS, GOLD_XML, INPUT_XML, OracleClient, gold_mapping, tei
 from .test_zones import LAYOUT as ZONE_LAYOUT
 from .test_zones import XML as ZONE_XML
 from .test_zones import OracleClient as ZoneOracle
 from .test_zones import gold_xml as zone_gold_xml
+from .test_transfer import annotated_with_old_ocr
 
 PREFIX = "/api/plugins/auto-annotation/correct"
 UNIT_PATH = ".//listBibl/bibl"
@@ -235,6 +236,137 @@ class TestZoneCorrectionRoutes(unittest.TestCase):
         self.assertEqual(response.status_code, 422)
         self.assertIn("layout information", response.text)
         self.assertEqual(self.post("start", stable_id="v1", provider_id="pa", model_id="m", batch="pages:2").status_code, 422)
+
+
+
+# the gold version from an older text layer: two references were misread
+OLD_GOLD_UNITS = [GOLD_UNITS[0], GOLD_UNITS[1].replace("Torts", "Torls"), GOLD_UNITS[2], GOLD_UNITS[3].replace("Roe, B.", "R0e, B.")]
+OLD_GOLD_XML = tei(OLD_GOLD_UNITS, pretty=True, changes=EXTRACTION + CORRECTED)
+
+
+class TransferOracle:
+    """Answers every unit of a transfer with its gold version (looked up by the text to annotate), with a doubt on the first."""
+
+    def __init__(self):
+        self.mapping = gold_mapping()
+        self.calls: list[tuple[str, str]] = []
+
+    async def complete(self, system_prompt: str, user_prompt: str) -> str:
+        from .fixtures import prompt_units
+
+        self.calls.append((system_prompt, user_prompt))
+        parts = []
+        for uid, shown in prompt_units(user_prompt).items():
+            if "Text to annotate:" not in shown:
+                # doubts-only mode
+                return "### Doubt 1\nThe date is not tagged as a date."
+            xml = shown.split("Text to annotate:\n", 1)[1].strip()
+            doubt = "\nDOUBT: the title level is unclear." if uid == 1 else ""
+            parts.append(f"### Unit {uid}\n{self.mapping[xml]}{doubt}")
+        return "\n\n".join(parts)
+
+
+class TestTransferRoutes(unittest.TestCase):
+    """Transferring the annotation of an earlier version (transfer.py)."""
+
+    post = TestCorrectionRoutes.post
+
+    def setUp(self):
+        TestCorrectionRoutes.setUp(self)  # type: ignore[arg-type]
+        FILES["old"] = SimpleNamespace(**{**vars(_file("old", gold=True)), "label": "Gold (old OCR)"})
+        CONTENT["hash-old"] = OLD_GOLD_XML
+        self.addCleanup(FILES.pop, "old")
+        self.addCleanup(CONTENT.pop, "hash-old")
+        patcher = mock.patch.object(correction_routes, "check_file_access", return_value=True)
+        self.addCleanup(patcher.stop)
+        patcher.start()
+        self.oracle = TransferOracle()
+        LLMProviderRegistry.get_instance().register(ClientProvider("pt", self.oracle))
+
+    def test_a_full_transfer_with_marks(self):
+        job = self.post("start", stable_id="v1", provider_id="pt", model_id="m", source_stable_id="old", marks=True).json()
+        self.assertEqual(job["transfer"], {"copied": 2, "model": 2, "unmatched": 0, "coverage": job["transfer"]["coverage"]})
+        self.assertGreater(job["transfer"]["coverage"], 0.9)
+        self.assertEqual((job["batches"], job["doubt_batches"]), ([[1, 3]], [[0], [2]]))
+        ids = {"job_id": job["job_id"], "stable_id": "v1"}
+        common = {**ids, "provider_id": "pt", "model_id": "m", "source_stable_id": "old", "marks": True}
+        body = self.post("batch", **common, units=[1, 3]).json()
+        self.assertEqual([(u["status"], u["xml"]) for u in body["units"]], [("ok", GOLD_UNITS[1]), ("ok", GOLD_UNITS[3])])
+        self.assertEqual(body["units"][0]["doubt"], "the title level is unclear.")
+        self.assertIn("Torls", self.oracle.calls[0][1])
+        doubts = self.post("batch", **common, units=[0], mode="doubts").json()
+        self.assertEqual(doubts["units"][0]["doubt"], "The date is not tagged as a date.")
+        # copied units are not sent for the transfer, model units not for doubts
+        self.assertEqual(self.post("batch", **common, units=[0]).status_code, 422)
+        response = self.post(
+            "finish", **common, corrections=[{"index": u["index"], "xml": u["xml"]} for u in body["units"]], processed=2,
+            doubts=[{"index": 1, "comment": "the title level is unclear."}, {"index": 0, "comment": "The date is not tagged as a date."}],
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        result = response.json()
+        units = document_units(result["xml"], UNIT_PATH)
+        self.assertEqual([u.xml for u in units], GOLD_UNITS)
+        self.assertEqual(result["marks"], [
+            {"fingerprint": units[0].fingerprint, "comment": "The date is not tagged as a date."},
+            {"fingerprint": units[1].fingerprint, "comment": "the title level is unclear."},
+        ])
+        xml = result["xml"]
+        # the status of the source's last change, the earlier version named
+        self.assertIn('status="draft"', xml.split("<revisionDesc>", 1)[1].rsplit("<change", 1)[1])
+        self.assertIn('<name type="version" key="old">Gold (old OCR)</name>', xml)
+        self.assertIn('<measure type="transferred-units" subtype="copied" commodity="pt/m" quantity="2">', xml)
+        self.assertIn("Annotation transfer", xml)
+
+    def test_preview(self):
+        response = self.client.get(f"{PREFIX}/transfer-preview", params={"target": "v1", "source": "old"})
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["transfer"]["copied"], 2)
+
+    def test_refusals(self):
+        self.assertEqual(self.client.get(f"{PREFIX}/transfer-preview", params={"target": "v1", "source": "v1"}).status_code, 422)
+        FILES["other"] = SimpleNamespace(**{**vars(_file("other")), "doc_id": "doc2"})
+        CONTENT["hash-other"] = OLD_GOLD_XML
+        self.addCleanup(FILES.pop, "other")
+        self.addCleanup(CONTENT.pop, "hash-other")
+        self.assertEqual(self.client.get(f"{PREFIX}/transfer-preview", params={"target": "v1", "source": "other"}).status_code, 422)
+        CONTENT["hash-old"] = tei(["<bibl>Nothing in common with the current version at all.</bibl>"])
+        response = self.post("start", stable_id="v1", provider_id="pt", model_id="m", source_stable_id="old")
+        self.assertEqual(response.status_code, 422)
+        self.assertIn("same text", response.text)
+
+    def test_finish_checks_the_results(self):
+        job = self.post("start", stable_id="v1", provider_id="pt", model_id="m", source_stable_id="old").json()
+        ids = {"job_id": job["job_id"], "stable_id": "v1"}
+        common = {**ids, "provider_id": "pt", "model_id": "m", "source_stable_id": "old"}
+        response = self.post("finish", **common, corrections=[{"index": 1, "xml": "<bibl>Doe, A. Torts 1999.</bibl>"}], processed=2)
+        self.assertEqual(response.status_code, 422)
+        response = self.post("finish", **common, corrections=[{"index": 0, "xml": GOLD_UNITS[0]}], processed=2)
+        self.assertEqual(response.status_code, 422)
+
+
+@unittest.skipUnless(ZONES_AVAILABLE, "needs the editor's zone_lines module")
+class TestZoneTransferRoutes(unittest.TestCase):
+    post = TestCorrectionRoutes.post
+
+    def setUp(self):
+        TestZoneCorrectionRoutes.setUp(self)  # type: ignore[arg-type]
+        FILES["zold"] = SimpleNamespace(**{**vars(_file("zold", gold=True)), "variant": "grobid.training.segmentation", "label": "Gold"})
+        CONTENT["hash-zold"] = annotated_with_old_ocr()
+        self.addCleanup(FILES.pop, "zold")
+        self.addCleanup(CONTENT.pop, "hash-zold")
+        patcher = mock.patch.object(correction_routes, "check_file_access", return_value=True)
+        self.addCleanup(patcher.stop)
+        patcher.start()
+
+    def test_copied_pages_need_no_model(self):
+        job = self.post("start", stable_id="z1", provider_id="pz", model_id="m", source_stable_id="zold").json()
+        self.assertEqual((job["transfer"]["copied"], job["batches"]), (4, []))
+        ids = {"job_id": job["job_id"], "stable_id": "z1"}
+        response = self.post("finish", **ids, provider_id="pz", model_id="m", source_stable_id="zold", corrections=[], processed=0)
+        self.assertEqual(response.status_code, 200, response.text)
+        xml = response.json()["xml"]
+        self.assertIn("<listBibl>Smith, J. (2020). A book. <lb/>Miller, K. (2021). Another book. <lb/>stray text outside <lb/></listBibl>", xml)
+        self.assertIn("<front>Cover page &amp; notes <lb/>", xml)
 
 
 if __name__ == "__main__":

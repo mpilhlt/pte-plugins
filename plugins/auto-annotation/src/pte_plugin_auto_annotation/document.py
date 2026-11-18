@@ -12,6 +12,9 @@ Writing a pipeline result or a single model's corrections into the TEI document 
   `<name type="model" subtype="<provider id>" key="<provider id>/<model id>">` and the number of
   changed, unchanged, invalid, failed and unprocessed units as `measure` elements of type `corrected-units`
   (for zone documents, the units are pages and their changes are applied with zones.apply_page_changes())
+- for a transfer of annotation decisions from an earlier version (transfer.py), the change names the
+  model as above and the earlier version as `<name type="version" key="<stable id>">`, and records
+  the units per category as `measure` elements of type `transferred-units`
 """
 
 from __future__ import annotations
@@ -26,6 +29,7 @@ from fastapi_app.lib.utils.tei_utils import add_revision_change, serialize_tei_l
 from .checks import ProposalStatus
 from .pipeline import Decision, PipelineResult, UnitDecision
 from .single import CorrectionSummary
+from .transfer import TransferSummary
 from .units import TEI_NS, find_unit_elements, parse_document, parse_unit
 
 VALID_STATUSES = (ProposalStatus.OK, ProposalStatus.UNCHANGED)
@@ -251,6 +255,50 @@ def write_zone_corrections(
     """
     root = parse_document(corrected_xml)
     return _record_change(root, corrected_xml, correction_description_xml(provider_id, model_id, summary, seconds, model_label), when, status, label)
+
+
+def transfer_description_xml(
+    provider_id: str, model_id: str, summary: TransferSummary, seconds: float, source_stable_id: str, source_label: str | None = None, model_label: str | None = None
+) -> str:
+    """
+    The content of the change's `desc` for a transfer: the earlier version as
+    `<name type="version" key="<stable id>">`, the model as in correction_description_xml(), the
+    counts per category as `measure` elements of type `transferred-units` and the duration.
+    """
+    model = f"{provider_id}/{model_id}"
+    counts = ", ".join(_measure("transferred-units", key, value, model) for key, value in summary.measures())
+    name = summary.unit_name
+    iso, text = iso_duration(seconds)
+    version = f'<name type="version" key="{_escape(source_stable_id)}">{_escape(source_label or source_stable_id)}</name>'
+    return (
+        f"Annotation transferred from {version} by {model_name_xml(provider_id, model_id, model_label)}: "
+        f"{summary.units} {name}. {name.capitalize()}: {counts}. Completed in <time dur=\"{iso}\">{text}</time>."
+    )
+
+
+def write_transfer(
+    xml: str,
+    unit_path: str | None,
+    replacements: Mapping[int, str],
+    desc_xml: str,
+    when: str,
+    status: str,
+    label: str | None,
+    segmenting: bool = False,
+    zone_xml: str | None = None,
+) -> str:
+    """
+    The target with the transferred units (for zone documents: `zone_xml`, the target with the
+    label changes applied already) and the revision change.
+
+    Raises:
+        ValueError: the document is not well-formed, or a result cannot be inserted.
+    """
+    if zone_xml is not None:
+        return _record_change(parse_document(zone_xml), zone_xml, desc_xml, when, status, label)
+    root = parse_document(xml)
+    replace_units(root, unit_path, replacements, segmenting=segmenting)
+    return _record_change(root, xml, desc_xml, when, status, label)
 
 
 def _record_change(root: etree._Element, xml: str, desc_xml: str, when: str, status: str, label: str | None) -> str:
