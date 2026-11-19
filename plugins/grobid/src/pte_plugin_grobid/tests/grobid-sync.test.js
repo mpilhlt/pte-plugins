@@ -64,14 +64,11 @@ describe('grobid-sync page breaks', () => {
     assert.deepStrictEqual(pageBreakDiagnostics(nearLines, pageBreaksOf(near, nearLines), FEATURE_TOKENS, PAGE_STARTS), []);
   });
 
-  it('reports missing, misplaced and misnumbered page breaks', () => {
+  it('reports misplaced and misnumbered page breaks, but not missing ones', () => {
     const lines = lineTokens(DOC);
     const breaks = pageBreaksOf(DOC, lines);
     // no <pb/> for page 2
-    const missing = pageBreakDiagnostics(lines, [breaks[0]], FEATURE_TOKENS, PAGE_STARTS);
-    assert.strictEqual(missing.length, 1);
-    assert.match(missing[0].message, /Page 2 of the PDF starts here/);
-    assert.strictEqual(missing[0].from, lines[4].from);
+    assert.deepStrictEqual(pageBreakDiagnostics(lines, [breaks[0]], FEATURE_TOKENS, PAGE_STARTS), []);
     // a <pb/> far from any page start (with more lines in between)
     const far = pageBreakDiagnostics(lines, [...breaks, { from: 1, to: 2, n: null, line: 20 }], FEATURE_TOKENS, PAGE_STARTS);
     assert.deepStrictEqual(far.map(d => d.message), ['This <pb/> is not at a page start of the PDF (feature file)']);

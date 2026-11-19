@@ -113,10 +113,9 @@ export function alignLines(lineTokens, rowTokens) {
 }
 
 /**
- * Diagnostics for `<pb/>` elements that disagree with the page starts of the feature file: a page
- * start without a `<pb/>` within PAGE_BREAK_VICINITY lines, a `<pb/>` without a page start within
- * that distance, and a `<pb/>` whose `n` is not the number of its page. Documents without `<pb/>`
- * get none.
+ * Diagnostics for `<pb/>` elements that disagree with the page starts of the feature file: a
+ * `<pb/>` without a page start within PAGE_BREAK_VICINITY lines, and a `<pb/>` whose `n` is not the
+ * number of its page. A page start without a `<pb/>` gets none.
  * @param {LineToken[]} lines - The line tokens of the document
  * @param {PageBreakTag[]} pageBreaks - Its `<pb/>` elements
  * @param {string[]} featureTokens - First tokens of the feature file rows
@@ -136,16 +135,6 @@ export function pageBreakDiagnostics(lines, pageBreaks, featureTokens, pageStart
   });
   /** @type {Diagnostic[]} */
   const diagnostics = [];
-  for (const start of starts) {
-    if (pageBreaks.some(pb => Math.abs(pb.line - start.line) <= PAGE_BREAK_VICINITY)) continue;
-    const at = /** @type {LineToken} */ (lines[start.line]);
-    diagnostics.push({
-      from: at.from,
-      to: at.to,
-      severity: 'warning',
-      message: `Page ${start.page} of the PDF starts here, but there is no <pb/> (TEI Wizard: "Insert page breaks")`
-    });
-  }
   for (const pb of pageBreaks) {
     const near = starts
       .filter(s => Math.abs(s.line - pb.line) <= PAGE_BREAK_VICINITY)
