@@ -29,11 +29,11 @@ ANNOTATION_TAG_SCOPE: dict[str, TagScope] = {
     "grobid.training.references.referenceSegmenter": {
         "root": "bibl",
         "exclude": set(),
-        "read_only": {"lb", "pb"},
+        "read_only": {"lb"},
     },
     "grobid.training.references": {
         "root": "bibl",
         "exclude": set(),
-        "read_only": {"lb", "pb"},
+        "read_only": {"lb"},
     },
 }
