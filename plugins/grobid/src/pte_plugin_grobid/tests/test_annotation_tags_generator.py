@@ -102,10 +102,10 @@ class TestGenerateAnnotationTags(unittest.TestCase):
         )
         self.assertEqual(tags, [])
 
-    def test_generates_expected_tags_excluding_lb(self):
+    def test_generates_expected_tags_with_read_only_lb(self):
         tags = generate_annotation_tags("grobid.training.segmentation", self.schema_path)
-        tag_names = {t["tag"] for t in tags}
-        self.assertEqual(tag_names, {"text", "div", "page"})
+        self.assertEqual({t["tag"] for t in tags}, {"text", "div", "page", "lb"})
+        self.assertEqual({t["tag"] for t in tags if t["readOnly"]}, {"text", "lb"})
 
     def test_alphabetical_order(self):
         tags = generate_annotation_tags("grobid.training.segmentation", self.schema_path)

@@ -141,10 +141,12 @@ class TestGetAnnotationTags(unittest.TestCase):
         for expected in ["acknowledgement", "toc", "annex", "funding", "conflict"]:
             self.assertIn(expected, variant_values)
 
-    def test_segmentation_excludes_lb(self):
+    def test_segmentation_lb_is_a_read_only_badge(self):
         tags = self.get_annotation_tags()
         seg = tags["grobid.training.segmentation"]
-        self.assertNotIn("lb", {t["tag"] for t in seg})
+        lb = next(t for t in seg if t["tag"] == "lb")
+        self.assertTrue(lb["readOnly"])
+        self.assertTrue(lb["empty"])
 
     # --- grobid.training.references.referenceSegmenter ---
 

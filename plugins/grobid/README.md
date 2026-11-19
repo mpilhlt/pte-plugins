@@ -14,6 +14,14 @@ Extracted training data is cached per document, GROBID revision, flavor and PDF 
 
 Reviewers can download a complete training package for a collection as a ZIP file that mirrors the `grobid-trainer/resources/dataset/` directory structure and can be dropped directly into that directory.
 
+### Page breaks in segmentation documents
+
+Segmentation documents mark the start of every PDF page with `<pb n="…"/>` (`n`: the page number in the PDF, from 1), placed at the start of the page: before the zone that holds the first word of the page if the page starts with that zone, otherwise before that word inside its zone. The extractor inserts them from the page starts of GROBID's feature file, unless GROBID already put a `<pb/>` within three lines of a page start. GROBID's trainer ignores `<pb/>`, so the training data is unchanged. The pages of the unit review and the LLM review come from the `<pb/>` elements, so a document keeps its pages when the extraction cache is gone; the layout hints for the LLM still come from the feature file.
+
+For documents extracted before, the TEI Wizard enhancement **Insert page breaks** adds the missing `<pb/>` elements from the cached feature file (fetch it with [Reload feature file](#reload-feature-file) if it is missing) and shows the result in the merge view. Running it again adds nothing to pages that have a `<pb/>`. When the feature file is cached, the sync-check lint warns about a page start without a `<pb/>` nearby, a `<pb/>` that is not near a page start, and a `<pb/>` whose `n` is not its page number. Documents without any `<pb/>` get no such warnings.
+
+In the XML editor's visual mode, `<lb/>` appears as a read-only badge in all GROBID training variants, and `<pb/>` in segmentation documents: they mark the layout of the PDF and cannot be edited there (`read_only` in `config/annotation_tags_scope.py`).
+
 ### Supported variants
 
 | Variant ID | GROBID model path |
@@ -210,10 +218,11 @@ The resulting ZIP mirrors `grobid-trainer/resources/dataset/` and can be unpacke
 3. `#diffTokens` performs a forward-scan diff with a lookahead window of 10 tokens to recover alignment after a mismatch. It emits:
    - `warning` — when the feature file has tokens absent from the XML (missing tokens) or the XML has extra tokens not in the feature file.
    - `error` — when neither side recovers alignment within the window.
+4. For segmentation documents with `<pb/>` elements, `pageBreakDiagnostics()` aligns the lines with the feature rows (the forward scan of `layout.py`) and warns about page starts without a `<pb/>` within `PAGE_BREAK_VICINITY` (3) lines, `<pb/>` elements without a page start within that distance, and `<pb n>` values that differ from the page number. `pageBreaksOf()` assigns each `<pb/>` to the first line whose first word follows it. Both are exported and unit-tested in `tests/grobid-sync.test.js`.
 
 **Tokenisation rules:** a token is either a maximal run of non-delimiter, non-whitespace characters, or a single non-whitespace delimiter character, where the delimiter set matches `TextUtilities.fullPunctuations` from `grobid-core`. XML entity references (`&amp;`, `&#60;`, `&#x3c;`) are decoded before tokenisation so that `&amp;` produces one token `&` and `&lt;www` produces one token `<www`.
 
-**Feature-tokens endpoint** (`GET /api/plugins/grobid/feature-tokens`): reads the TEI's `encodingDesc` labels (`variant-id`, `revision`, `doc_id`) to locate the cached training ZIP, then extracts the first column of each non-blank line from the matching feature file. Returns `{"status": "ok", "tokens": [...], "count": N}` on success or `{"status": "no_feature_file", "tokens": [], "count": 0}` when the cache is missing or the labels are absent. Requires an authenticated session.
+**Feature-tokens endpoint** (`GET /api/plugins/grobid/feature-tokens`): reads the TEI's `encodingDesc` labels (`variant-id`, `revision`, `doc_id`) to locate the cached training ZIP, then extracts the first column of each non-blank line from the matching feature file. Returns `{"status": "ok", "tokens": [...], "count": N, "line_based": bool, "page_starts": [...]}` on success (`page_starts`: indices of the tokens whose row has `PAGESTART`, segmentation documents only) or `{"status": "no_feature_file", "tokens": [], "count": 0}` when the cache is missing or the labels are absent. Requires an authenticated session.
 
 ### Cache (`cache.py`)
 
@@ -224,3 +233,5 @@ Cache entries are cleaned up automatically via the `file.deleted` event bus hand
 ### Page layout of segmentation documents (`layout.py`)
 
 Segmentation documents (`grobid.training.segmentation`) are reviewed by page: the plugin declares `reviewUnits = "pages"` and the zone labels of the variant (`zoneLabels`, `config/review_units.py`), and registers a layout provider with the editor (plugin API 1.5). The provider reads the segmentation feature file from the cached `training.zip` of the document's extraction (revision, flavor and PDF hash from its `encodingDesc`), maps its rows to the `<lb/>`-delimited lines of `<text>` by their first token (the forward scan of the feature-file lint), and returns the page of every line (a page starts at every `PAGESTART` row) and its layout hints: position on the page, repeated on other pages, larger or smaller font, bold, italic, figure around, outside the main area, block start. Without a cached feature file, or when fewer than half of the lines match a row, the document has no layout; a fresh extraction provides it. On editors without the layout API, segmentation documents are reviewed by zone (`./*`).
+
+The editor's `zone_lines` module reads `<pb/>` in zone documents. The provider takes the pages from the document's `<pb/>` elements if it has any (`zone_lines.line_pages_from_page_breaks()`), and the hints from the feature file if it is cached. `insert_page_breaks_from_feature_file(xml, doc_id)` inserts `<pb n="…"/>` at the page starts of the feature file with `zone_lines.insert_page_breaks()`, which skips page starts that have an existing `<pb/>` within `PAGE_BREAK_VICINITY` lines (each existing `<pb/>` counts for the nearest page start); it returns None when that is not possible. The extractor calls it after every segmentation extraction (`GrobidTrainingExtractor._insert_page_breaks()`, which never fails the extraction), and `POST /api/plugins/grobid/insert-page-breaks` (`{stable_id, xml}` → `{status, xml, inserted, message}`) serves the TEI Wizard enhancement `enhancements/insert-page-breaks.js`, which the plugin registers with the `tei-wizard` plugin.

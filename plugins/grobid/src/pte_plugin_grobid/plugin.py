@@ -7,7 +7,7 @@ Provides a download endpoint for reviewers to download complete training package
 
 import logging
 from pathlib import Path
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 from fastapi_app.plugin_api import (
     clear_directory,
@@ -29,6 +29,9 @@ from .layout import SEGMENTATION, segmentation_layout
 from .cache import get_cache_dir
 from .extractor import GrobidTrainingExtractor
 
+if TYPE_CHECKING:
+    from fastapi_app.plugins.tei_wizard.plugin import TeiWizardPlugin
+
 logger = logging.getLogger(__name__)
 
 GROBID_RNG_URL = "https://raw.githubusercontent.com/kermitt2/grobid/refs/heads/master/grobid-home/schemas/rng/Grobid.rng"
@@ -36,6 +39,9 @@ GROBID_RNG_URL = "https://raw.githubusercontent.com/kermitt2/grobid/refs/heads/m
 
 class GrobidPlugin(Plugin):
     """Plugin that provides GROBID-based extraction."""
+
+    # the TEI Wizard the enhancements are registered with
+    _wizard: "TeiWizardPlugin | None" = None
 
     def __init__(self) -> None:
         init_plugin_config()
@@ -75,6 +81,7 @@ class GrobidPlugin(Plugin):
                     "required_roles": ["reviewer"],
                 },
             ],
+            "dependencies": ["tei-wizard"],
         }
 
     def get_endpoints(self) -> dict[str, Callable]:
@@ -111,12 +118,24 @@ class GrobidPlugin(Plugin):
             from fastapi_app.plugin_api import register_layout_provider
 
             register_layout_provider(SEGMENTATION, self.metadata["id"], segmentation_layout)
+        self._register_enhancements(context)
 
         # Register event handler for file deletion cache cleanup
         event_bus = get_event_bus()
         event_bus.on("file.deleted", self._on_file_deleted)
         
         logger.info("GROBID extractor plugin initialized")
+
+    def _register_enhancements(self, context: PluginContext) -> None:
+        """Register the TEI Wizard enhancement "Insert page breaks"."""
+        from fastapi_app.plugins.tei_wizard.plugin import TeiWizardPlugin
+
+        tei_wizard = context.get_dependency("tei-wizard")
+        if not isinstance(tei_wizard, TeiWizardPlugin):
+            logger.debug("tei-wizard dependency not available")
+            return
+        self._wizard = tei_wizard
+        tei_wizard.register_enhancement(Path(__file__).parent / "enhancements" / "insert-page-breaks.js", self.metadata["id"])
 
     async def cleanup(self) -> None:
         """Unregister the GROBID extractor and event handlers."""
@@ -129,6 +148,9 @@ class GrobidPlugin(Plugin):
             from fastapi_app.plugin_api import unregister_layout_provider
 
             unregister_layout_provider(SEGMENTATION)
+        if self._wizard is not None:
+            self._wizard.unregister_enhancements(self.metadata["id"])
+            self._wizard = None
 
         # Unregister event handler
         event_bus = get_event_bus()

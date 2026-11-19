@@ -49,6 +49,7 @@ from fastapi_app.lib.utils.debug_utils import log_extraction_response, log_xml_p
 from fastapi_app.plugin_api import get_config, get_settings
 from fastapi_app.lib.core.url_cache import UrlCache
 from pte_plugin_grobid.annotation_rules import build_editorial_decl_entries
+from pte_plugin_grobid.layout import SEGMENTATION
 
 
 class GrobidTrainingExtractor(BaseExtractor):
@@ -356,8 +357,28 @@ class GrobidTrainingExtractor(BaseExtractor):
         if "CDATA_PLACEHOLDER_FOR_INVALID_XML" in result_xml:
             cdata_content = f"<![CDATA[\n{raw_tei_content}\n]]>"
             result_xml = result_xml.replace("CDATA_PLACEHOLDER_FOR_INVALID_XML", cdata_content)
+        elif variant_id == SEGMENTATION and doc_id:
+            result_xml = self._insert_page_breaks(result_xml, doc_id)
 
         return result_xml
+
+    def _insert_page_breaks(self, xml: str, doc_id: str) -> str:
+        """
+        The segmentation document with `<pb n="…"/>` at the page starts of the feature file just
+        cached (unless GROBID put a `<pb/>` near them); unchanged if that is not possible.
+        """
+        from pte_plugin_grobid.layout import insert_page_breaks_from_feature_file
+
+        try:
+            result = insert_page_breaks_from_feature_file(xml, doc_id)
+        except Exception as e:  # noqa: BLE001 - page breaks are an addition, never a reason to fail the extraction
+            logger.warning(f"Page breaks not inserted into {doc_id}: {e}")
+            return xml
+        if result is None:
+            logger.info(f"Page breaks not inserted into {doc_id}: no matching feature file")
+            return xml
+        logger.info(f"Inserted {result[1]} page breaks into {doc_id}")
+        return result[0]
 
 
     def _build_encoding_desc(

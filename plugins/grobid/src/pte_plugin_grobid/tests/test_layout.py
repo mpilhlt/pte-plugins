@@ -16,6 +16,8 @@ from pte_plugin_grobid.config import has_layout_api
 from pte_plugin_grobid.layout import (
     FeatureRow,
     align,
+    feature_page_starts,
+    insert_page_breaks_from_feature_file,
     line_layout_from_rows,
     parse_row,
     read_feature_rows,
@@ -128,6 +130,71 @@ class TestProvider(unittest.TestCase):
     def test_other_variant(self):
         self.write_zip(FEATURES)
         self.assertIsNone(segmentation_layout(DOC.replace("grobid.training.segmentation", "grobid.training.header"), "doc1"))
+
+
+class TestPageBreaks(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        patcher = mock.patch("pte_plugin_grobid.cache.get_cache_dir", return_value=Path(self.tmp.name))
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def write_zip(self, features: str = FEATURES) -> Path:
+        target = Path(self.tmp.name) / "doc1_abc123"
+        target.mkdir()
+        with zipfile.ZipFile(target / "training.zip", "w") as zf:
+            zf.writestr("doc1.training.segmentation", features)
+        return target / "training.zip"
+
+    def test_insert_page_breaks(self):
+        self.write_zip()
+        result = insert_page_breaks_from_feature_file(DOC, "doc1")
+        assert result is not None
+        xml, count = result
+        self.assertEqual(count, 2)
+        self.assertIn('<pb n="1"/>\n    <front>A Sample Article', xml)
+        self.assertIn('<pb n="2"/>\n    <page>2</page>', xml)
+        # nothing to add on a second run
+        self.assertEqual(insert_page_breaks_from_feature_file(xml, "doc1"), (xml, 0))
+
+    def test_page_breaks_near_the_page_start_are_kept(self):
+        self.write_zip()
+        doc = DOC.replace("<body>Introduction text <lb/>more text <lb/></body>", '<body>Introduction text <lb/>more text <lb/><pb/></body>')
+        xml, count = insert_page_breaks_from_feature_file(doc, "doc1")
+        self.assertEqual(count, 1)
+        self.assertEqual(xml.count("<pb"), 2)
+        self.assertNotIn('<pb n="2"/>', xml)
+
+    def test_no_insertion_without_a_matching_feature_file(self):
+        self.assertIsNone(insert_page_breaks_from_feature_file(DOC, "doc1"))
+        self.write_zip(row("x") + "\n" + row("y") + "\n")
+        self.assertIsNone(insert_page_breaks_from_feature_file(DOC, "doc1"))
+        self.assertIsNone(insert_page_breaks_from_feature_file(DOC.replace("grobid.training.segmentation", "grobid.training.header"), "doc1"))
+
+    def test_pages_come_from_page_breaks(self):
+        self.write_zip()
+        xml, _ = insert_page_breaks_from_feature_file(DOC, "doc1")
+        # a <pb/> moved one line up wins over the feature file
+        moved = xml.replace('<pb n="2"/>\n    <page>2</page>', "<page>2</page>").replace("more text <lb/></body>", '<pb n="2"/>more text <lb/></body>')
+        layout = segmentation_layout(moved, "doc1")
+        self.assertEqual(layout.pages, [0, 0, 0, 1, 1, 1, 1, 1])
+        # hints still come from the feature file
+        self.assertEqual(layout.hints[0], ["block", "top", "larger", "bold"])
+
+    def test_pages_from_page_breaks_without_cache(self):
+        zip_path = self.write_zip()
+        xml, _ = insert_page_breaks_from_feature_file(DOC, "doc1")
+        zip_path.unlink()
+        layout = segmentation_layout(xml, "doc1")
+        self.assertIsNotNone(layout)
+        self.assertEqual(layout.pages, [0, 0, 0, 0, 1, 1, 1, 1])
+        self.assertEqual(layout.hints, [])
+
+    def test_feature_page_starts(self):
+        zip_path = self.write_zip(FEATURES.replace("\n", "\n\n", 1))
+        self.assertEqual(feature_page_starts(zip_path), [0, 4])
+        self.assertIsNone(feature_page_starts(Path(self.tmp.name) / "missing.zip"))
 
 
 if __name__ == "__main__":

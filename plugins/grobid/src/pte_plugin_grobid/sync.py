@@ -22,7 +22,8 @@ def parse_encoding_labels(xml_content: str) -> dict[str, str]:
     Returns a dict with whichever of these keys are present:
     ``model``, ``flavor``, ``variant-id``, ``revision``, ``pdf-hash``.
     """
-    parser = etree.XMLParser(recover=True)
+    # the content may come from a request: no DTDs, external or entity resolution
+    parser = etree.XMLParser(recover=True, resolve_entities=False, load_dtd=False, no_network=True)
     try:
         root = etree.fromstring(xml_content.encode("utf-8"), parser)
     except etree.XMLSyntaxError:
