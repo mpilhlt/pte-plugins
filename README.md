@@ -48,11 +48,12 @@ If the operator enabled runtime install (`PTE_PLUGIN_INSTALL=1`), administrators
 
 ## Releasing a plugin
 
-Releases are what the plugin manager installs, and they are triggered by commit messages, not by hand. A commit releases a plugin only when its Conventional Commits **scope is exactly that plugin's id** (the `id` field in `pte-plugins.json`, e.g. `grobid` or `archival-edition`):
+Releases are what the plugin manager installs, and they are triggered by commit messages, not by hand. A commit releases a plugin only when its Conventional Commits **scope is that plugin's id** (the `id` field in `pte-plugins.json`, e.g. `grobid` or `archival-edition`), or a comma-separated list of plugin ids that includes it:
 
 ```text
-fix(grobid): handle a broken bibl split        -> patch release of grobid
-feat(archival-edition): support TEI facsimile  -> minor release of archival-edition
+fix(grobid): handle a broken bibl split            -> patch release of grobid
+feat(archival-edition): support TEI facsimile      -> minor release of archival-edition
+feat(grobid,annotation-review): review by page     -> minor releases of grobid and annotation-review
 ```
 
 A breaking change needs a `BREAKING CHANGE:` footer (not the `type(scope)!:` shorthand, which this project's parser configuration does not recognize) to trigger a major release:

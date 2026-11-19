@@ -57,7 +57,15 @@ test('parses scope with the same header pattern @semantic-release/commit-analyze
   // must use the same parserOpts the real analyzer uses, or a commit the real analyzer can
   // read could be invisible to our filter for reasons that have nothing to do with scope.
   const commits = [{ message: 'fix(a,b): multi scope' }];
-  assert.deepEqual(filterByScope(commits, 'a,b'), commits);
+  assert.deepEqual(filterByScope(commits, 'a'), commits);
+});
+
+test('a comma-separated scope counts for each plugin it names', () => {
+  const commits = [{ message: 'feat(grobid, annotation-review): by page' }, { message: 'fix(grobid-extra,other): x' }];
+  assert.deepEqual(filterByScope(commits, 'grobid'), [commits[0]]);
+  assert.deepEqual(filterByScope(commits, 'annotation-review'), [commits[0]]);
+  assert.deepEqual(filterByScope(commits, 'grobid-extra'), [commits[1]]);
+  assert.deepEqual(filterByScope(commits, 'a,b'), []);
 });
 
 test('analyzeCommits delegates to @semantic-release/commit-analyzer, counting only scoped commits', async () => {
