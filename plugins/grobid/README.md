@@ -14,8 +14,6 @@ Extracted training data is cached per document, GROBID revision, flavor and PDF 
 
 Reviewers can download a complete training package for a collection as a ZIP file that mirrors the `grobid-trainer/resources/dataset/` directory structure and can be dropped directly into that directory.
 
-The plugin also registers a `split-bibl` enhancement with the TEI Wizard plugin, if available.
-
 ### Supported variants
 
 | Variant ID | GROBID model path |

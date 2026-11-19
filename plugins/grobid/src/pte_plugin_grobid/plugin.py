@@ -23,7 +23,6 @@ from fastapi_app.plugin_api import (
     unregister_schema_config,
 )
 from pte_plugin_grobid.annotation_rules import GrobidRulesProvider
-from fastapi_app.plugins.tei_wizard.plugin import TeiWizardPlugin
 from .config import has_layout_api, init_plugin_config
 from .layout import SEGMENTATION, segmentation_layout
 
@@ -76,7 +75,6 @@ class GrobidPlugin(Plugin):
                     "required_roles": ["reviewer"],
                 },
             ],
-            "dependencies": ["tei-wizard"],
         }
 
     def get_endpoints(self) -> dict[str, Callable]:
@@ -118,20 +116,6 @@ class GrobidPlugin(Plugin):
         event_bus = get_event_bus()
         event_bus.on("file.deleted", self._on_file_deleted)
         
-        """Register the TEI header enrichment enhancement with tei-wizard."""
-        # todo: create auto-discover reusable utility func
-        tei_wizard = context.get_dependency("tei-wizard")
-        if isinstance(tei_wizard, TeiWizardPlugin):
-            self._wizard = tei_wizard
-            for enhancement_filename in ["split-bibl.js", "segment-footnotes.js", "desegment-footnotes.js"]:
-                enhancement_file = Path(__file__).parent / "enhancements" / enhancement_filename
-                if enhancement_file.exists():
-                    tei_wizard.register_enhancement(enhancement_file, self.metadata["id"])
-                else:
-                    logger.warning(f"Enhancement file not found: {enhancement_file}")
-        else:
-            logger.debug("tei-wizard dependency not available")
-
         logger.info("GROBID extractor plugin initialized")
 
     async def cleanup(self) -> None:
@@ -149,11 +133,6 @@ class GrobidPlugin(Plugin):
         # Unregister event handler
         event_bus = get_event_bus()
         event_bus.off("file.deleted", self._on_file_deleted)
-
-        wizard = getattr(self, "_wizard", None)
-        if wizard is not None:
-            wizard.unregister_enhancements(self.metadata["id"])
-            self._wizard = None
 
         logger.info("GROBID extractor plugin cleaned up")
 
