@@ -255,15 +255,6 @@ def has_layout_api() -> bool:
     return True
 
 
-def has_page_break_api() -> bool:
-    """Whether the editor reads `<pb/>` in zone documents and can insert them (plugin API 1.6); older editors refuse `<pb/>` there."""
-    try:
-        from fastapi_app.plugin_api import zone_lines
-    except ImportError:
-        return False
-    return hasattr(zone_lines, "insert_page_breaks")
-
-
 def get_review_units() -> ReviewUnits:
     """Return the path of the review units below TEI/text for each variant (unit review mode)."""
     units = dict(REVIEW_UNITS)

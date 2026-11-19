@@ -15,12 +15,10 @@ from fastapi.testclient import TestClient
 
 from fastapi_app.lib.core.dependencies import get_auth_manager, get_db, get_session_manager
 from fastapi_app.lib.models.models import FileMetadata
-from pte_plugin_grobid.config import has_page_break_api
 from pte_plugin_grobid.routes import router
 from pte_plugin_grobid.tests.test_layout import DOC, FEATURES
 
 
-@unittest.skipUnless(has_page_break_api(), "needs <pb/> support in zone documents (plugin API 1.6)")
 class InsertPageBreaksRouteTestCase(unittest.TestCase):
     def setUp(self):
         self.app = FastAPI()

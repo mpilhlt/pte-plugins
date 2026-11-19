@@ -199,7 +199,7 @@ class InsertPageBreaksRequest(BaseModel):
 class InsertPageBreaksResponse(BaseModel):
     """The document with page breaks, or why there are none."""
 
-    status: str = Field(..., description="ok, or unsupported (the editor cannot read <pb/> in zone documents), not_segmentation, no_feature_file")
+    status: str = Field(..., description="ok, not_segmentation or no_feature_file")
     xml: str | None = Field(default=None, description="The document with the inserted <pb/> elements (status ok)")
     inserted: int = Field(default=0, description="Number of <pb/> elements inserted")
     message: str = Field(default="", description="Explanation if status is not ok")
@@ -217,15 +217,12 @@ async def insert_page_breaks(
     "Insert page breaks").
     """
     from fastapi_app.lib.repository.file_repository import FileRepository
-    from pte_plugin_grobid.config import has_page_break_api
     from pte_plugin_grobid.layout import SEGMENTATION, insert_page_breaks_from_feature_file
     from pte_plugin_grobid.sync import parse_encoding_labels
 
     file_meta = FileRepository(db).get_file_by_stable_id(request.stable_id)
     if not file_meta or not file_meta.doc_id:
         raise HTTPException(status_code=404, detail="File not found")
-    if not has_page_break_api():
-        return InsertPageBreaksResponse(status="unsupported", message="This version of the editor does not support page breaks in segmentation documents.")
     if parse_encoding_labels(request.xml).get("variant-id") != SEGMENTATION:
         return InsertPageBreaksResponse(status="not_segmentation", message="Page breaks are only inserted into GROBID segmentation documents.")
     result = insert_page_breaks_from_feature_file(request.xml, file_meta.doc_id)

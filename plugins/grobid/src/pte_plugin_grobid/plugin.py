@@ -23,7 +23,7 @@ from fastapi_app.plugin_api import (
     unregister_schema_config,
 )
 from pte_plugin_grobid.annotation_rules import GrobidRulesProvider
-from .config import has_layout_api, has_page_break_api, init_plugin_config
+from .config import has_layout_api, init_plugin_config
 from .layout import SEGMENTATION, segmentation_layout
 
 from .cache import get_cache_dir
@@ -127,9 +127,7 @@ class GrobidPlugin(Plugin):
         logger.info("GROBID extractor plugin initialized")
 
     def _register_enhancements(self, context: PluginContext) -> None:
-        """Register the TEI Wizard enhancement "Insert page breaks" (editors that read <pb/> in zone documents only)."""
-        if not has_page_break_api():
-            return
+        """Register the TEI Wizard enhancement "Insert page breaks"."""
         from fastapi_app.plugins.tei_wizard.plugin import TeiWizardPlugin
 
         tei_wizard = context.get_dependency("tei-wizard")

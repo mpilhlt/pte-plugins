@@ -15,7 +15,7 @@ forward scan the feature-file lint uses (`extensions/grobid-sync.js`). Since tex
 never change, the mapping holds for every later version of the document. Lines without a row
 inherit the page and hints of the line before. A page starts at every row with `PAGESTART`.
 
-With plugin API 1.6, the extractor inserts `<pb n="…"/>` at these page starts
+The extractor inserts `<pb n="…"/>` at these page starts
 (`insert_page_breaks_from_feature_file()`), and the pages of a document with `<pb/>` come from
 them, so that they no longer depend on the cache.
 
@@ -273,19 +273,17 @@ def _feature_layout(doc, xml: str, doc_id: str) -> tuple[list[int], list[list[st
 def segmentation_layout(xml: str, doc_id: str):  # -> LineLayout | None (core type, imported lazily)
     """
     Layout provider of `grobid.training.segmentation`: the line layout of a document, or None.
-    The pages come from the document's `<pb/>` elements if it has any (editors with plugin API
-    1.6), else from the cached feature file of its extraction; the layout hints always come from
-    the feature file (none without it).
+    The pages come from the document's `<pb/>` elements if it has any, else from the cached
+    feature file of its extraction; the layout hints always come from the feature file (none
+    without it).
     """
     from fastapi_app.plugin_api import LineLayout, zone_lines
-
-    from pte_plugin_grobid.config import has_page_break_api
 
     doc = _zone_document(xml, doc_id)
     if doc is None:
         return None
     feature = _feature_layout(doc, xml, doc_id)
-    pages = zone_lines.line_pages_from_page_breaks(doc) if has_page_break_api() else None
+    pages = zone_lines.line_pages_from_page_breaks(doc)
     if pages is not None:
         return LineLayout(pages=pages, hints=feature[1] if feature else [])
     if feature is None:
@@ -297,14 +295,9 @@ def insert_page_breaks_from_feature_file(xml: str, doc_id: str) -> tuple[str, in
     """
     A segmentation document with `<pb n="…"/>` at the page starts of the cached feature file of its
     extraction (see the editor's `zone_lines.insert_page_breaks()`, which skips page starts with a
-    `<pb/>` nearby), and the number of page breaks inserted; None if the editor does not support
-    `<pb/>` in zone documents, the document is another variant or cannot be read as zones, or its
-    feature file is missing or does not match its lines.
+    `<pb/>` nearby), and the number of page breaks inserted; None if the document is another
+    variant or cannot be read as zones, or its feature file is missing or does not match its lines.
     """
-    from pte_plugin_grobid.config import has_page_break_api
-
-    if not has_page_break_api():
-        return None
     from fastapi_app.plugin_api import zone_lines
 
     doc = _zone_document(xml, doc_id)

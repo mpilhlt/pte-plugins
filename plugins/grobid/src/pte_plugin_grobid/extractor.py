@@ -375,7 +375,7 @@ class GrobidTrainingExtractor(BaseExtractor):
             logger.warning(f"Page breaks not inserted into {doc_id}: {e}")
             return xml
         if result is None:
-            logger.info(f"Page breaks not inserted into {doc_id}: no matching feature file, or the editor does not support <pb/> in zone documents")
+            logger.info(f"Page breaks not inserted into {doc_id}: no matching feature file")
             return xml
         logger.info(f"Inserted {result[1]} page breaks into {doc_id}")
         return result[0]

@@ -11,7 +11,7 @@ import zipfile
 from pathlib import Path
 from unittest import mock
 
-from pte_plugin_grobid.config import has_layout_api, has_page_break_api
+from pte_plugin_grobid.config import has_layout_api
 
 from pte_plugin_grobid.layout import (
     FeatureRow,
@@ -132,7 +132,6 @@ class TestProvider(unittest.TestCase):
         self.assertIsNone(segmentation_layout(DOC.replace("grobid.training.segmentation", "grobid.training.header"), "doc1"))
 
 
-@unittest.skipUnless(has_page_break_api(), "needs <pb/> support in zone documents (plugin API 1.6)")
 class TestPageBreaks(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
