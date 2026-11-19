@@ -15,6 +15,8 @@ NavigationXPath = dict[str, list[XPathEntry]]
 
 NAVIGATION_XPATH: NavigationXPath = {
     "grobid.training.segmentation": [
+        # pages: the editor navigates milestones such as <pb/> by the text up to the next one
+        {"value": "//tei:text//tei:pb", "label": "Page (&lt;pb&gt;)"},
         {"value": "//tei:listBibl", "label": "&lt;listBibl&gt;"},
     ],
     "grobid.training.references.referenceSegmenter": [

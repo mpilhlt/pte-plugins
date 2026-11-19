@@ -700,7 +700,7 @@ describe('node-scoped review', () => {
       callPluginApiImpl: async (endpoint, method, params) => { calls.push(params); return { findings: [] }; },
     });
     const from = docText.indexOf('<bibl>Two');
-    ext._deps.xmleditor.getSyntaxNodeByXpath = (xpath) => {
+    ext._deps.xmleditor.getRangeByXpath = (xpath) => {
       assert.strictEqual(xpath, '//tei:bibl[2]');
       return { from, to: from + '<bibl>Two</bibl>'.length };
     };
@@ -715,7 +715,7 @@ describe('node-scoped review', () => {
       defaultModel: { providerId: 'p', modelId: 'm' },
       docText,
     });
-    ext._deps.xmleditor.getSyntaxNodeByXpath = () => { throw new Error('No XML node found'); };
+    ext._deps.xmleditor.getRangeByXpath = () => { throw new Error('No XML node found'); };
     assert.strictEqual(await ext.review(undefined, { xpath: '//tei:bibl[9]' }), null);
     assert.strictEqual(notifyCalls.length, 1);
     assert.match(notifyCalls[0][0], /selected node/);

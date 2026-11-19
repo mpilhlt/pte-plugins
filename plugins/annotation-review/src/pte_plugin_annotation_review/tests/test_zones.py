@@ -73,6 +73,15 @@ class TestWindows(ZoneTestCase):
         assert source is not None
         self.assertEqual([[p.number for p in w] for w in source.windows], [[3]])
 
+    def test_scope_of_a_page_reviews_that_page(self):
+        # the editor's range of a <pb/> milestone: up to the next <pb/>, without the whitespace before it
+        doc, _ = zone_lines.insert_page_breaks(DOC, zone_lines.zone_labels(LABELS), PAGES)
+        start = doc.index('<pb n="3"/>')
+        scope = doc[start:doc.index('<pb n="4"/>')].rstrip()
+        source = zone_source(doc, "doc1", scope)
+        assert source is not None
+        self.assertEqual([[p.number for p in w] for w in source.windows], [[3]])
+
     def test_scope_outside_text_is_reviewed_as_xml(self):
         self.assertIsNone(zone_source(DOC, "doc1", '<label type="flavor">default</label>'))
 

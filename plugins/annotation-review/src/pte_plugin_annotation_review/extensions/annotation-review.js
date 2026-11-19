@@ -7,7 +7,8 @@
  * merged into the editor's diagnostic set, each with a "Propose fix" action
  * that opens the merge view and a `replacement` that the diagnostics drawer
  * applies directly. When node navigation is on (the `xpath` state is
- * set), the "LLM Review" button of focus mode reviews only the navigated-to node; the
+ * set), the "LLM Review" button of focus mode reviews only the navigated-to node (for a
+ * milestone such as `<pb/>`, the text up to the next one, e.g. a page); the
  * menu item always reviews the whole document. While the editor's unit review mode is
  * on, the model also records its result as a reviewer: the review units of each chunk
  * are marked OK, or not OK with the rationale of the findings in them. Zone documents
@@ -549,15 +550,16 @@ export default class AnnotationReviewExtension extends FrontendExtensionPlugin {
   }
 
   /**
-   * Return the raw XML of the node the given xpath points to, as it appears in
-   * the given editor text, or null (user notified) if it cannot be resolved.
+   * Return the raw XML of the node the given navigation xpath points to, as it appears in the
+   * given editor text, or null (user notified) if it cannot be resolved. For a milestone such as
+   * `<pb/>`, this is the text up to the next one: the page.
    * @param {string} xpath
    * @param {string} docText
    * @returns {string|null}
    */
   _nodeText(xpath, docText) {
     try {
-      const { from, to } = this.getDependency('xmleditor').getSyntaxNodeByXpath(xpath);
+      const { from, to } = this.getDependency('xmleditor').getRangeByXpath(xpath);
       return docText.slice(from, to);
     } catch (err) {
       this.getDependency('sl-utils').notify(
