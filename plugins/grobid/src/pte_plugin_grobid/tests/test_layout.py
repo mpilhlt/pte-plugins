@@ -153,8 +153,8 @@ class TestPageBreaks(unittest.TestCase):
         assert result is not None
         xml, count = result
         self.assertEqual(count, 2)
-        self.assertIn('<front><pb n="1"/>A Sample Article', xml)
-        self.assertIn('<page><pb n="2"/>2</page>', xml)
+        self.assertIn('<pb n="1"/>\n    <front>A Sample Article', xml)
+        self.assertIn('<pb n="2"/>\n    <page>2</page>', xml)
         # nothing to add on a second run
         self.assertEqual(insert_page_breaks_from_feature_file(xml, "doc1"), (xml, 0))
 
@@ -176,7 +176,7 @@ class TestPageBreaks(unittest.TestCase):
         self.write_zip()
         xml, _ = insert_page_breaks_from_feature_file(DOC, "doc1")
         # a <pb/> moved one line up wins over the feature file
-        moved = xml.replace('<page><pb n="2"/>2</page>', "<page>2</page>").replace("more text <lb/></body>", '<pb n="2"/>more text <lb/></body>')
+        moved = xml.replace('<pb n="2"/>\n    <page>2</page>', "<page>2</page>").replace("more text <lb/></body>", '<pb n="2"/>more text <lb/></body>')
         layout = segmentation_layout(moved, "doc1")
         self.assertEqual(layout.pages, [0, 0, 0, 1, 1, 1, 1, 1])
         # hints still come from the feature file

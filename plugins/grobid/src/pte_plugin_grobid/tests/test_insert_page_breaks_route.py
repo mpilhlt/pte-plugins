@@ -67,7 +67,7 @@ class InsertPageBreaksRouteTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         body = response.json()
         self.assertEqual((body["status"], body["inserted"]), ("ok", 2))
-        self.assertIn('<page><pb n="2"/>2</page>', body["xml"])
+        self.assertIn('<pb n="2"/>\n    <page>2</page>', body["xml"])
 
     def test_without_feature_file(self):
         self.assertEqual(self.post().json()["status"], "no_feature_file")

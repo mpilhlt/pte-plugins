@@ -13,9 +13,11 @@ global.FrontendExtensionPlugin = class {};
 const { pageBreaksOf, alignLines, pageBreakDiagnostics } = await import('../extensions/grobid-sync.js');
 
 const DOC = `<TEI><teiHeader/><text>
-  <front><pb n="1"/>A Sample Article <lb/>Jane Doe <lb/></front>
+  <pb n="1"/>
+  <front>A Sample Article <lb/>Jane Doe <lb/></front>
   <body>Introduction text <lb/>more text <lb/></body>
-  <page><pb n="2"/>2</page> <note place="headnote">Doe, A Sample Article <lb/></note>
+  <pb n="2"/>
+  <page>2</page> <note place="headnote">Doe, A Sample Article <lb/></note>
   <body>Second page <lb/>end of page <lb/></body>
 </text></TEI>`;
 const FEATURE_TOKENS = ['A', 'Jane', 'Introduction', 'more', '2', 'Second', 'end'];
@@ -57,7 +59,7 @@ describe('grobid-sync page breaks', () => {
   it('accepts page breaks at or near the page starts', () => {
     const lines = lineTokens(DOC);
     assert.deepStrictEqual(pageBreakDiagnostics(lines, pageBreaksOf(DOC, lines), FEATURE_TOKENS, PAGE_STARTS), []);
-    const near = DOC.replace('<page><pb n="2"/>2</page>', '<page>2</page>').replace('more text <lb/>', '<pb n="2"/>more text <lb/>');
+    const near = DOC.replace('<pb n="2"/>\n  <page>2</page>', '<page>2</page>').replace('more text <lb/>', '<pb n="2"/>more text <lb/>');
     const nearLines = lineTokens(near);
     assert.deepStrictEqual(pageBreakDiagnostics(nearLines, pageBreaksOf(near, nearLines), FEATURE_TOKENS, PAGE_STARTS), []);
   });
