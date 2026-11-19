@@ -29,6 +29,136 @@ const NAMED_ENTITIES = { amp: '&', lt: '<', gt: '>', apos: "'", quot: '"' };
 // Lookahead window for the forward-scan diff recovery.
 const WINDOW = 10;
 
+// Lookahead of the line alignment for page breaks, as `WINDOW` in layout.py
+const LINE_WINDOW = 5;
+
+// Lines before or after a page start within which a <pb/> counts as its page break, as
+// PAGE_BREAK_VICINITY in the editor's zone_lines.py
+export const PAGE_BREAK_VICINITY = 3;
+
+const PB_RE = /<(?:[\w.-]+:)?pb\b((?:"[^"]*"|'[^']*'|[^>"'])*)\/?>/g;
+
+/**
+ * @typedef {object} LineToken
+ * @property {string} token - First word of the line
+ * @property {number} from - Offset of the word in the XML
+ * @property {number} to - Offset after the word
+ */
+
+/**
+ * @typedef {object} PageBreakTag
+ * @property {number} from - Offset of the tag in the XML
+ * @property {number} to - Offset after the tag
+ * @property {string|null} n - Its `n` attribute
+ * @property {number} line - Index of the line (in the line tokens) that starts its page
+ */
+
+/**
+ * The `<pb/>` elements in `<text>`, each with the line whose page it starts: the first line
+ * whose first word follows it.
+ * @param {string} xmlText
+ * @param {LineToken[]} lines - The line tokens of the document (see `#extractFirstLineTokens`)
+ * @returns {PageBreakTag[]}
+ */
+export function pageBreaksOf(xmlText, lines) {
+  const openMatch = /<text[\s>\/]/.exec(xmlText);
+  if (!openMatch) return [];
+  const closeIdx = xmlText.lastIndexOf('</text>');
+  const end = closeIdx !== -1 ? closeIdx : xmlText.length;
+  /** @type {PageBreakTag[]} */
+  const result = [];
+  let line = 0;
+  PB_RE.lastIndex = openMatch.index;
+  for (let m; (m = PB_RE.exec(xmlText)) && m.index < end;) {
+    while (line < lines.length && /** @type {LineToken} */ (lines[line]).from < m.index) line++;
+    const n = /\bn\s*=\s*(?:"([^"]*)"|'([^']*)')/.exec(m[1] ?? '');
+    result.push({ from: m.index, to: m.index + m[0].length, n: n ? (n[1] ?? n[2] ?? null) : null, line });
+  }
+  return result;
+}
+
+/**
+ * The feature file row of every line (null for lines without a row), by first tokens: the
+ * forward scan of `align()` in layout.py.
+ * @param {string[]} lineTokens
+ * @param {string[]} rowTokens
+ * @returns {(number|null)[]}
+ */
+export function alignLines(lineTokens, rowTokens) {
+  /** @type {(number|null)[]} */
+  const result = new Array(lineTokens.length).fill(null);
+  let li = 0;
+  let ri = 0;
+  while (li < lineTokens.length && ri < rowTokens.length) {
+    if (lineTokens[li] === rowTokens[ri]) {
+      result[li++] = ri++;
+      continue;
+    }
+    let skipped = false;
+    for (let d = 1; d <= LINE_WINDOW; d++) {
+      if (ri + d < rowTokens.length && rowTokens[ri + d] === lineTokens[li]) {
+        ri += d;
+        skipped = true;
+        break;
+      }
+      if (li + d < lineTokens.length && lineTokens[li + d] === rowTokens[ri]) {
+        li += d;
+        skipped = true;
+        break;
+      }
+    }
+    if (!skipped) result[li++] = ri++;
+  }
+  return result;
+}
+
+/**
+ * Diagnostics for `<pb/>` elements that disagree with the page starts of the feature file: a page
+ * start without a `<pb/>` within PAGE_BREAK_VICINITY lines, a `<pb/>` without a page start within
+ * that distance, and a `<pb/>` whose `n` is not the number of its page. Documents without `<pb/>`
+ * get none.
+ * @param {LineToken[]} lines - The line tokens of the document
+ * @param {PageBreakTag[]} pageBreaks - Its `<pb/>` elements
+ * @param {string[]} featureTokens - First tokens of the feature file rows
+ * @param {number[]} pageStarts - Indices of the rows that start a page
+ * @returns {Diagnostic[]}
+ */
+export function pageBreakDiagnostics(lines, pageBreaks, featureTokens, pageStarts) {
+  if (pageBreaks.length === 0 || pageStarts.length === 0 || lines.length === 0) return [];
+  const mapping = alignLines(lines.map(l => l.token), featureTokens);
+  // the first line at or after each page start row
+  /** @type {{line: number, page: number}[]} */
+  const starts = [];
+  let line = 0;
+  pageStarts.forEach((row, index) => {
+    while (line < lines.length && (mapping[line] === null || /** @type {number} */ (mapping[line]) < row)) line++;
+    if (line < lines.length && !starts.some(s => s.line === line)) starts.push({ line, page: index + 1 });
+  });
+  /** @type {Diagnostic[]} */
+  const diagnostics = [];
+  for (const start of starts) {
+    if (pageBreaks.some(pb => Math.abs(pb.line - start.line) <= PAGE_BREAK_VICINITY)) continue;
+    const at = /** @type {LineToken} */ (lines[start.line]);
+    diagnostics.push({
+      from: at.from,
+      to: at.to,
+      severity: 'warning',
+      message: `Page ${start.page} of the PDF starts here, but there is no <pb/> (TEI Wizard: "Insert page breaks")`
+    });
+  }
+  for (const pb of pageBreaks) {
+    const near = starts
+      .filter(s => Math.abs(s.line - pb.line) <= PAGE_BREAK_VICINITY)
+      .sort((a, b) => Math.abs(a.line - pb.line) - Math.abs(b.line - pb.line) || a.line - b.line)[0];
+    if (!near) {
+      diagnostics.push({ from: pb.from, to: pb.to, severity: 'warning', message: 'This <pb/> is not at a page start of the PDF (feature file)' });
+    } else if (pb.n !== null && /^\d+$/.test(pb.n) && Number(pb.n) !== near.page) {
+      diagnostics.push({ from: pb.from, to: pb.to, severity: 'warning', message: `This <pb/> starts page ${near.page} of the PDF, not page ${pb.n}` });
+    }
+  }
+  return diagnostics;
+}
+
 export default class GrobidSyncExtension extends FrontendExtensionPlugin {
   /** @param {PluginContext} context */
   constructor(context) {
@@ -36,9 +166,10 @@ export default class GrobidSyncExtension extends FrontendExtensionPlugin {
   }
 
   /**
-   * Cache: stable_id → {tokens, lineBased}, or null when the file has no
-   * associated feature file (non-GROBID or cache missing).
-   * @type {Map<string, {tokens: string[], lineBased: boolean}|null>}
+   * Cache: stable_id → {tokens, lineBased, pageStarts}, or null when the file has no
+   * associated feature file (non-GROBID or cache missing). pageStarts: indices of the
+   * tokens whose row starts a page (segmentation only).
+   * @type {Map<string, {tokens: string[], lineBased: boolean, pageStarts: number[]}|null>}
    */
   #cache = new Map();
 
@@ -69,7 +200,7 @@ export default class GrobidSyncExtension extends FrontendExtensionPlugin {
         `/api/plugins/grobid/feature-tokens?stable_id=${encodeURIComponent(newStableId)}`
       );
       this.#cache.set(newStableId, result.status === 'ok'
-        ? { tokens: result.tokens, lineBased: result.line_based === true }
+        ? { tokens: result.tokens, lineBased: result.line_based === true, pageStarts: Array.isArray(result.page_starts) ? result.page_starts : [] }
         : null);
     } catch (_) {
       this.#cache.set(newStableId, null);
@@ -87,12 +218,16 @@ export default class GrobidSyncExtension extends FrontendExtensionPlugin {
   #lintSource(view) {
     const cached = this.#cache.get(this.#currentStableId);
     if (!cached) return [];
-    const { tokens: featureTokens, lineBased } = cached;
+    const { tokens: featureTokens, lineBased, pageStarts } = cached;
     const xmlText = view.state.doc.toString();
     const xmlTokens = lineBased
       ? this.#extractFirstLineTokens(xmlText)
       : this.#extractXmlTokens(xmlText);
-    return this.#diffTokens(featureTokens, xmlTokens);
+    const diagnostics = this.#diffTokens(featureTokens, xmlTokens);
+    if (lineBased && pageStarts.length > 0) {
+      diagnostics.push(...pageBreakDiagnostics(xmlTokens, pageBreaksOf(xmlText, xmlTokens), featureTokens, pageStarts));
+    }
+    return diagnostics;
   }
 
   /**

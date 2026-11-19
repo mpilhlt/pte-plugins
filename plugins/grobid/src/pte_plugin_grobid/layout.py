@@ -15,6 +15,10 @@ forward scan the feature-file lint uses (`extensions/grobid-sync.js`). Since tex
 never change, the mapping holds for every later version of the document. Lines without a row
 inherit the page and hints of the line before. A page starts at every row with `PAGESTART`.
 
+With plugin API 1.6, the extractor inserts `<pb n="…"/>` at these page starts
+(`insert_page_breaks_from_feature_file()`), and the pages of a document with `<pb/>` come from
+them, so that they no longer depend on the cache.
+
 The columns are found by their values where possible (block, page and font size status), and the
 others relative to the font size column, so that flavors which append columns are read as well.
 """
@@ -175,7 +179,7 @@ def line_layout_from_rows(line_tokens: list[str | None], rows: list[FeatureRow])
         return None
     mapping = align(line_tokens, [r.token for r in rows])
     with_text = [i for i, t in enumerate(line_tokens) if t is not None]
-    matched = sum(1 for i in with_text if mapping[i] is not None and rows[mapping[i]].token == line_tokens[i])  # type: ignore[index]
+    matched = sum(1 for i in with_text if (r := mapping[i]) is not None and rows[r].token == line_tokens[i])
     if not with_text or matched / len(with_text) < MIN_MATCHED_SHARE:
         return None
     row_pages: list[int] = []
@@ -202,34 +206,111 @@ def first_token(text: str) -> str | None:
     return words[0] if words else None
 
 
-def segmentation_layout(xml: str, doc_id: str):  # -> LineLayout | None (core type, imported lazily)
+def feature_page_starts(zip_path: Path, suffix: str = "segmentation") -> list[int] | None:
     """
-    Layout provider of `grobid.training.segmentation`: the line layout of a document from the
-    cached feature file of its extraction (revision, flavor and PDF hash from its encodingDesc), or None.
+    The indices of the feature file rows that start a page, counted as the tokens of
+    `sync.extract_feature_tokens()` (non-blank rows); None if the cached training ZIP has no
+    feature file for `suffix`.
     """
-    from fastapi_app.plugin_api import LineLayout, zone_lines
+    if not zip_path.exists():
+        return None
+    entry_suffix = f".training.{suffix}"
+    try:
+        with zipfile.ZipFile(zip_path, "r") as zf:
+            entry = next((n for n in zf.namelist() if n.endswith(entry_suffix) and not n.endswith(".tei.xml")), None)
+            if entry is None:
+                return None
+            raw = zf.read(entry).decode("utf-8", errors="replace")
+    except (zipfile.BadZipFile, KeyError, OSError):
+        return None
+    starts: list[int] = []
+    index = 0
+    for line in raw.splitlines():
+        columns = line.split()
+        if not columns:
+            continue
+        row = parse_row(columns)
+        if row is not None and row.page_start:
+            starts.append(index)
+        index += 1
+    return starts
 
+
+def _zone_document(xml: str, doc_id: str):  # -> ZoneDocument | None (core type, imported lazily)
+    """The `<text>` of a segmentation document as zones, or None if it is another variant or cannot be read as zones."""
+    from fastapi_app.plugin_api import zone_lines
+
+    from pte_plugin_grobid.sync import parse_encoding_labels
+
+    if parse_encoding_labels(xml).get("variant-id", SEGMENTATION) != SEGMENTATION:
+        return None
+    try:
+        return zone_lines.read_zone_document(xml, zone_lines.zone_labels(ZONE_LABELS[SEGMENTATION]))
+    except ValueError as e:
+        logger.info(f"grobid layout: {doc_id} cannot be read as zones: {e}")
+        return None
+
+
+def _feature_layout(doc, xml: str, doc_id: str) -> tuple[list[int], list[list[str]]] | None:
+    """(page index, hints) of every line of a zone document from the cached feature file of its extraction (revision, flavor and PDF hash from its encodingDesc), or None."""
     from pte_plugin_grobid.cache import get_cache_zip
     from pte_plugin_grobid.config import get_feature_suffix
     from pte_plugin_grobid.sync import parse_encoding_labels
 
-    labels = parse_encoding_labels(xml)
-    if labels.get("variant-id", SEGMENTATION) != SEGMENTATION:
-        return None
-    zip_path = get_cache_zip(doc_id, labels)
+    zip_path = get_cache_zip(doc_id, parse_encoding_labels(xml))
     if zip_path is None:
         return None
     rows = read_feature_rows(zip_path, get_feature_suffix(SEGMENTATION))
     if rows is None:
         return None
-    try:
-        doc = zone_lines.read_zone_document(xml, zone_lines.zone_labels(ZONE_LABELS[SEGMENTATION]))
-    except ValueError as e:
-        logger.info(f"grobid layout: {doc_id} cannot be read as zones: {e}")
-        return None
     tokens = [first_token(" ".join(p.text for p in line.pieces)) for line in doc.lines]
     result = line_layout_from_rows(tokens, rows)
     if result is None:
         logger.warning(f"grobid layout: the feature file of {doc_id} does not match the document's lines")
+    return result
+
+
+def segmentation_layout(xml: str, doc_id: str):  # -> LineLayout | None (core type, imported lazily)
+    """
+    Layout provider of `grobid.training.segmentation`: the line layout of a document, or None.
+    The pages come from the document's `<pb/>` elements if it has any (editors with plugin API
+    1.6), else from the cached feature file of its extraction; the layout hints always come from
+    the feature file (none without it).
+    """
+    from fastapi_app.plugin_api import LineLayout, zone_lines
+
+    from pte_plugin_grobid.config import has_page_break_api
+
+    doc = _zone_document(xml, doc_id)
+    if doc is None:
         return None
-    return LineLayout(pages=result[0], hints=result[1])
+    feature = _feature_layout(doc, xml, doc_id)
+    pages = zone_lines.line_pages_from_page_breaks(doc) if has_page_break_api() else None
+    if pages is not None:
+        return LineLayout(pages=pages, hints=feature[1] if feature else [])
+    if feature is None:
+        return None
+    return LineLayout(pages=feature[0], hints=feature[1])
+
+
+def insert_page_breaks_from_feature_file(xml: str, doc_id: str) -> tuple[str, int] | None:
+    """
+    A segmentation document with `<pb n="…"/>` at the page starts of the cached feature file of its
+    extraction (see the editor's `zone_lines.insert_page_breaks()`, which skips page starts with a
+    `<pb/>` nearby), and the number of page breaks inserted; None if the editor does not support
+    `<pb/>` in zone documents, the document is another variant or cannot be read as zones, or its
+    feature file is missing or does not match its lines.
+    """
+    from pte_plugin_grobid.config import has_page_break_api
+
+    if not has_page_break_api():
+        return None
+    from fastapi_app.plugin_api import zone_lines
+
+    doc = _zone_document(xml, doc_id)
+    if doc is None:
+        return None
+    feature = _feature_layout(doc, xml, doc_id)
+    if feature is None:
+        return None
+    return zone_lines.insert_page_breaks(xml, doc.labels, feature[0])

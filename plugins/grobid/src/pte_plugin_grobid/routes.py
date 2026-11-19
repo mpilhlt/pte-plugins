@@ -17,6 +17,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse, StreamingResponse
+from pydantic import BaseModel, Field
 
 from fastapi_app.lib.core.dependencies import (
     get_db,
@@ -140,13 +141,16 @@ async def get_feature_tokens(
     client-side without a round-trip on every keystroke.
 
     Returns:
-        ``{"status": "ok", "tokens": [...], "count": N}`` on success, or
+        ``{"status": "ok", "tokens": [...], "count": N, "line_based": bool, "page_starts": [...]}``
+        on success (page_starts: indices of the tokens whose row starts a page, segmentation
+        documents only), or
         ``{"status": "no_feature_file", "tokens": [], "count": 0}`` when the
         cache is missing or the TEI lacks extractable labels.
     """
     from fastapi_app.lib.repository.file_repository import FileRepository
     from pte_plugin_grobid.cache import get_cache_zip
     from pte_plugin_grobid.config import get_feature_suffix, LINE_BASED_VARIANTS
+    from pte_plugin_grobid.layout import SEGMENTATION, feature_page_starts
     from pte_plugin_grobid.sync import extract_feature_tokens, parse_encoding_labels
 
     file_repo = FileRepository(db)
@@ -181,7 +185,54 @@ async def get_feature_tokens(
         return {"status": "no_feature_file", "tokens": [], "count": 0, "line_based": False}
 
     line_based = variant_id in LINE_BASED_VARIANTS
-    return {"status": "ok", "tokens": tokens, "count": len(tokens), "line_based": line_based}
+    page_starts = (feature_page_starts(zip_path, suffix) or []) if variant_id == SEGMENTATION else []
+    return {"status": "ok", "tokens": tokens, "count": len(tokens), "line_based": line_based, "page_starts": page_starts}
+
+
+class InsertPageBreaksRequest(BaseModel):
+    """Request of the TEI Wizard's "Insert page breaks" enhancement."""
+
+    stable_id: str = Field(..., description="Stable ID of the segmentation TEI file (identifies its extraction's cached feature file)")
+    xml: str = Field(..., description="The document as the editor holds it")
+
+
+class InsertPageBreaksResponse(BaseModel):
+    """The document with page breaks, or why there are none."""
+
+    status: str = Field(..., description="ok, or unsupported (the editor cannot read <pb/> in zone documents), not_segmentation, no_feature_file")
+    xml: str | None = Field(default=None, description="The document with the inserted <pb/> elements (status ok)")
+    inserted: int = Field(default=0, description="Number of <pb/> elements inserted")
+    message: str = Field(default="", description="Explanation if status is not ok")
+
+
+@router.post("/insert-page-breaks", response_model=InsertPageBreaksResponse)
+async def insert_page_breaks(
+    request: InsertPageBreaksRequest,
+    user: dict[str, Any] = Depends(require_authenticated_user),
+    db: DatabaseManager = Depends(get_db),
+) -> InsertPageBreaksResponse:
+    """
+    Insert `<pb n="…"/>` at the page starts of the cached feature file into a segmentation
+    document, except where a `<pb/>` already lies near a page start (TEI Wizard enhancement
+    "Insert page breaks").
+    """
+    from fastapi_app.lib.repository.file_repository import FileRepository
+    from pte_plugin_grobid.config import has_page_break_api
+    from pte_plugin_grobid.layout import SEGMENTATION, insert_page_breaks_from_feature_file
+    from pte_plugin_grobid.sync import parse_encoding_labels
+
+    file_meta = FileRepository(db).get_file_by_stable_id(request.stable_id)
+    if not file_meta or not file_meta.doc_id:
+        raise HTTPException(status_code=404, detail="File not found")
+    if not has_page_break_api():
+        return InsertPageBreaksResponse(status="unsupported", message="This version of the editor does not support page breaks in segmentation documents.")
+    if parse_encoding_labels(request.xml).get("variant-id") != SEGMENTATION:
+        return InsertPageBreaksResponse(status="not_segmentation", message="Page breaks are only inserted into GROBID segmentation documents.")
+    result = insert_page_breaks_from_feature_file(request.xml, file_meta.doc_id)
+    if result is None:
+        return InsertPageBreaksResponse(status="no_feature_file", message="The feature file of this document's extraction is missing or does not match its lines. \"Reload Feature File\" in the GROBID menu fetches it again.")
+    xml, inserted = result
+    return InsertPageBreaksResponse(status="ok", xml=xml, inserted=inserted)
 
 
 @router.get("/reload-feature-file/preview", response_class=HTMLResponse)
