@@ -6,40 +6,22 @@ The MPCDF Terms of Use do not allow users to share a session, so the plugin keep
 
 The plugin is a thin wrapper around the [mpcdf-llm](https://gitlab.mpcdf.mpg.de/cboul/llm-mpcdf) library, which logs in to the service, submits and follows the jobs, renews them before they expire and cancels them when idle.
 
-## Usage
+## User manual
 
-Every user opens the management page from the plugin menu (Inference > My MPCDF endpoints). The dialog has these parts:
+The plugin adds two pages to the editor's user manual, in the section on language models (`manual` in `pte-plugin.json`, slot `inference`):
 
-- **MPCDF session.** Log in with your own MPCDF user name, password and one-time code. The session is stored encrypted on the server (in the editor's secret store, see [Security](#security)), so every worker uses it and the server can renew your endpoints while you are offline, as long as the login stays valid. **Log out** ends it. "Remove all keys" in the API Keys dialog removes it as well. When the session is lost, the dialog asks for a login again.
-- **Start.** Choose a preset and start it, optionally with a "keep alive until" time of day. The dialog shows the progress (queued, building, pulling the model, ready). Closing the dialog does not stop the start. If you have not stored a Hugging Face read token, the section says so (see [Hugging Face token](#hugging-face-token)).
-- **My endpoints.** Lists your endpoints with their preset, status, remaining time and "until"; you can cancel them here.
+- [Running a model on the MPCDF LLM service](src/pte_plugin_mpcdf_llm/docs/mpcdf-endpoints.md), for all users: logging in, starting a preset, using and ending an endpoint.
+- [Setting up MPCDF presets](src/pte_plugin_mpcdf_llm/docs/mpcdf-presets.md), for administrators: the preset form and its rules, export and import, the endpoints of all users.
 
-Administrators also see:
-
-- **Presets.** The installation-wide preset catalog that every user starts from. A preset describes one endpoint: framework (vLLM or Ollama), model, machine, GPU type and count, run time, queue time, extra arguments, environment, and the supervisor rules below. Presets are created, edited and duplicated in the dialog (**Duplicate** opens the form with a copy under a free name such as `<name>-copy`). Saving a preset checks it against the service's live options and needs the administrator's own MPCDF login. **Export** downloads all presets as a JSON file and **Import** reads such a file (see below).
-- **All users' endpoints.** Per user, whether a session is stored and the endpoints the server manages for them (preset, ready or starting, "until", last activity), read from the users' state files without using their sessions. Administrators cannot cancel other users' endpoints, since that would act through another user's session. **Remove session** deletes a user's stored session: the server then no longer renews or uses that user's endpoints, which expire or idle out at MPCDF.
+The management page is opened from the plugins menu (Inference > My MPCDF endpoints). Its parts are 1. MPCDF session, 2. Start, 3. My endpoints, and for administrators 4. Presets and 5. All users' endpoints. Saving a preset checks it against the service's live options and needs the administrator's own MPCDF login; administrators cannot cancel other users' endpoints, only remove their stored session.
 
 ### Exporting and importing presets
 
-Export writes `mpcdf-llm-presets-<date>.json` with all presets (`{"format": "mpcdf-llm-presets", "version": 1, "presets": [...]}`). Import also accepts a bare JSON array of presets. A file with a preset without a name, or with the same name twice, is rejected.
+Export writes `mpcdf-llm-presets-<date>.json` with all presets (`{"format": "mpcdf-llm-presets", "version": 1, "presets": [...]}`). Import also accepts a bare JSON array of presets and posts it to `POST /presets/import`, which needs no MPCDF login and checks only the fields and types. A file with a preset without a name, or with the same name twice, is rejected. Merge and Replace are computed by the page: Merge saves only new names; Replace saves all and then deletes the existing presets that are not in the file, unless a preset was rejected.
 
-When presets already exist, the import asks how to combine them. Presets are identified by name:
+### Supervisor rules
 
-- **Merge** adds only the presets whose name does not exist yet. Existing presets stay unchanged, and the imported presets of the same name are skipped.
-- **Replace** saves all imported presets, overwriting those of the same name, and then deletes the existing presets that are not in the file. If an imported preset is rejected, nothing is deleted.
-
-Importing needs no MPCDF login, because the catalog is stored in the plugin's data directory. The import therefore checks only the preset's fields and types, not whether the service offers its machine, GPU type and so on (which saving in the form does, and which needs a login). A preset the service does not support fails when it is started. The dialog lists the presets it could not import with the reason.
-
-Per preset, the supervisor (one per user, see [Multiple workers](#multiple-workers)) applies these rules to the user's endpoints:
-
-| Rule | Meaning |
-| --- | --- |
-| Run time | An endpoint stops when its run time at MPCDF ends |
-| Renewal | While an endpoint's "until" time is not reached, a replacement is started before the old one expires (`min_remaining`), and the models switch over without interruption |
-| Idle timeout | An endpoint nobody uses for the idle time is cancelled |
-| Build timeout | An endpoint that does not serve its model within this time after it starts running (download and load) is cancelled and the start fails. Empty: 30 min. Large models need more on their first start, when the weights are not yet cached at MPCDF (a 155 GiB model took about 45 min) |
-
-Using an endpoint counts as activity, so it stays alive while its user uses it.
+Per preset, the supervisor (one per user, see [Multiple workers](#multiple-workers)) applies `time` (run time), `min_remaining` (renewal while the user's "until" is not reached), `idle_timeout` and `build_timeout` (empty: 30 min) to the user's endpoints. Using an endpoint counts as activity.
 
 ## Models in the inference menu
 
