@@ -2,7 +2,17 @@
   "version": "1.2.0",
   "readme": "https://github.com/mpilhlt/pte-plugins/tree/main/plugins/google-llm#readme",
   "engines": {
-    "pte": ">=0.82.0",
+    "pte": ">=0.89.0",
     "pte-plugin-api": "^1.2"
-  }
+  },
+  "manual": [
+    {
+      "id": "google-gemini",
+      "slot": "inference",
+      "title": "Google Gemini",
+      "description": "Use the Gemini models with your own Google API key.",
+      "file": "docs/google-gemini.md",
+      "order": 110
+    }
+  ]
 }
