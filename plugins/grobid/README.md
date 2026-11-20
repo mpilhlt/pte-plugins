@@ -14,6 +14,10 @@ Extracted training data is cached per document, GROBID revision, flavor and PDF 
 
 Reviewers can download a complete training package for a collection as a ZIP file that mirrors the `grobid-trainer/resources/dataset/` directory structure and can be dropped directly into that directory.
 
+### User manual
+
+The plugin adds the tutorial [How to use the LLM Reviewer with GROBID](src/pte_plugin_grobid/docs/llm-review-tutorial.md) to the editor's user manual (`manual` in `pte-plugin.json`, see the editor's [Manual Pages](https://github.com/mpilhlt/pdf-tei-editor/blob/main/docs/code-assistant/backend-plugins.md#manual-pages)). It is listed under Tutorials and in the Review Workflow when the LLM Reviewer (`annotation-review`) is active too. The screenshots in `docs/images/` were taken with the demo document of the editor (`docker/demo-data`).
+
 ### Page breaks in segmentation documents
 
 Segmentation documents mark the start of every PDF page with `<pb n="…"/>` (`n`: the page number in the PDF, from 1), placed at the start of the page: before the zone that holds the first word of the page if the page starts with that zone, otherwise before that word inside its zone. The extractor inserts them from the page starts of GROBID's feature file, unless GROBID already put a `<pb/>` within three lines of a page start. GROBID's trainer ignores `<pb/>`, so the training data is unchanged. The pages of the unit review and the LLM review come from the `<pb/>` elements, so a document keeps its pages when the extraction cache is gone; the layout hints for the LLM still come from the feature file.
