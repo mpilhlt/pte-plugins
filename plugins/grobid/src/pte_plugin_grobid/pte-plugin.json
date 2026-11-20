@@ -4,5 +4,29 @@
   "engines": {
     "pte": ">=0.83.0",
     "pte-plugin-api": "^1.6"
-  }
+  },
+  "manual": [
+    {
+      "id": "llm-review-tutorial",
+      "slot": "tutorials",
+      "title": "How to use the LLM Reviewer with GROBID",
+      "description": "Let a language model check GROBID training documents part by part, and keep every step reversible.",
+      "file": "docs/llm-review-tutorial.md",
+      "requires": [
+        "annotation-review"
+      ],
+      "order": 100
+    },
+    {
+      "id": "llm-review-tutorial-review",
+      "slot": "review",
+      "title": "How to use the LLM Reviewer with GROBID",
+      "description": "Let a language model check GROBID training documents part by part.",
+      "file": "docs/llm-review-tutorial.md",
+      "requires": [
+        "annotation-review"
+      ],
+      "order": 100
+    }
+  ]
 }
