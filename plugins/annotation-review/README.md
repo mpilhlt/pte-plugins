@@ -30,12 +30,7 @@ The rules to review against are taken from the document, not from server configu
 
 ### Choosing and restricting models
 
-The model used is chosen in the **Tools > Inference** menu (provided by the core `inference-settings` plugin):
-
-- **Admins** set the installation-wide default, stored in the config as `llm.default-model.provider` and `llm.default-model.model`.
-- **Other users** can pick a model for their own browser session, for example when the default is busy. It overrides the default until the session ends.
-- Providers flag each model as **free** or not (KISSKI: free; Anthropic, Google: not). Non-admins can only select free models, plus the configured default even if it is not free. The `/review` route enforces this on the server, not just in the menu.
-- Models a provider reports as busy are marked with a warning icon.
+The administrator page [LLM Reviewer: models and cost](src/pte_plugin_annotation_review/docs/models-and-cost.md) in the editor's user manual (section "Choosing a language model", `manual` in `pte-plugin.json`, admins only) describes the default model, which models users can use, the include/exclude filters, cost and duration, and what to tell users when a review fails. The model is chosen in the **Tools > Inference** menu (core `inference-settings` plugin); non-admins can only select free models plus the default, which the `/review` route enforces on the server.
 
 Config keys (all under `config.json`, editable in the Configuration Editor):
 
@@ -45,11 +40,7 @@ Config keys (all under `config.json`, editable in the Configuration Editor):
 | `llm.model-filter.include` | `LLM_MODEL_FILTER_INCLUDE` | If set, only matching models are listed and usable |
 | `llm.model-filter.exclude` | `LLM_MODEL_FILTER_EXCLUDE` | Matching models are never listed or usable; wins over include |
 
-Filter values are comma-separated, double-quoted regular expressions matched (substring search) against the label shown in the menu, `"<Provider>/<Model>"`, for example `"Flash", "^KISSKI/"`. A value without quotes is treated as one single pattern.
-
-### Cost and duration
-
-Long documents are reviewed in chunks of about 8000 characters, one LLM call per chunk, sequentially. The rule excerpts are sent with every chunk, so the token cost is roughly the excerpt size times the number of chunks plus the document once. Reviews of a full paper can take minutes, and paid models cost money per review; use the include/exclude filter and the free-model rule to control this.
+Long documents are reviewed in chunks of about 8000 characters, one LLM call per chunk, sequentially, with the rule excerpts sent with every chunk.
 
 ### Security
 

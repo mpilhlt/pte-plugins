@@ -29,16 +29,9 @@ After a restart, "Archival Edition" appears in the Plugin Manager, and "Archival
 
 Besides the editor's own dependencies, the plugin needs PyMuPDF, which the package declares.
 
-## Usage
+## User manual
 
-1. Fill in the Document Description Form for a document and export it to PDF from Word.
-2. Append the photographs of the document, one per page and in reading order.
-3. Upload the PDF to the editor and run the "Archival edition" extractor. Options:
-   - **Transcribe pages**: `no` builds only the header and the page structure, without calling the model;
-   - **Form pages**: number of form pages at the start of the PDF; leave empty to detect them (the form pages are the ones with a text layer).
-4. Review the result following the [review checklist](docs/guidelines.md#review-checklist).
-
-If the form was printed and scanned instead of exported, it has no text layer. The extractor then asks the model to read it.
+The plugin adds the page [Editing archival documents](src/pte_plugin_archival_edition/docs/archival-edition.md) to the Extraction Workflow of the editor's user manual (`manual` in `pte-plugin.json`), when `anthropic-llm` is active too. It describes preparing the PDF, the options of the extractor, the user's Anthropic key, the Autosearch fallback and the reading view. The screenshots in `docs/images/` were taken with [sample-letter.pdf](src/pte_plugin_archival_edition/tests/fixtures/sample-letter.pdf) and [examples/sample-letter.tei.xml](examples/sample-letter.tei.xml).
 
 ## How it works
 

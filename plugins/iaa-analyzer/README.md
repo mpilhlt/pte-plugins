@@ -1,31 +1,10 @@
 # Inter-Annotator Agreement (IAA) Analyzer Plugin
 
-## For End Users
+The IAA Analyzer compares all TEI versions of a document and variant, computes the agreement between each pair of versions and shows their differences side by side, in two modes: all differences, or only semantic ones.
 
-### Purpose
+## User manual
 
-The IAA Analyzer helps assess annotation quality by comparing multiple TEI versions of the same document. It measures agreement between annotators and highlights disagreements for review.
-
-### Workflow Integration
-
-1. **Multiple Annotations**: Create multiple TEI versions of the same PDF using different annotators or extraction methods (GROBID variants, manual annotation, etc.)
-
-2. **Agreement Analysis**: The plugin computes pairwise agreement percentages between versions by comparing element sequences (tags, attributes, text content)
-
-3. **Disagreement Review**: View side-by-side diffs of disagreements with two modes:
-   - **All Differences**: Shows every difference including formatting, IDs, and structural variations
-   - **Semantic Differences**: Filters out configured attributes (like `xml:id`, `rendition`) and ignored elements (like `<pb>`) to focus on meaningful content differences
-
-4. **Navigation**: Click on any difference line to open the corresponding document at that location for correction
-
-5. **Export**: Download agreement metrics as CSV for further analysis
-
-### Use Cases
-
-- Quality control for automated extraction tools
-- Training data validation for machine learning models
-- Identifying systematic disagreements between annotators
-- Evaluating impact of different extraction configurations
+The page [Comparing annotators: inter-annotator agreement](src/pte_plugin_iaa_analyzer/docs/iaa-analyzer.md) in the Review Workflow of the editor's user manual (`manual` in `pte-plugin.json`) describes starting the analysis (**Compute Inter-Annotator Agreement** in the Document section of the plugins menu), the agreement table, the CSV export and the diff view. The screenshots in `docs/images/` were taken with the demo data of the editor (`docker/demo-data`).
 
 ---
 

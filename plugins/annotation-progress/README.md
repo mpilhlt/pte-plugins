@@ -12,29 +12,17 @@ Backend plugin that provides an overview of annotation progress for documents in
 - Includes documents without annotations
 - Filters by variant when specified
 
-## Usage
+## User manual
 
-1. Select a collection in the application
-2. Open the "Backend Plugins" menu
-3. Select "Show Annotation Progress"
+The page [Following the annotation progress](src/pte_plugin_annotation_progress/docs/annotation-progress.md) in the Review Workflow of the editor's user manual (`manual` in `pte-plugin.json`) describes opening the view, the columns, the version histories, the stage filter and the share link. The screenshot in `docs/images/` was taken with the demo data of the editor (`docker/demo-data`).
 
 ## Output
 
-The plugin generates a DataTables page with one row per version history of each document, sorted by document label:
+The view is a DataTables page with one row per version history of each document, sorted by document label. A version history is a group of current versions that were copied from the same version, as in the app's "Target XML" and "Compare with version" menus; each gold standard and each version without a parent forms a history of its own. **Last Change**, **Last Annotator**, **Status** and **Date** come from the last `<change>` of the most recently edited current version of the history. Sorting is disabled so that the rows of a document stay together.
 
-- **Document**: the document label (as in the app's PDF menu, shortened with an ellipsis; the full label is shown on hover) and **Document ID**, which opens the PDF. They are shown in the first row of the document only, so that its further histories look indented
-- **Version History**: a version history is a group of current versions that were copied from the same version, as in the app's "Target XML" and "Compare with version" menus. Each gold standard (🥇) and each version without a parent forms a history of its own. Clicking **(see history)** after the labels expands the superseded versions of the history below them; every label opens its version.
-- **Last Change**, **Last Annotator**, **Status**, **Date**: from the last `<change>` of the most recently edited current version of the history
+The lifecycle stage of a document in the summary is the most advanced status of its versions in `annotation.lifecycle.order`, or "no status" if the document has no annotations or none of its versions has a status from that list.
 
-Documents without any annotations show "No annotations". Sorting is disabled so that the rows of a document stay together; the search shows a document with all its histories if any of their rows match.
-
-### Filtering by lifecycle stage
-
-The summary above the table counts the documents by lifecycle stage: the most advanced status of a document's versions in `annotation.lifecycle.order`, or "no status" if the document has no annotations or none of its versions has a status from that list. Each stage badge is a toggle. Clicking it hides the documents of that stage from the table and shows the badge crossed out; clicking it again shows them again. All stages are shown when the page is loaded. The filter combines with the search, e.g. hiding "no status" lists only the documents that have been annotated.
-
-### Share link
-
-The **Share link** button above the summary copies a link to the app that opens the view for the same collection and variant, e.g. `https://host/#plugin=annotation-progress/show_progress&collection=batch-1&variant=grobid`. Users who are not logged in see the view after logging in. This relies on the endpoint's `url_openable` flag, which requires a PDF-TEI-Editor version that supports opening backend plugin endpoints from the URL hash.
+**Share link** copies a link such as `https://host/#plugin=annotation-progress/show_progress&collection=batch-1&variant=grobid`. This relies on the endpoint's `url_openable` flag, which requires a PDF-TEI-Editor version that supports opening backend plugin endpoints from the URL hash.
 
 ## Configuration
 

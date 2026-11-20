@@ -4,6 +4,10 @@ Registers Google's Gemini API as a provider in the core LLM provider registry (`
 
 The plugin has no menu entries or routes of its own.
 
+## User manual
+
+The page [Google Gemini](src/pte_plugin_google_llm/docs/google-gemini.md) in the section "Choosing a language model" of the editor's user manual (`manual` in `pte-plugin.json`) tells users where to get a key and how to enter it.
+
 ## Configuration
 
 | Config key | Environment variable | Default |

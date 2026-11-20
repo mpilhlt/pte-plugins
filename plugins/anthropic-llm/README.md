@@ -4,6 +4,10 @@ Registers Anthropic's Claude API as a provider in the core LLM provider registry
 
 The plugin has no menu entries or routes of its own.
 
+## User manual
+
+The page [Anthropic Claude](src/pte_plugin_anthropic_llm/docs/anthropic-claude.md) in the section "Choosing a language model" of the editor's user manual (`manual` in `pte-plugin.json`) tells users where to get a key and how to enter it.
+
 ## Configuration
 
 | Config key | Environment variable | Default |

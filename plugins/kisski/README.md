@@ -11,7 +11,11 @@ Extract structured JSON data from PDFs and text using the KISSKI Academic Cloud 
 
 ## Requirements
 
-### Configuration
+### User manual
+
+The page [KISSKI Academic Cloud](src/pte_plugin_kisski/docs/kisski.md) in the section "Choosing a language model" of the editor's user manual (`manual` in `pte-plugin.json`) tells users where to get a key and how to enter it.
+
+## Configuration
 
 | Config key | Environment variable | Default |
 | --- | --- | --- |
