@@ -39,7 +39,7 @@
       "requires": [],
       "dependencies": [],
       "engines": {
-        "pte": ">=0.82.0",
+        "pte": ">=0.89.0",
         "pte-plugin-api": "^1.2"
       }
     },
@@ -53,7 +53,7 @@
       "requires": [],
       "dependencies": [],
       "engines": {
-        "pte": ">=0.82.0",
+        "pte": ">=0.89.0",
         "pte-plugin-api": "^1.2"
       }
     },
@@ -85,7 +85,7 @@
       "requires": [],
       "dependencies": [],
       "engines": {
-        "pte": ">=0.82.0",
+        "pte": ">=0.89.0",
         "pte-plugin-api": "^1.2"
       }
     },
@@ -132,7 +132,7 @@
         "httpx>=0.28.0"
       ],
       "engines": {
-        "pte": ">=0.82.0",
+        "pte": ">=0.89.0",
         "pte-plugin-api": "^1.2"
       }
     },
@@ -174,7 +174,7 @@
       "requires": [],
       "dependencies": [],
       "engines": {
-        "pte": ">=0.83.0",
+        "pte": ">=0.89.0",
         "pte-plugin-api": "^1.2"
       }
     },
@@ -191,7 +191,7 @@
         "pdf2image>=1.17.0"
       ],
       "engines": {
-        "pte": ">=0.83.0",
+        "pte": ">=0.89.0",
         "pte-plugin-api": "^1.2"
       }
     },
@@ -254,7 +254,7 @@
         "mpcdf-llm[fastapi,testing] @ git+https://gitlab.mpcdf.mpg.de/cboul/llm-mpcdf.git@1ffc5c4c3226ad3efdd541e07b1104e24511d8fb"
       ],
       "engines": {
-        "pte": ">=0.83.0",
+        "pte": ">=0.89.0",
         "pte-plugin-api": "^1.3"
       }
     },
