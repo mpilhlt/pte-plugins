@@ -16,7 +16,10 @@ Reviewers can download a complete training package for a collection as a ZIP fil
 
 ### User manual
 
-The plugin adds the tutorial [How to use the LLM Reviewer with GROBID](src/pte_plugin_grobid/docs/llm-review-tutorial.md) to the editor's user manual (`manual` in `pte-plugin.json`, see the editor's [Manual Pages](https://github.com/mpilhlt/pdf-tei-editor/blob/main/docs/code-assistant/backend-plugins.md#manual-pages)). It is listed under Tutorials and in the Review Workflow when the LLM Reviewer (`annotation-review`) is active too. The screenshots in `docs/images/` were taken with the demo document of the editor (`docker/demo-data`).
+The plugin adds two pages to the editor's user manual (`manual` in `pte-plugin.json`, see the editor's [Manual Pages](https://github.com/mpilhlt/pdf-tei-editor/blob/main/docs/code-assistant/backend-plugins.md#manual-pages)):
+
+- [Extracting GROBID training data](src/pte_plugin_grobid/docs/training-data.md), in the Extraction Workflow: the variants and flavors in the extraction dialog, page breaks, Reload Feature File and downloading the training data of a collection.
+- [How to use the LLM Reviewer with GROBID](src/pte_plugin_grobid/docs/llm-review-tutorial.md), under Tutorials and in the Review Workflow, when the LLM Reviewer (`annotation-review`) is active too. The screenshots in `docs/images/` were taken with the demo document of the editor (`docker/demo-data`).
 
 ### Page breaks in segmentation documents
 

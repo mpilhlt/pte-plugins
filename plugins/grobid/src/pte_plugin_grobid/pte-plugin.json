@@ -27,6 +27,14 @@
         "annotation-review"
       ],
       "order": 100
+    },
+    {
+      "id": "training-data",
+      "slot": "extraction",
+      "title": "Extracting GROBID training data",
+      "description": "Choose the GROBID model and flavor, reload the feature file, and download the training data of a collection.",
+      "file": "docs/training-data.md",
+      "order": 100
     }
   ]
 }
