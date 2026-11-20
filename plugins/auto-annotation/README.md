@@ -9,6 +9,15 @@ It contains:
 - the **model probe**, which measures how well a single model corrects the annotation of gold documents, and how that changes with the number of review units sent in one request; in the editor as **Test model with current document** in the Tools menu, and as a command line tool;
 - the **annotation pipeline**, which annotates documents or a whole collection with two models and an arbiter and saves the result as a new version.
 
+## User manual
+
+The plugin adds these pages to the editor's user manual (`manual` in `pte-plugin.json`):
+
+- [Correcting and transferring annotations with a language model](src/pte_plugin_auto_annotation/docs/correct-and-transfer.md), for annotators, reviewers and administrators, in the Review Workflow (slot `review`) and, opening at the transfer section, in the Extraction Workflow (slot `extraction`).
+- [Testing a model with the current document](src/pte_plugin_auto_annotation/docs/model-test.md), for reviewers and administrators, in the section on language models (slot `inference`).
+
+The sections below are the technical reference: locking, batching, checks, the recorded markup and storage.
+
 ## Correct annotations in new version
 
 The Tools menu item (section "Annotation") is for annotators, reviewers and admins. It is enabled when the open document's `editorialDecl` has a machine-readable rule reference (`subtype="machine"`).

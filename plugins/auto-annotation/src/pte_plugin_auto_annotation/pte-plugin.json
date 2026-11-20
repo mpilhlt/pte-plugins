@@ -2,7 +2,47 @@
   "version": "1.8.0",
   "readme": "https://github.com/mpilhlt/pte-plugins/tree/main/plugins/auto-annotation#readme",
   "engines": {
-    "pte": ">=0.82.0",
+    "pte": ">=0.89.0",
     "pte-plugin-api": "^1.2"
-  }
+  },
+  "manual": [
+    {
+      "id": "correct-and-transfer",
+      "slot": "review",
+      "title": "Correcting and transferring annotations with a language model",
+      "description": "Let a language model correct the annotation of a document, or carry over the annotation of another version, each into a new version.",
+      "file": "docs/correct-and-transfer.md",
+      "roles": [
+        "annotator",
+        "reviewer",
+        "admin"
+      ],
+      "order": 200
+    },
+    {
+      "id": "transfer-after-ocr",
+      "slot": "extraction",
+      "title": "Keeping annotation decisions after text recognition",
+      "description": "Transfer the annotation of an earlier version to a new extraction of the same document.",
+      "file": "docs/correct-and-transfer.md#transferring-the-annotation-from-another-version",
+      "roles": [
+        "annotator",
+        "reviewer",
+        "admin"
+      ],
+      "order": 200
+    },
+    {
+      "id": "model-test",
+      "slot": "inference",
+      "title": "Testing a model with the current document",
+      "description": "Measure how well a model corrects a document whose annotation is known to be right.",
+      "file": "docs/model-test.md",
+      "roles": [
+        "reviewer",
+        "admin"
+      ],
+      "order": 400
+    }
+  ]
 }
