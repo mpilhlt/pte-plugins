@@ -4,5 +4,15 @@
   "engines": {
     "pte": ">=0.83.0",
     "pte-plugin-api": "^1.0"
-  }
+  },
+  "manual": [
+    {
+      "id": "annotation-progress",
+      "slot": "review",
+      "title": "Following the annotation progress",
+      "description": "See which documents of a collection are done, who worked on them last, and share the view.",
+      "file": "docs/annotation-progress.md",
+      "order": 300
+    }
+  ]
 }
