@@ -2,38 +2,11 @@
 
 Lets administrators add and remove any number of OpenAI-compatible inference endpoints, such as [Ollama](https://ollama.com), vLLM, LM Studio, the llama.cpp server, LiteLLM or OpenRouter. Each endpoint is registered as a provider in the core LLM provider registry (`fastapi_app/lib/llm/`), so its models can be selected wherever the registry is used (for example Tools > Default Model, the [Annotation Review](../annotation-review/README.md) plugin and the [LLamore extractor](../llamore-extractor/README.md)).
 
-## Usage
+## User manual
 
-Administrators open the management page from the plugin menu (Inference > Inference endpoints). For each endpoint they enter:
+How administrators add, test and delete endpoints, and which base URL to use for Ollama on their own computer, is described in the manual page [Adding inference endpoints](src/pte_plugin_inference_endpoints/docs/inference-endpoints.md). The plugin adds it to the editor's user manual for administrators, in the section on language models (`manual` in `pte-plugin.json`, slot `inference`).
 
-| Field | Meaning |
-| --- | --- |
-| Name | Label of the provider in the model picker; models appear as `<Name>/<model id>` |
-| Base URL | The URL that `/chat/completions` and `/models` are appended to, e.g. `http://localhost:11434/v1` for Ollama |
-| API key | No key; a shared key used for all users; or per-user keys, which each user enters under user menu > API Keys |
-| Models | Comma-separated model ids to offer; empty offers every model the endpoint lists at `GET /models` |
-| Vision | The models accept images (sent as `image_url` content parts with base64 data URLs) |
-| Free | Non-admin users may use the models. Otherwise only administrators can, unless a model is the default model (see the editor's model access rules) |
-| Timeout | Seconds to wait for a completion (default 600, since local models can be slow) |
-
-"Test connection" lists the models of the endpoint before or after saving it. An endpoint cannot be edited; delete it and add it again.
-
-## Models on your own computer (Ollama)
-
-The server sends the requests to the endpoint, not the browser. Two things follow:
-
-- **CORS does not apply.** Browser CORS settings such as `OLLAMA_ORIGINS` are not needed.
-- **The endpoint must be reachable from the server.** `localhost` in the base URL is the machine or container the editor runs on.
-
-Depending on where the editor runs:
-
-| Editor runs | Base URL |
-| --- | --- |
-| On your computer (`npm run start:dev`, `uv run ...`) | `http://localhost:11434/v1` |
-| On your computer, in Docker | `http://host.docker.internal:11434/v1`. On Linux, start the container with `--add-host=host.docker.internal:host-gateway` and make Ollama listen on all interfaces (`OLLAMA_HOST=0.0.0.0`) |
-| On a remote server | The server cannot reach your computer's `localhost`. Connect the two through a VPN such as Tailscale (`http://<machine>.<tailnet>.ts.net:11434/v1`, with `OLLAMA_HOST=0.0.0.0`), or an SSH reverse tunnel from your computer (`ssh -N -R 11434:localhost:11434 user@server`, then `http://localhost:11434/v1`; in Docker the tunnel has to end where the container can reach it). Tunnel services such as ngrok or Cloudflare Tunnel work too, but make Ollama, which has no authentication, publicly reachable: put an authenticating proxy in front of it and enter its key here |
-
-Calling the model directly from the browser, which would need `OLLAMA_ORIGINS`, is not supported: all LLM features of the editor (extraction, review, metadata) run on the server.
+The management page is opened from the plugins menu (Inference > Inference endpoints). The fields of an endpoint are name, base URL, key mode (`none`, `shared`, `user`), model ids, vision, free and timeout; an endpoint cannot be edited, only deleted and added again.
 
 ## Security
 

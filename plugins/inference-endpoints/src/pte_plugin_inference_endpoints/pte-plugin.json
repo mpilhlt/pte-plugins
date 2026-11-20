@@ -2,7 +2,20 @@
   "version": "1.1.1",
   "readme": "https://github.com/mpilhlt/pte-plugins/tree/main/plugins/inference-endpoints#readme",
   "engines": {
-    "pte": ">=0.83.0",
+    "pte": ">=0.89.0",
     "pte-plugin-api": "^1.2"
-  }
+  },
+  "manual": [
+    {
+      "id": "inference-endpoints",
+      "slot": "inference",
+      "title": "Adding inference endpoints",
+      "description": "Offer the models of Ollama, vLLM and other OpenAI-compatible servers in the editor.",
+      "file": "docs/inference-endpoints.md",
+      "roles": [
+        "admin"
+      ],
+      "order": 200
+    }
+  ]
 }
