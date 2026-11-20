@@ -4,5 +4,15 @@
   "engines": {
     "pte": ">=0.83.0",
     "pte-plugin-api": "^1.0"
-  }
+  },
+  "manual": [
+    {
+      "id": "iaa-analyzer",
+      "slot": "review",
+      "title": "Comparing annotators: inter-annotator agreement",
+      "description": "Measure how far the versions of a document agree and review their differences.",
+      "file": "docs/iaa-analyzer.md",
+      "order": 400
+    }
+  ]
 }
