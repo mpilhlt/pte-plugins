@@ -27,7 +27,7 @@ The transcription takes a while, one request to the model per page.
 
 ## Your Anthropic API key
 
-The transcription runs on your own Anthropic API key, so that its cost is billed to you. When you start the first extraction, the editor asks for the key and stores it encrypted. You can change or remove it later under **API Keys** in the user menu. A key is created in the [Anthropic Console](https://console.anthropic.com/) under **API Keys**.
+The transcription runs on your own Anthropic API key, so that its cost is billed to you. When you start the first extraction, the editor asks for the key and stores it encrypted. You can change or remove it later under **API Keys** in the user menu. A key is created in the [Anthropic Console](https://console.anthropic.com/settings/keys); the dialog links to it with **Get a key**.
 
 ## Reviewing the transcription
 
