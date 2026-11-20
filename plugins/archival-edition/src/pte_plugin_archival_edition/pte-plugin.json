@@ -4,5 +4,18 @@
   "engines": {
     "pte": ">=0.76.0",
     "pte-plugin-api": "^1.0"
-  }
+  },
+  "manual": [
+    {
+      "id": "archival-edition",
+      "slot": "extraction",
+      "title": "Editing archival documents",
+      "description": "Describe a letter or other archival document in a form, let Claude transcribe its photographs and review the edition.",
+      "file": "docs/archival-edition.md",
+      "requires": [
+        "anthropic-llm"
+      ],
+      "order": 300
+    }
+  ]
 }
