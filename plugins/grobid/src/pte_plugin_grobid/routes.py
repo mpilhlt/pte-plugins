@@ -787,6 +787,22 @@ async def download_training_package(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+def _importable_collections(user: dict[str, Any]) -> list[tuple[str, str]]:
+    """(id, name) of the existing collections the user can access, the targets of an import."""
+    from fastapi_app.config import get_settings
+    from fastapi_app.lib.permissions.user_utils import get_user_collections
+    from fastapi_app.lib.utils.collection_utils import list_collections
+
+    db_dir = get_settings().db_dir
+    accessible = get_user_collections(user, db_dir)  # None: all
+    collections = [
+        (c["id"], c.get("name") or c["id"])
+        for c in list_collections(db_dir)
+        if c.get("id") and (accessible is None or c["id"] in accessible)
+    ]
+    return sorted(collections, key=lambda c: c[1].lower())
+
+
 @router.get("/import-training/view", response_class=HTMLResponse)
 async def import_training_view(
     collection: str = Query("", description="Preselected target collection"),
@@ -794,16 +810,19 @@ async def import_training_view(
 ):
     """The upload form of the training data import (#68)."""
     import html
-    import json
 
     from fastapi_app.plugin_api import load_plugin_html
     from pte_plugin_grobid.config import get_processing_flavors
     from pte_plugin_grobid.training_import import DEFAULT_REVISION
 
     flavor_options = "".join(f'<option value="{html.escape(f)}">{html.escape(f)}</option>' for f in get_processing_flavors())
+    collection_options = "".join(
+        f'<option value="{html.escape(cid)}"{" selected" if cid == collection else ""}>{html.escape(name)}</option>'
+        for cid, name in _importable_collections(user)
+    )
     page = load_plugin_html(__file__, "import-training.html")
     page = page.replace("__FLAVOR_OPTIONS__", flavor_options)
-    page = page.replace("__COLLECTION__", html.escape(collection))
+    page = page.replace("__COLLECTION_OPTIONS__", collection_options)
     page = page.replace("__DEFAULT_REVISION__", html.escape(DEFAULT_REVISION))
     return HTMLResponse(content=page)
 
@@ -831,7 +850,6 @@ async def import_training(
     from pathlib import Path
 
     from fastapi_app.config import get_settings
-    from fastapi_app.lib.permissions.user_utils import user_has_collection_access
     from fastapi_app.lib.repository.file_repository import FileRepository
     from fastapi_app.lib.sse.sse_utils import broadcast_to_all_sessions
     from pte_plugin_grobid.config import get_processing_flavors
@@ -840,8 +858,10 @@ async def import_training(
     settings = get_settings()
     if not collection:
         raise HTTPException(status_code=400, detail="No collection given")
-    if not user_has_collection_access(user, collection, settings.db_dir):
-        raise HTTPException(status_code=403, detail=f"No access to collection '{collection}'")
+    # Only into an existing collection: documents of a collection that does not exist are in no
+    # project and so invisible
+    if collection not in {cid for cid, _ in _importable_collections(user)}:
+        raise HTTPException(status_code=400, detail=f"Collection '{collection}' does not exist or you have no access to it. Create it first.")
     if flavor not in get_processing_flavors():
         raise HTTPException(status_code=400, detail=f"Unknown flavor '{flavor}'")
 

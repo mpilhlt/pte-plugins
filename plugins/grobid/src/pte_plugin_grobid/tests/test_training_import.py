@@ -209,18 +209,18 @@ class ImportRouteTestCase(unittest.TestCase):
         app.dependency_overrides[get_session_manager] = lambda: mock.Mock()
         self.client = TestClient(app)
         for target, value in [
-            ("fastapi_app.lib.permissions.user_utils.user_has_collection_access", True),
+            ("pte_plugin_grobid.routes._importable_collections", [("cex", "CEX")]),
             ("fastapi_app.lib.sse.sse_utils.broadcast_to_all_sessions", 1),
         ]:
             patcher = mock.patch(target, return_value=value)
             setattr(self, target.rsplit(".", 1)[1], patcher.start())
             self.addCleanup(patcher.stop)
 
-    def post(self, data: bytes, flavor: str = "default"):
+    def post(self, data: bytes, flavor: str = "default", collection: str = "cex"):
         return self.client.post(
             "/api/plugins/grobid/import-training",
             files={"file": ("cex23.zip", data, "application/zip")},
-            data={"collection": "cex", "flavor": flavor, "revision": ""},
+            data={"collection": collection, "flavor": flavor, "revision": ""},
         )
 
     def test_upload_imports_and_notifies_clients(self):
@@ -232,6 +232,17 @@ class ImportRouteTestCase(unittest.TestCase):
 
     def test_no_zip_is_rejected(self):
         self.assertEqual(self.post(b"not a zip").status_code, 400)
+
+    def test_collection_must_exist(self):
+        response = self.post(self.zip, collection="new-collection")
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("Create it first", response.json()["detail"])
+        self.assertEqual(self.repo.get_files_by_doc_id(DOC_ID), [])
+
+    def test_view_lists_the_collections(self):
+        response = self.client.get("/api/plugins/grobid/import-training/view?collection=cex")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('<option value="cex" selected>CEX</option>', response.text)
 
     def test_unknown_flavor_is_rejected(self):
         self.assertEqual(self.post(self.zip, flavor="nope").status_code, 400)

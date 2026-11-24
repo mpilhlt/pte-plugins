@@ -16,6 +16,12 @@
 const form = /** @type {HTMLFormElement} */ (document.getElementById('importForm'))
 const statusEl = /** @type {HTMLDivElement} */ (document.getElementById('status'))
 const submitBtn = /** @type {HTMLButtonElement} */ (document.getElementById('submitBtn'))
+const collectionSelect = /** @type {HTMLSelectElement} */ (document.getElementById('collection'))
+
+if (collectionSelect.options.length === 0) {
+  /** @type {HTMLDivElement} */ (document.getElementById('noCollections')).hidden = false
+  submitBtn.disabled = true
+}
 
 /**
  * Show a status message.
