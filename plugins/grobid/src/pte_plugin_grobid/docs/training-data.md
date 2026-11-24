@@ -58,8 +58,20 @@ Reloading only replaces the layout information. Your annotations stay as they ar
 When the documents of a collection have been corrected and marked as gold, reviewers download them for retraining GROBID:
 
 1. Choose the collection under **Collection** in the toolbar.
-2. Choose **Download GROBID Training Data** in the **Collection** section of the plugins menu (plug icon).
+2. Choose **Download GROBID Training Data** in the **GROBID** section of the plugins menu (plug icon).
 
 The editor collects the gold version of each GROBID variant of each document in the collection, together with GROBID's feature files, and downloads them as a ZIP file. Its folders have the layout of GROBID's training data (`grobid-trainer/resources/dataset/`), sorted by model and flavor, so it can be unpacked there directly and the models retrained as described in the [GROBID documentation](https://grobid.readthedocs.io/en/latest/Training-the-models-of-Grobid/).
 
 A progress indicator shows the documents being processed. If GROBID cannot process some documents, the download contains the others and a file `skipped-documents.txt` that names the skipped documents and the reason, and a message names them too.
+
+## Importing training data
+
+Reviewers can import existing GROBID training data, for example a corpus from GROBID's repository, so that it can be reviewed and corrected in the editor. Choose **Import GROBID Training Data** in the **GROBID** section of the plugins menu and upload a ZIP file that contains:
+
+- the PDFs, named `{name}.pdf`,
+- the annotations, named `{name}.training.{model}.tei.xml` (for example `{name}.training.segmentation.tei.xml` or `{name}.training.references.referenceSegmenter.tei.xml`),
+- the feature files, named `{name}.training.{model}` without an extension.
+
+These are the file names that GROBID gives the training data it creates. The files can be in any folder. Text and TSV files, such as a README, are ignored. In the form, choose the collection to import into and the flavor of the training data, and enter the GROBID revision that the feature files were computed with, if you know it. Without a revision, the documents are labeled `imported`.
+
+Each annotation becomes the gold version of its document and variant. If the document already has a gold version of that variant, the annotation is imported as a new version instead. The imported feature files are used like the ones of an extraction: for checking corrections, for page breaks, which are inserted into segmentation documents during the import, and for the training data download. A document is skipped, and the form tells you why, if its PDF is missing from the ZIP file or if the collection already has a different PDF for it.

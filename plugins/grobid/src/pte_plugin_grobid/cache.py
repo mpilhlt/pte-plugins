@@ -139,7 +139,9 @@ def package_lookups(
     if recorded_hash and recorded_hash != current_pdf_hash:
         return [(r, recorded_hash) for r in revisions], False
     if recorded_hash:
-        return [(revision, current_pdf_hash)], True
+        # The recorded revision after the current one: the package of the extraction itself, or the
+        # feature files of an import (#68)
+        return [(r, current_pdf_hash) for r in revisions], True
     return [(revision, None), (revision, current_pdf_hash)], True
 
 
@@ -181,6 +183,47 @@ def cache_training_data(
     }
     with open(cache_path / "metadata.json", "w") as f:
         json.dump(metadata, f, indent=2)
+
+
+def add_to_cache(doc_id: str, revision: str, flavor: str, pdf_hash: str, files: dict[str, bytes]) -> Path:
+    """
+    Add imported feature files to the cache entry of (doc_id, revision, flavor, pdf_hash), keeping
+    the files the entry already has (#68).
+
+    Args:
+        doc_id: Document ID
+        revision: Revision label of the imported documents
+        flavor: GROBID processing flavor
+        pdf_hash: Content hash of the PDF the files were computed from
+        files: File name (as GROBID's createTraining names it) -> content
+
+    Returns:
+        Path of the entry's training.zip
+    """
+    cache_path = get_cache_dir() / get_cache_key(doc_id, revision, flavor, pdf_hash)
+    cache_path.mkdir(parents=True, exist_ok=True)
+    zip_path = cache_path / "training.zip"
+    existing: set[str] = set()
+    if zip_path.exists():
+        with zipfile.ZipFile(zip_path, "r") as zf:
+            existing = set(zf.namelist())
+    with zipfile.ZipFile(zip_path, "a", zipfile.ZIP_DEFLATED) as zf:
+        for name, content in files.items():
+            if name not in existing:
+                zf.writestr(name, content)
+        names = zf.namelist()
+    metadata = {
+        "doc_id": doc_id,
+        "grobid_revision": revision,
+        "flavor": flavor,
+        "pdf_hash": pdf_hash,
+        "files": names,
+        "source": "import",
+        "cached_at": datetime.now().isoformat(),
+    }
+    with open(cache_path / "metadata.json", "w") as f:
+        json.dump(metadata, f, indent=2)
+    return zip_path
 
 
 def delete_cache_for_doc(doc_id: str) -> bool:

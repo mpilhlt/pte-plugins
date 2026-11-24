@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Import GROBID Training Data</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; max-width: 640px; margin: 0 auto; }
+        h2 { color: #333; border-bottom: 2px solid #2196F3; padding-bottom: 10px; }
+        .description { font-size: 0.9em; color: #666; margin-bottom: 16px; }
+        label { display: block; margin: 12px 0 4px; font-weight: bold; }
+        input[type=text], select { width: 100%; padding: 6px; box-sizing: border-box; }
+        .hint { font-size: 0.85em; color: #777; margin-top: 2px; }
+        button { margin-top: 16px; padding: 10px 24px; border: none; border-radius: 4px; font-size: 1em; cursor: pointer; background: #2196F3; color: white; }
+        button:disabled { opacity: 0.6; cursor: not-allowed; }
+        .status { margin-top: 16px; padding: 10px; border-radius: 4px; display: none; white-space: pre-wrap; }
+        .status.info { background: #e3f2fd; border-left: 4px solid #2196F3; display: block; }
+        .status.error { background: #ffebee; border-left: 4px solid #f44336; display: block; }
+        .status.success { background: #e8f5e9; border-left: 4px solid #4caf50; display: block; }
+        ul { margin: 6px 0; padding-left: 20px; font-size: 0.9em; }
+    </style>
+</head>
+<body>
+    <h2>Import GROBID Training Data</h2>
+    <div class="description">
+        Upload a ZIP with the PDFs, the training annotations (<code>*.training.&lt;model&gt;.tei.xml</code>)
+        and their raw feature files (<code>*.training.&lt;model&gt;</code>), in any folder layout.
+        Annotations become gold files, or versions if the document has a gold file of that variant.
+        Documents without a PDF, or whose PDF differs from the one in the collection, are skipped.
+    </div>
+    <form id="importForm">
+        <label for="file">ZIP file</label>
+        <input type="file" id="file" name="file" accept=".zip" required>
+
+        <label for="collection">Collection</label>
+        <input type="text" id="collection" name="collection" value="__COLLECTION__" required>
+
+        <label for="flavor">Flavor</label>
+        <select id="flavor" name="flavor">__FLAVOR_OPTIONS__</select>
+        <div class="hint">The GROBID processing flavor the training data belongs to.</div>
+
+        <label for="revision">GROBID revision</label>
+        <input type="text" id="revision" name="revision" placeholder="__DEFAULT_REVISION__">
+        <div class="hint">The GROBID revision the feature files were computed with, if known (e.g. a commit hash).</div>
+
+        <button type="submit" id="submitBtn">Import</button>
+    </form>
+    <div id="status" class="status"></div>
+    <script type="module" src="/api/plugins/grobid/static/import-training.js"></script>
+</body>
+</html>
