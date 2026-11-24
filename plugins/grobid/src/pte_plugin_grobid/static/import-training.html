@@ -26,13 +26,15 @@
         and their raw feature files (<code>*.training.&lt;model&gt;</code>), in any folder layout.
         Annotations become gold files, or versions if the document has a gold file of that variant.
         Documents without a PDF, or whose PDF differs from the one in the collection, are skipped.
+        The collection must exist.
     </div>
     <form id="importForm">
         <label for="file">ZIP file</label>
         <input type="file" id="file" name="file" accept=".zip" required>
 
         <label for="collection">Collection</label>
-        <input type="text" id="collection" name="collection" value="__COLLECTION__" required>
+        <select id="collection" name="collection" required>__COLLECTION_OPTIONS__</select>
+        <div class="hint" id="noCollections" hidden>There is no collection you can import into. Create one first (Manage Access &amp; Projects).</div>
 
         <label for="flavor">Flavor</label>
         <select id="flavor" name="flavor">__FLAVOR_OPTIONS__</select>
