@@ -14,6 +14,8 @@ Extracted training data is cached per document, GROBID revision, flavor and PDF 
 
 Reviewers can download a complete training package for a collection as a ZIP file that mirrors the `grobid-trainer/resources/dataset/` directory structure and can be dropped directly into that directory.
 
+Reviewers can also import existing training data (PDFs, annotations and GROBID's raw feature files, named as GROBID's `createTraining` names them) from a ZIP file into a collection: the annotations become gold files (versions if a gold file exists) with the encodingDesc of an extraction, and the feature files are added to the extraction cache, so the sync check, the page breaks and the training download use them (`training_import.py`, `POST /api/plugins/grobid/import-training`). See [Importing training data](src/pte_plugin_grobid/docs/training-data.md#importing-training-data).
+
 ### User manual
 
 The plugin adds two pages to the editor's user manual (`manual` in `pte-plugin.json`, see the editor's [Manual Pages](https://github.com/mpilhlt/pdf-tei-editor/blob/main/docs/code-assistant/backend-plugins.md#manual-pages)):

@@ -130,7 +130,13 @@ class PackageLookupsTestCase(unittest.TestCase):
         return package_lookups("rev-2", "current", labels)
 
     def test_document_of_the_current_pdf(self):
-        self.assertEqual(self.lookups({"revision": "rev-1", "pdf-hash": "current"}), ([("rev-2", "current")], True))
+        self.assertEqual(
+            self.lookups({"revision": "rev-1", "pdf-hash": "current"}),
+            ([("rev-2", "current"), ("rev-1", "current")], True),
+        )
+
+    def test_document_extracted_with_the_current_revision(self):
+        self.assertEqual(self.lookups({"revision": "rev-2", "pdf-hash": "current"}), ([("rev-2", "current")], True))
 
     def test_document_of_a_replaced_pdf_only_uses_the_cache(self):
         self.assertEqual(

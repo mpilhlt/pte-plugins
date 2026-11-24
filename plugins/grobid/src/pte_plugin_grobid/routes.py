@@ -1,7 +1,7 @@
 """
 Custom routes for GROBID plugin.
 
-Provides download endpoint for GROBID training data packages and a diagnostics
+Provides download and import endpoints for GROBID training data packages and a diagnostics
 endpoint for debugging connectivity issues with the GROBID server.
 """
 
@@ -15,13 +15,14 @@ from datetime import datetime
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import HTMLResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from fastapi_app.lib.core.dependencies import (
     get_db,
     get_file_storage,
+    get_session_manager,
     get_sse_service,
     require_session_id,
 )
@@ -33,6 +34,7 @@ from fastapi_app.plugin_api import (
     require_reviewer_or_admin,
 )
 from fastapi_app.lib.sse.sse_service import SSEService
+from fastapi_app.lib.core.sessions import SessionManager
 from fastapi_app.lib.sse.sse_utils import ProgressBar, send_notification
 from pte_plugin_grobid.cache import cache_training_data, check_cache, package_lookups
 from pte_plugin_grobid.config import get_grobid_server_url, get_model_path, get_grobid_server_timeout, is_grobid_cache_disabled
@@ -783,3 +785,86 @@ async def download_training_package(
     except Exception as e:
         logger.error(f"Failed to generate GROBID training package: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/import-training/view", response_class=HTMLResponse)
+async def import_training_view(
+    collection: str = Query("", description="Preselected target collection"),
+    user: dict[str, Any] = Depends(require_reviewer_or_admin),
+):
+    """The upload form of the training data import (#68)."""
+    import html
+    import json
+
+    from fastapi_app.plugin_api import load_plugin_html
+    from pte_plugin_grobid.config import get_processing_flavors
+    from pte_plugin_grobid.training_import import DEFAULT_REVISION
+
+    flavor_options = "".join(f'<option value="{html.escape(f)}">{html.escape(f)}</option>' for f in get_processing_flavors())
+    page = load_plugin_html(__file__, "import-training.html")
+    page = page.replace("__FLAVOR_OPTIONS__", flavor_options)
+    page = page.replace("__COLLECTION__", html.escape(collection))
+    page = page.replace("__DEFAULT_REVISION__", html.escape(DEFAULT_REVISION))
+    return HTMLResponse(content=page)
+
+
+@router.post("/import-training")
+async def import_training(
+    file: UploadFile = File(..., description="ZIP with the PDFs, annotations and raw feature files"),
+    collection: str = Form(..., description="Target collection"),
+    flavor: str = Form("default", description="GROBID processing flavor of the training data"),
+    revision: str = Form("", description="GROBID revision the feature files were computed with"),
+    user: dict[str, Any] = Depends(require_reviewer_or_admin),
+    db: DatabaseManager = Depends(get_db),
+    file_storage: FileStorage = Depends(get_file_storage),
+    sse_service: SSEService = Depends(get_sse_service),
+    session_manager: SessionManager = Depends(get_session_manager),
+) -> dict[str, int | list[dict[str, str]] | list[str]]:
+    """
+    Import GROBID training data from a ZIP (#68): the PDFs, their annotations as gold files (or
+    versions if a gold file exists) and the raw feature files into the extraction cache.
+
+    Returns:
+        Number of documents and files imported, skipped documents with reasons, warnings
+    """
+    import tempfile
+    from pathlib import Path
+
+    from fastapi_app.config import get_settings
+    from fastapi_app.lib.permissions.user_utils import user_has_collection_access
+    from fastapi_app.lib.repository.file_repository import FileRepository
+    from fastapi_app.lib.sse.sse_utils import broadcast_to_all_sessions
+    from pte_plugin_grobid.config import get_processing_flavors
+    from pte_plugin_grobid.training_import import TrainingDataImporter, unpack_upload
+
+    settings = get_settings()
+    if not collection:
+        raise HTTPException(status_code=400, detail="No collection given")
+    if not user_has_collection_access(user, collection, settings.db_dir):
+        raise HTTPException(status_code=403, detail=f"No access to collection '{collection}'")
+    if flavor not in get_processing_flavors():
+        raise HTTPException(status_code=400, detail=f"Unknown flavor '{flavor}'")
+
+    data = await file.read()
+    settings.tmp_dir.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="grobid_import_", dir=settings.tmp_dir) as tmp:
+        root = Path(tmp)
+        try:
+            unpack_upload(data, root)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        importer = TrainingDataImporter(
+            FileRepository(db), file_storage, collection, flavor, revision.strip(), user.get("username")
+        )
+        report = await asyncio.to_thread(importer.import_directory, root)
+
+    logger.info(f"Training data import into {collection}: {report.documents} documents, {len(report.skipped)} skipped")
+    if report.files_imported:
+        broadcast_to_all_sessions(
+            sse_service=sse_service,
+            session_manager=session_manager,
+            event_type="fileDataChanged",
+            data={"reason": "files_imported"},
+            logger=logger,
+        )
+    return report.to_dict()

@@ -2,7 +2,7 @@
 GROBID extractor plugin.
 
 Registers the GrobidTrainingExtractor with the extraction registry.
-Provides a download endpoint for reviewers to download complete training packages.
+Provides endpoints for reviewers to download and import complete training packages.
 """
 
 import logging
@@ -61,8 +61,17 @@ class GrobidPlugin(Plugin):
                     "name": "download_training",
                     "label": "Download GROBID Training Data",
                     "description": "Download complete GROBID training package for a collection",
-                    "category": "collection",
+                    "category": "grobid",
                     "icon": "download",
+                    "state_params": ["collection"],
+                    "required_roles": ["reviewer"],
+                },
+                {
+                    "name": "import_training",
+                    "label": "Import GROBID Training Data",
+                    "description": "Import GROBID training data (annotations, raw feature files and PDFs) into a collection",
+                    "category": "grobid",
+                    "icon": "upload",
                     "state_params": ["collection"],
                     "required_roles": ["reviewer"],
                 },
@@ -88,6 +97,7 @@ class GrobidPlugin(Plugin):
         """Return available endpoints."""
         return {
             "download_training": self.download_training,
+            "import_training": self.import_training,
             "reload_feature_file": self.reload_feature_file,
         }
 
@@ -235,6 +245,24 @@ class GrobidPlugin(Plugin):
             "downloadUrl": download_url,
             "collection": collection,
         }
+
+    async def import_training(
+        self, context: PluginContext, params: dict[str, Any]
+    ) -> dict[str, Any]:
+        """
+        Open the upload form of the training data import (#68).
+
+        Args:
+            context: Plugin context
+            params: May include 'collection' (preselected target collection)
+
+        Returns:
+            outputUrl of the upload form
+        """
+        from urllib.parse import quote
+
+        collection = params.get("collection") or ""
+        return {"outputUrl": f"/api/plugins/grobid/import-training/view?collection={quote(collection)}"}
 
     async def reload_feature_file(
         self, context: PluginContext, params: dict[str, Any]
