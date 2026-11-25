@@ -10,23 +10,21 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
 from fastapi_app.plugin_api import (
-    clear_directory,
     ExtractorRegistry,
-    get_event_bus,
     Plugin,
     PluginContext,
     register_document_rules_provider,
-    register_gc_handler,
+    register_gc_task,
     register_schema_config,
     unregister_document_rules_provider,
-    unregister_gc_handler,
+    unregister_gc_task,
     unregister_schema_config,
 )
 from pte_plugin_grobid.annotation_rules import GrobidRulesProvider
 from .config import has_layout_api, init_plugin_config
 from .layout import SEGMENTATION, segmentation_layout
 
-from .cache import get_cache_dir
+from .cache_gc import collect_cache_garbage
 from .extractor import GrobidTrainingExtractor
 
 if TYPE_CHECKING:
@@ -123,17 +121,17 @@ class GrobidPlugin(Plugin):
         registry.register(GrobidTrainingExtractor)
         register_document_rules_provider("GROBID", "grobid", GrobidRulesProvider())
         register_schema_config(GROBID_RNG_URL, timeout=10, reason="Grobid RelaxNG schema is complex and may be slow")
-        register_gc_handler(self.metadata["id"], lambda: clear_directory(get_cache_dir()))
+        # Garbage collection deletes only the cache entries no training document refers to
+        register_gc_task(
+            f"plugin:{self.metadata['id']}", "GROBID training-data cache (unreferenced entries)",
+            collect_cache_garbage, order=850,
+        )
         if has_layout_api():
             from fastapi_app.plugin_api import register_layout_provider
 
             register_layout_provider(SEGMENTATION, self.metadata["id"], segmentation_layout)
         self._register_enhancements(context)
 
-        # Register event handler for file deletion cache cleanup
-        event_bus = get_event_bus()
-        event_bus.on("file.deleted", self._on_file_deleted)
-        
         logger.info("GROBID extractor plugin initialized")
 
     def _register_enhancements(self, context: PluginContext) -> None:
@@ -153,7 +151,7 @@ class GrobidPlugin(Plugin):
         registry.unregister("grobid")
         unregister_document_rules_provider("GROBID")
         unregister_schema_config(GROBID_RNG_URL)
-        unregister_gc_handler(self.metadata["id"])
+        unregister_gc_task(f"plugin:{self.metadata['id']}")
         if has_layout_api():
             from fastapi_app.plugin_api import unregister_layout_provider
 
@@ -162,54 +160,7 @@ class GrobidPlugin(Plugin):
             self._wizard.unregister_enhancements(self.metadata["id"])
             self._wizard = None
 
-        # Unregister event handler
-        event_bus = get_event_bus()
-        event_bus.off("file.deleted", self._on_file_deleted)
-
         logger.info("GROBID extractor plugin cleaned up")
-
-    async def _on_file_deleted(self, stable_id: str, **kwargs) -> None:
-        """
-        Clean up cached GROBID training data when a file is deleted.
-
-        This handler is called when any file is deleted. It checks if the file
-        was a PDF and removes any cached training data for that document.
-
-        Args:
-            stable_id: The stable_id of the deleted file
-        """
-        from fastapi_app.lib.core.dependencies import get_db
-        from fastapi_app.lib.repository.file_repository import FileRepository
-
-        try:
-            # Get file info to check if it was a PDF
-            db = get_db()
-            file_repo = FileRepository(db)
-            file_info = file_repo.get_file_by_stable_id(stable_id)
-
-            if not file_info or file_info.file_type != "pdf":
-                return
-
-            doc_id = file_info.doc_id
-            if not doc_id:
-                return
-
-            # Check if any other TEI files still exist for this doc_id
-            doc_files = file_repo.get_files_by_doc_id(doc_id)
-            other_teis = [f for f in doc_files if f.file_type == "tei" and f.stable_id != stable_id and not f.deleted]
-
-            if other_teis:
-                # Other PDFs exist, don't delete cache
-                return
-
-            # Delete cached training data for this document
-            from pte_plugin_grobid.cache import delete_cache_for_doc
-
-            if delete_cache_for_doc(doc_id):
-                logger.info(f"Deleted cached GROBID training data for {doc_id}")
-
-        except Exception as e:
-            logger.warning(f"Failed to clean up GROBID cache for {stable_id}: {e}")
 
     async def download_training(
         self, context: PluginContext, params: dict[str, Any]

@@ -12,6 +12,7 @@ import os
 import shutil
 import zipfile
 from datetime import datetime
+from pathlib import Path
 
 from typing import Any
 
@@ -27,7 +28,9 @@ from fastapi_app.lib.core.dependencies import (
     require_session_id,
 )
 from fastapi_app.lib.core.database import DatabaseManager
+from fastapi_app.lib.models.models import FileMetadata
 from fastapi_app.plugin_api import (
+    FileRepository as PluginFileRepository,
     FileStorage,
     require_admin_user,
     require_authenticated_user,
@@ -38,6 +41,8 @@ from fastapi_app.lib.core.sessions import SessionManager
 from fastapi_app.lib.sse.sse_utils import ProgressBar, send_notification
 from pte_plugin_grobid.cache import cache_training_data, check_cache, package_lookups
 from pte_plugin_grobid.config import get_grobid_server_url, get_model_path, get_grobid_server_timeout, is_grobid_cache_disabled
+from pte_plugin_grobid.pdf_source import get_source_pdf
+from pte_plugin_grobid.sync import parse_encoding_labels
 
 logger = logging.getLogger(__name__)
 
@@ -451,6 +456,41 @@ async def grobid_diagnostics(
     return {"checks": results}
 
 
+def _package_source(
+    file_repo: PluginFileRepository,
+    file_storage: FileStorage,
+    gold_file: FileMetadata,
+    gold_content: str,
+    pdf_file: FileMetadata,
+    pdf_path: Path,
+    grobid_revision: str,
+) -> tuple[list[tuple[str, str | None]], bool, str, Path | None]:
+    """
+    Where the training download gets the training package of a gold file from: the PDF the gold
+    file was made from, which is the archived original if text recognition has replaced the
+    document's PDF since (pdf-tei-editor#924), otherwise the current PDF.
+
+    Args:
+        file_repo: File repository
+        file_storage: File storage
+        gold_file: The gold file
+        gold_content: Its TEI content (for the labels of its encodingDesc)
+        pdf_file: The document's current PDF
+        pdf_path: Storage path of the current PDF
+        grobid_revision: Revision of the GROBID server
+
+    Returns:
+        (cache keys to try, whether the package may be fetched from GROBID, content hash of the
+        source PDF, storage path of the source PDF or None if it is missing), see
+        cache.package_lookups()
+    """
+    source_pdf = get_source_pdf(file_repo, gold_file) or pdf_file
+    source_pdf_path = pdf_path if source_pdf.id == pdf_file.id else file_storage.get_file_path(source_pdf.id, "pdf")
+    # the editor's file id is the SHA-256 of the content
+    lookups, may_fetch = package_lookups(grobid_revision, source_pdf.id, parse_encoding_labels(gold_content))
+    return lookups, may_fetch and source_pdf_path is not None, source_pdf.id, source_pdf_path
+
+
 def _failed_documents_summary(failures: list[tuple[str, str]], limit: int = 5) -> str:
     """
     Describe the documents for which GROBID returned no training data, for a notification or error detail.
@@ -619,12 +659,14 @@ async def download_training_package(
                         and f.variant.startswith("grobid.training.")
                     ]
 
-                    # Build map of variant -> gold file content
+                    # Build map of variant -> gold file content (and its record)
                     gold_by_variant: dict[str, str] = {}
+                    gold_meta_by_variant: dict[str, FileMetadata] = {}
                     for gold_file in gold_files:
                         content = file_storage.read_file(gold_file.id, "tei")
                         if content and gold_file.variant:
                             gold_by_variant[gold_file.variant] = content.decode("utf-8")
+                            gold_meta_by_variant[gold_file.variant] = gold_file
 
                     # Skip documents without any gold standard files
                     if not gold_by_variant:
@@ -645,17 +687,21 @@ async def download_training_package(
                             doc_flavor = tei_flavor
                             break
 
-                    # The training package of each gold file: the PDF may have been replaced
-                    # (text recognition) after a gold file was extracted, whose feature files
-                    # then only exist in the cache (see cache.package_lookups()).
-                    current_pdf_hash = pdf_file.id  # the editor's file id is the SHA-256 of the content
+                    # The training package of each gold file comes from the PDF it was made
+                    # from. Text recognition may have replaced the PDF since: the core then
+                    # keeps the original as an archived PDF (pdf-tei-editor#924), from which the
+                    # package can be fetched again; without it, the feature files of the earlier
+                    # PDF only exist in the cache (see cache.package_lookups()).
                     refresh = force_refresh or is_grobid_cache_disabled()
                     packages: dict[tuple[tuple[str, str | None], ...], tuple[str, list[str]]] = {}
                     temp_dirs: list[str] = []
                     variants_written = 0
                     try:
                         for variant in variants_to_process:
-                            lookups, may_fetch = package_lookups(grobid_revision, current_pdf_hash, parse_encoding_labels(gold_by_variant[variant]))
+                            lookups, may_fetch, source_pdf_hash, source_pdf_path = _package_source(
+                                file_repo, file_storage, gold_meta_by_variant[variant], gold_by_variant[variant],
+                                pdf_file, pdf_path, grobid_revision,
+                            )
                             memo_key = tuple(lookups)
                             if memo_key not in packages:
                                 cached = None
@@ -668,7 +714,7 @@ async def download_training_package(
                                     packages[memo_key] = (cached["temp_dir"], cached["files"])
                                     temp_dirs.append(cached["temp_dir"])
                                 elif not may_fetch:
-                                    reason = f"{variant}: the PDF was replaced after this version was extracted (e.g. by text recognition), and the feature file of the earlier PDF is not cached"
+                                    reason = f"{variant}: the PDF was replaced after this version was extracted (e.g. by text recognition), the original PDF was not kept, and its feature file is not cached"
                                     logger.warning(f"Training download: {doc_id}: {reason}")
                                     grobid_failures.append((doc_id, reason))
                                     continue
@@ -677,13 +723,13 @@ async def download_training_package(
                                         # Run blocking GROBID fetch in thread pool to allow SSE events
                                         fetched_dir, fetched_files = await asyncio.to_thread(
                                             training_handler._fetch_training_package,
-                                            str(pdf_path), grobid_server_url, doc_flavor
+                                            str(source_pdf_path), grobid_server_url, doc_flavor
                                         )
                                     except Exception as e:
                                         logger.warning(f"Failed to fetch training data for {doc_id}: {e}")
                                         grobid_failures.append((doc_id, str(e)))
                                         break
-                                    cache_training_data(doc_id, grobid_revision, doc_flavor, fetched_dir, fetched_files, pdf_hash=current_pdf_hash)
+                                    cache_training_data(doc_id, grobid_revision, doc_flavor, fetched_dir, fetched_files, pdf_hash=source_pdf_hash)
                                     packages[memo_key] = (fetched_dir, fetched_files)
                                     temp_dirs.append(fetched_dir)
                             temp_dir, extracted_files = packages[memo_key]

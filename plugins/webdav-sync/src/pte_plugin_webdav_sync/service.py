@@ -495,6 +495,12 @@ class SyncService(SyncServiceBase):
                 doc_metadata=_parse_json_field(file_data.get("doc_metadata"), {}),
                 file_metadata=_parse_json_field(file_data.get("file_metadata"), {}),
                 created_by=file_data.get("created_by"),
+                # Version history and archived PDFs (pdf-tei-editor#924): without them, an archived
+                # PDF would arrive as a second current PDF of the document, and versions would lose
+                # their link to it. Cores without these fields ignore them (FileCreate ignores extras).
+                parent_stable_id=file_data.get("parent_stable_id"),
+                pdf_stable_id=file_data.get("pdf_stable_id"),
+                superseded_by=file_data.get("superseded_by"),
             )
             self.file_repo.insert_file(file_create)
             self.file_repo.mark_file_synced(file_id, op["seq"])

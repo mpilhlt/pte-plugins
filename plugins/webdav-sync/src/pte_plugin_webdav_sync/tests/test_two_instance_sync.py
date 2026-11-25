@@ -63,6 +63,7 @@ def _upsert_op(seq: int, file_id: str, stable_id: str, **kwargs) -> dict:
         'is_gold_standard': False,
         'doc_collections': [], 'doc_metadata': {}, 'file_metadata': {},
         'deleted': False,
+        **kwargs.get('extra', {}),
     }
     return {
         'seq': seq,
@@ -131,6 +132,28 @@ class TestApplyOps(unittest.TestCase):
 
         file = self.repo.get_file_by_id('hash_a')
         self.assertEqual(file.sync_status, 'synced')
+
+    @unittest.skipUnless(hasattr(FileRepository, 'get_pdf_for_file'), 'core without archived PDFs (pdf-tei-editor#924)')
+    def test_new_files_keep_version_history_and_archived_pdf_links(self):
+        """Archived PDFs (pdf-tei-editor#924) and the version links arrive as they were sent."""
+        ops = [
+            _upsert_op(seq=1, file_id='hash_pdf', stable_id='pdf_current', file_type='pdf', filename='doc.pdf'),
+            _upsert_op(seq=2, file_id='hash_orig', stable_id='pdf_orig', file_type='pdf', filename='doc.pdf',
+                       extra={'superseded_by': 'pdf_current'}),
+            _upsert_op(seq=3, file_id='hash_v1', stable_id='tei_v1', extra={'pdf_stable_id': 'pdf_orig'}),
+            _upsert_op(seq=4, file_id='hash_v2', stable_id='tei_v2', version=2,
+                       extra={'pdf_stable_id': 'pdf_orig', 'parent_stable_id': 'tei_v1'}),
+        ]
+        summary = SyncSummary()
+        self.service._apply_ops(ops, summary, client_id=None)
+        self.assertEqual(summary.errors, 0)
+
+        self.assertEqual(self.repo.get_file_by_stable_id('pdf_orig').superseded_by, 'pdf_current')
+        v2 = self.repo.get_file_by_stable_id('tei_v2')
+        self.assertEqual((v2.pdf_stable_id, v2.parent_stable_id), ('pdf_orig', 'tei_v1'))
+        # the archived PDF is not a second current PDF of the document
+        self.assertEqual(self.repo.get_pdf_for_document('doc1').stable_id, 'pdf_current')
+        self.assertEqual(self.repo.get_pdf_for_file(v2).stable_id, 'pdf_orig')
 
     # -- metadata-only update -----------------------------------------------
 
