@@ -32,6 +32,9 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+GROBID_RNG_URL = "https://raw.githubusercontent.com/kermitt2/grobid/refs/heads/master/grobid-home/schemas/rng/Grobid.rng"
+
+
 def register_corrected_pdf_handler_if_available(plugin_id: str) -> bool:
     """Register the corrected-PDF handler of segmentation documents if the editor has the API (plugin API 1.8); whether it has."""
     try:
@@ -51,9 +54,6 @@ def unregister_corrected_pdf_handler_if_available() -> None:
     except ImportError:
         return
     unregister_corrected_pdf_handler(SEGMENTATION)
-
-
-GROBID_RNG_URL = "https://raw.githubusercontent.com/kermitt2/grobid/refs/heads/master/grobid-home/schemas/rng/Grobid.rng"
 
 
 class GrobidPlugin(Plugin):

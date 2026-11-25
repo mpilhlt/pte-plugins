@@ -57,7 +57,7 @@ Reloading only replaces the layout information. Your annotations stay as they ar
 
 When you write the corrections of a segmentation document into the text layer of its PDF with **Tools > Write text corrections to PDF**, the plugin fetches the feature file of the corrected PDF from GROBID, so that the check of your corrections and the page layout keep working. The document gets the labels of the new PDF; its annotations do not change.
 
-The plugin first compares the new feature file with the lines of the document. If a line that matched the words GROBID found in the old PDF no longer matches, or a corrected line still does not match, the corrections are refused, the lines are listed, and the PDF is not replaced. If the GROBID server cannot be reached, nothing is changed either.
+The plugin first compares the new feature file with the lines of the document. If a line that matched the words GROBID found in the old PDF no longer matches, the corrections are refused, the lines are listed, and the PDF is not replaced. If the GROBID server cannot be reached, nothing is changed either.
 
 ## Downloading the training data
 

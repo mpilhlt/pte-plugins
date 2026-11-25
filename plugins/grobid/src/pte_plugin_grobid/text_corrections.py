@@ -11,13 +11,14 @@ labels pointing to that cache entry. The text of the document is not changed.
 
 The handler refuses the corrected PDF (`CorrectedPdfMismatch`, and the editor replaces nothing)
 if its feature file matches the lines of the document worse than the old one: every line that
-matched before, and every corrected line, must match.
+matched before must match. Corrected lines that still do not match are logged.
 """
 
 from __future__ import annotations
 
 import logging
 import shutil
+import zipfile
 from collections.abc import Mapping
 from pathlib import Path
 
@@ -70,13 +71,16 @@ def corrected_pdf_handler(xml: str, doc_id: str, pdf_path: Path, pdf_hash: str, 
 
     The feature file of the corrected PDF must match the document's lines at least as well as
     the one of the old PDF: with `before` and `after` the unmatched lines (unmatched_lines())
-    of the old and the new feature file, every line in `after` must have been unmatched before
-    and not be a corrected line. If there is no cache entry for the old PDF, `after` is accepted
+    of the old and the new feature file, every line in `after` must have been unmatched before.
+    Corrected lines that are still unmatched are only logged: a correction in the middle of a
+    line (a footnote marker, say) does not change a first token that differs for other reasons
+    (reading order, tokenization). If there is no cache entry for the old PDF, `after` is accepted
     if at least MIN_MATCHED_SHARE of the lines with text match, as the layout provider requires.
     Otherwise raises CorrectedPdfMismatch with the offending lines; the new cache entry is then
     left to the cache garbage collection, since no document refers to it.
 
-    Raises RuntimeError if GROBID is not configured or unreachable, the fetch fails, the document
+    Raises RuntimeError if GROBID is not configured or unreachable, the fetch fails (also when
+    GROBID returns no ZIP), the document
     has no `revision` label or the package has no segmentation feature file.
     """
     from fastapi_app.plugin_api import CorrectedPdfMismatch
@@ -95,7 +99,10 @@ def corrected_pdf_handler(xml: str, doc_id: str, pdf_path: Path, pdf_hash: str, 
     before = unmatched_lines(xml, doc_id, labels)
     _, revision = check_grobid_revision(grobid_server_url)
     flavor = labels.get("flavor", "default")
-    temp_dir, files = TrainingHandler()._fetch_training_package(str(pdf_path), grobid_server_url, flavor)
+    try:
+        temp_dir, files = TrainingHandler()._fetch_training_package(str(pdf_path), grobid_server_url, flavor)
+    except zipfile.BadZipFile as e:
+        raise RuntimeError(f"GROBID did not return a training package for the corrected PDF: {e}") from e
     try:
         cache_training_data(doc_id, revision, flavor, temp_dir, files, pdf_hash=pdf_hash)
     finally:
@@ -110,7 +117,10 @@ def corrected_pdf_handler(xml: str, doc_id: str, pdf_path: Path, pdf_hash: str, 
         with_text = sum(1 for t in tokens if t is not None)
         offending = after if with_text and (with_text - len(after)) / with_text < MIN_MATCHED_SHARE else set()
     else:
-        offending = after - (before - corrected_lines)
+        offending = after - before
+    still_unmatched = sorted(after & corrected_lines)
+    if still_unmatched:
+        logger.warning(f"grobid: {len(still_unmatched)} corrected line(s) {still_unmatched} of {doc_id} still do not match the feature file of the corrected PDF")
     if offending:
         logger.warning(f"grobid: the feature file of the corrected PDF of {doc_id} does not match lines {sorted(offending)}")
         raise CorrectedPdfMismatch(MISMATCH_MESSAGE, sorted(offending))

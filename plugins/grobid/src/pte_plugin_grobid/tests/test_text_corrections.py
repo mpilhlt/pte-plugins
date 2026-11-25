@@ -133,14 +133,23 @@ class TestCorrectedPdfHandler(TextCorrectionsTestBase):
             self.handle()
         self.assertEqual(cm.exception.lines, [3])
 
-    def test_a_corrected_line_must_match(self):
-        from fastapi_app.plugin_api import CorrectedPdfMismatch
-
+    def test_a_corrected_line_that_still_does_not_match_is_logged(self):
+        # e.g. a footnote marker corrected in the middle of a line whose first token differs for other reasons
         self.write_zip(OLD_FEATURES)
         self.new_features = OLD_FEATURES
-        with self.assertRaises(CorrectedPdfMismatch) as cm:
-            self.handle()
-        self.assertEqual(cm.exception.lines, [1])
+        with self.assertLogs("pte_plugin_grobid.text_corrections", "WARNING") as logs:
+            xml = self.handle()
+        self.assertEqual(parse_encoding_labels(xml)["pdf-hash"], NEW_HASH)
+        self.assertIn("1 corrected line(s) [1]", logs.output[0])
+
+    def test_grobid_returns_no_zip(self):
+        def bad_zip(*_args, **_kwargs):
+            raise zipfile.BadZipFile("File is not a zip file")
+
+        with mock.patch("pte_plugin_grobid.handlers.training.TrainingHandler._fetch_training_package", side_effect=bad_zip):
+            with self.assertRaises(RuntimeError) as cm:
+                self.handle()
+        self.assertNotIsInstance(cm.exception, zipfile.BadZipFile)
 
     def test_lines_that_did_not_match_before_are_tolerated(self):
         self.write_zip(OLD_FEATURES)
@@ -186,7 +195,6 @@ class TestRegistration(unittest.TestCase):
             self.assertFalse(register_corrected_pdf_handler_if_available("grobid"))
             return
         from fastapi_app.plugin_api import get_corrected_pdf_handler, unregister_corrected_pdf_handler
-        from pte_plugin_grobid.plugin import register_corrected_pdf_handler_if_available
         from pte_plugin_grobid.text_corrections import corrected_pdf_handler
 
         self.addCleanup(unregister_corrected_pdf_handler, "grobid.training.segmentation")
