@@ -8,7 +8,7 @@ Admin plugin that updates the bibliographic metadata (`<biblStruct>` in `<source
 - Optional LLM extraction from the PDF when no DOI is available
 - Optionally overwrites existing `<biblStruct>` elements
 - Progress bar via SSE, with cancellation
-- Summary page with update statistics
+- Summary page with update statistics, listing the documents whose registry language (e.g. from CrossRef) was not declared because their text reads as another language (requires pdf-tei-editor with `language_kept` in the statistics of `update_tei_metadata()`)
 
 ## Usage
 

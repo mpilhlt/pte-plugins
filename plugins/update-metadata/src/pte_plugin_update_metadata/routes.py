@@ -7,6 +7,7 @@ and cancellation support.
 
 import asyncio
 import logging
+from html import escape
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query
@@ -28,6 +29,33 @@ router = APIRouter(prefix="/api/plugins/update-metadata", tags=["update-metadata
 
 # Cancellation token storage
 _cancellation_tokens: dict[str, bool] = {}
+
+
+def _language_kept_html(language_kept: list[dict[str, str]]) -> str:
+    """
+    Render the TEI files whose registry language was not declared, since their text contradicts it.
+
+    Args:
+        language_kept: Entries with stable_id, registry and detected language, from `update_tei_metadata()`
+
+    Returns:
+        A summary stat with the list of files, or an empty string if there are none
+    """
+    if not language_kept:
+        return ""
+    items = "".join(
+        f"<li>{escape(kept['stable_id'])}: registry <code>{escape(kept['registry'])}</code>, "
+        f"text <code>{escape(kept['detected'])}</code></li>"
+        for kept in language_kept
+    )
+    return f"""
+                <div class="stat warning">
+                    <strong>Registry language not declared:</strong> {len(language_kept)}
+                    <div style="font-size: 0.9em; color: #666; margin-top: 5px;">
+                        (the text of these documents reads as another language; please check them)
+                    </div>
+                    <ul style="font-size: 0.9em;">{items}</ul>
+                </div>"""
 
 
 class CancellationToken:
@@ -282,6 +310,8 @@ async def execute_update(
             else "DOI lookup (CrossRef/DataCite) only"
         )
 
+        language_kept_html = _language_kept_html(stats.get('language_kept', []))
+
         # Generate summary HTML
         html = f"""
         <!DOCTYPE html>
@@ -352,6 +382,7 @@ async def execute_update(
                         (no DOI, already have biblStruct, or no useful metadata)
                     </div>
                 </div>
+                {language_kept_html}
                 <div class="stat error">
                     <strong>Errors:</strong> {stats['errors']}
                 </div>
