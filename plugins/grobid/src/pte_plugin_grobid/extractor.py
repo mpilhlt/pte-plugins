@@ -2,6 +2,7 @@
 GROBID-based extraction engine supporting multiple API endpoints.
 """
 
+import asyncio
 import logging
 import os
 import datetime
@@ -99,6 +100,35 @@ class GrobidTrainingExtractor(BaseExtractor):
     def is_available(cls) -> bool:
         """Check if GROBID server URL is configured."""
         return get_grobid_server_url() is not None
+
+    async def check_ready(self, options: Optional[Dict[str, Any]] = None) -> Optional[str]:
+        """
+        Check that the GROBID server can process a document now (plugin API 1.7).
+
+        Runs the checks that `extract()` runs before the extraction: the server URL is
+        configured, the Hugging Face Space behind it (if any) is running, and the server
+        reports itself ready with its models loaded. The core calls this before text
+        recognition, so that a long OCR run is not wasted when GROBID is down.
+
+        Returns:
+            None if the server is ready, otherwise a message for the user
+        """
+        _ = options
+        return await asyncio.to_thread(self._readiness_problem)
+
+    def _readiness_problem(self) -> Optional[str]:
+        """Return why the GROBID server cannot process a document now, or None."""
+        grobid_server_url = get_grobid_server_url()
+        if grobid_server_url is None:
+            return "No GROBID server is configured (plugin.grobid.server.url or GROBID_SERVER_URL)"
+        hf_error = check_space_running(grobid_server_url, get_grobid_server_timeout(), get_grobid_hf_space())
+        if hf_error:
+            return hf_error
+        try:
+            self._check_grobid_health(grobid_server_url)
+        except RuntimeError as e:
+            return str(e)
+        return None
 
     async def extract(self, pdf_path: Optional[str] = None, xml_content: Optional[str] = None,
                       options: Optional[Dict[str, Any]] = None) -> str:
