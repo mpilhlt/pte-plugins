@@ -102,15 +102,6 @@ class CachePdfIsolationTestCase(CacheFlavorIsolationTestCase):
         )
         self.assertIsNone(get_cache_zip("doc-1", {"flavor": "default"}))
 
-    def test_delete_removes_entries_of_all_pdfs(self):
-        from pte_plugin_grobid.cache import cache_training_data, check_cache, delete_cache_for_doc
-
-        cache_training_data("doc-1", "rev-1", "default", str(self.src_dir), ["doc-1.training.segmentation"], pdf_hash="a" * 64)
-        cache_training_data("doc-1", "rev-1", "default", str(self.src_dir), ["doc-1.training.segmentation"])
-        self.assertTrue(delete_cache_for_doc("doc-1"))
-        self.assertIsNone(check_cache("doc-1", "rev-1", "default", pdf_hash="a" * 64))
-        self.assertIsNone(check_cache("doc-1", "rev-1", "default"))
-
     def test_pdf_content_hash_is_sha256(self):
         import hashlib
 

@@ -224,32 +224,3 @@ def add_to_cache(doc_id: str, revision: str, flavor: str, pdf_hash: str, files: 
     with open(cache_path / "metadata.json", "w") as f:
         json.dump(metadata, f, indent=2)
     return zip_path
-
-
-def delete_cache_for_doc(doc_id: str) -> bool:
-    """
-    Delete all cached training data for a document (all revisions).
-
-    Args:
-        doc_id: Document ID
-
-    Returns:
-        True if any cache entries were deleted, False otherwise
-    """
-    import shutil
-
-    cache_dir = get_cache_dir()
-    safe_id = _safe_doc_id(doc_id)
-    deleted = False
-
-    # Find all cache entries for this doc_id (any revision)
-    # Pattern: {safe_id} or {safe_id}_{revision}
-    for cache_path in cache_dir.glob(f"{safe_id}*"):
-        if cache_path.is_dir():
-            # Verify it's actually for this doc_id (not a prefix match of another doc)
-            folder_name = cache_path.name
-            if folder_name == safe_id or folder_name.startswith(f"{safe_id}_"):
-                shutil.rmtree(cache_path, ignore_errors=True)
-                deleted = True
-
-    return deleted

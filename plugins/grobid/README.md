@@ -10,7 +10,7 @@ The plugin provides two complementary workflows:
 
 **Full-text / reference extraction** — submits a PDF to GROBID's fulltext or references service endpoints and stores the result as a TEI document.
 
-Extracted training data is cached per document, GROBID revision, flavor and PDF content so that subsequent extractions for the same document are served from cache without re-contacting the server (see [Cache](#cache-cachepy) below). The cache is invalidated automatically when a PDF is deleted.
+Extracted training data is cached per document, GROBID revision, flavor and PDF content so that subsequent extractions for the same document are served from cache without re-contacting the server (see [Cache](#cache-cachepy) below). Garbage collection removes the entries no training document refers to any more.
 
 Reviewers can download a complete training package for a collection as a ZIP file that mirrors the `grobid-trainer/resources/dataset/` directory structure and can be dropped directly into that directory.
 
@@ -91,7 +91,7 @@ The PDF's content hash (SHA-256, the editor's file id of the PDF; the first 16 c
 
 The training download pairs each gold file with the feature file of the PDF it was extracted from (`cache.package_lookups()`). Since pdf-tei-editor#924, the editor keeps the original PDF when text recognition replaces the PDF of a document with versions (an archived PDF, linked to these versions); the plugin finds it with `FileRepository.get_pdf_for_file()` (`pdf_source.get_source_pdf()`), so a gold file made before text recognition is paired with a feature file computed from its original PDF, fetched from GROBID if it is not cached. If the original PDF was not kept (text recognition before #924, or an editor without archived PDFs), only the cache is used for a gold file whose `pdf-hash` differs from the current PDF, since the current PDF's feature files do not match its text; if the entry is gone, the file is left out and listed in `skipped-documents.txt`.
 
-Garbage collection in the editor empties the whole cache directory (the plugin's GC handler), and deleting the last TEI file of a document removes its entries; entries are recomputed on demand.
+Garbage collection in the editor (GC task `plugin:grobid`, `cache_gc.py`) deletes only the entries that no training document refers to: the entry of every document with a `grobid.training.*` variant, found from the labels of its encodingDesc as above, is kept, also for soft-deleted documents, which can be restored. Entries of purged documents, of PDFs replaced without a remaining version, of earlier GROBID revisions after a reload, and of extractions that were never saved go; entries changed within the last hour are kept, so that an extraction whose document is not saved yet keeps its entry. The task supports dry runs. A deleted entry is computed again from the PDF when a document needs it.
 
 The directory is created automatically. To force a fresh extraction for a document, delete its cache directory, set `GROBID_DISABLE_CACHE=true` to disable caching globally, or use the `force_refresh=true` query parameter on the download endpoint.
 
