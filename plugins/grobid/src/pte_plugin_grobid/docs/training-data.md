@@ -53,6 +53,12 @@ A dialog first shows what the action does, which document it applies to, and whe
 
 Reloading only replaces the layout information. Your annotations stay as they are, no new version is created, and the document is reloaded in the editor afterwards. The action is refused if the PDF was replaced after the extraction, for example by text recognition: the new PDF's layout no longer matches the text of the document, so the document has to be extracted again.
 
+## Text corrections written into the PDF
+
+When you write the corrections of a segmentation document into the text layer of its PDF with **Tools > Write text corrections to PDF**, the plugin fetches the feature file of the corrected PDF from GROBID, so that the check of your corrections and the page layout keep working. The document gets the labels of the new PDF; its annotations do not change.
+
+The plugin first compares the new feature file with the lines of the document. If a line that matched the words GROBID found in the old PDF no longer matches, the corrections are refused, the lines are listed, and the PDF is not replaced. If the GROBID server cannot be reached, nothing is changed either.
+
 ## Downloading the training data
 
 When the documents of a collection have been corrected and marked as gold, reviewers download them for retraining GROBID:

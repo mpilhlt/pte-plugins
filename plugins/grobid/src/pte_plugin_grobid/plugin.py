@@ -35,6 +35,27 @@ logger = logging.getLogger(__name__)
 GROBID_RNG_URL = "https://raw.githubusercontent.com/kermitt2/grobid/refs/heads/master/grobid-home/schemas/rng/Grobid.rng"
 
 
+def register_corrected_pdf_handler_if_available(plugin_id: str) -> bool:
+    """Register the corrected-PDF handler of segmentation documents if the editor has the API (plugin API 1.8); whether it has."""
+    try:
+        from fastapi_app.plugin_api import register_corrected_pdf_handler
+    except ImportError:
+        return False
+    from .text_corrections import corrected_pdf_handler
+
+    register_corrected_pdf_handler(SEGMENTATION, plugin_id, corrected_pdf_handler)
+    return True
+
+
+def unregister_corrected_pdf_handler_if_available() -> None:
+    """Unregister the corrected-PDF handler of segmentation documents if the editor has the API (plugin API 1.8)."""
+    try:
+        from fastapi_app.plugin_api import unregister_corrected_pdf_handler
+    except ImportError:
+        return
+    unregister_corrected_pdf_handler(SEGMENTATION)
+
+
 class GrobidPlugin(Plugin):
     """Plugin that provides GROBID-based extraction."""
 
@@ -130,6 +151,8 @@ class GrobidPlugin(Plugin):
             from fastapi_app.plugin_api import register_layout_provider
 
             register_layout_provider(SEGMENTATION, self.metadata["id"], segmentation_layout)
+        # regenerates the feature file when the editor writes text corrections into the PDF (pdf-tei-editor#931)
+        register_corrected_pdf_handler_if_available(self.metadata["id"])
         self._register_enhancements(context)
 
         logger.info("GROBID extractor plugin initialized")
@@ -156,6 +179,7 @@ class GrobidPlugin(Plugin):
             from fastapi_app.plugin_api import unregister_layout_provider
 
             unregister_layout_provider(SEGMENTATION)
+        unregister_corrected_pdf_handler_if_available()
         if self._wizard is not None:
             self._wizard.unregister_enhancements(self.metadata["id"])
             self._wizard = None
