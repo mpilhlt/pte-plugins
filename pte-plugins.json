@@ -40,7 +40,7 @@
       "dependencies": [],
       "engines": {
         "pte": ">=0.89.0",
-        "pte-plugin-api": "^1.2"
+        "pte-plugin-api": "^1.9"
       }
     },
     {

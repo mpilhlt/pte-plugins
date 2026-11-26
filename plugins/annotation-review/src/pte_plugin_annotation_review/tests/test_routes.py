@@ -18,7 +18,7 @@ from fastapi_app.lib.core.dependencies import get_document_rules_store, require_
 from fastapi_app.lib.doc_rules.storage import DocumentRulesStore
 from fastapi_app.lib.llm.model_access import ModelAccessDenied
 from fastapi_app.lib.llm import LLMModel, LLMProvider, LLMProviderError, LLMProviderRegistry
-from pte_plugin_annotation_review.prompts import UnusableResponseError
+from fastapi_app.plugin_api import UnusableResponseError
 from pte_plugin_annotation_review import routes as routes_module
 from pte_plugin_annotation_review.routes import router
 
