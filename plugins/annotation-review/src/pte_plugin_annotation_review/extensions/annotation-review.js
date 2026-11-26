@@ -285,6 +285,9 @@ export default class AnnotationReviewExtension extends FrontendExtensionPlugin {
     let done = 0;
     let total = 0;
     let discarded = 0;
+    // findings of the review received so far, of which the display holds those not dismissed or applied
+    let received = 0;
+    let appended = 0;
     progress.show(progressId, { label: heading, value: null, cancellable: true, onCancel: () => { cancelled = true; } });
     try {
       const findings = await this.review(resolved ?? undefined, {
@@ -303,7 +306,13 @@ export default class AnnotationReviewExtension extends FrontendExtensionPlugin {
           progress.setLabel(progressId, `${heading} (part ${Math.min(chunksDone + 1, chunksTotal)} of ${chunksTotal})`);
           // findings from a different document must not attach to another one
           if (documentChanged()) return;
-          this.showFindings(foundSoFar, this._display.findings.length === 0);
+          // the findings of the previous review are replaced by those of this one
+          if (chunksDone === 1) this._display.clear();
+          // appended, so that findings dismissed or applied meanwhile do not come back; the drawer
+          // opens for the first findings only
+          const added = foundSoFar.slice(received);
+          received = foundSoFar.length;
+          if (added.length) appended += this._display.append(added, appended === 0);
         },
       });
       if (findings === null || documentChanged()) return;

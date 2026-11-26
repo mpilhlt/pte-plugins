@@ -833,6 +833,25 @@ describe('chunked review', () => {
     assert.strictEqual(progressCalls.at(-1)[0], 'hide');
   });
 
+  it('runReview keeps a finding dismissed during the run dismissed when later chunks complete', async () => {
+    let dismiss;
+    const { ext, lintCalls } = buildExtension({
+      getEditorialDeclGuides: () => rules,
+      defaultModel: { providerId: 'p', modelId: 'm' },
+      docText: 'A0 A1 A2',
+      chunkCount: 2,
+      callPluginApiImpl: async (e, m, params) => {
+        if (params.chunk_index === 1) dismiss();
+        return { findings: [finding(`A${params.chunk_index}`)], chunk_count: 2 };
+      },
+    });
+    await ext.start();
+    dismiss = () => ext._display._forgetDismissed([{ from: 0, to: 2, severity: 'info', message: 'r', source: 'annotation-review' }]);
+    await ext.runReview();
+    assert.deepStrictEqual(ext._display.findings.map(f => f.old), ['A1']);
+    assert.deepStrictEqual(lintCalls.at(-1).own.map(d => d.from), [3]);
+  });
+
   it('runReview updates the progress value and label per chunk', async () => {
     const { ext, progressCalls } = buildExtension({
       getEditorialDeclGuides: () => rules,
