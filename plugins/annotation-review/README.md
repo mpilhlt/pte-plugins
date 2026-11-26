@@ -49,7 +49,7 @@ The rule URLs come from the (client-supplied) document, so the server fetches th
 ### Failure behavior
 
 - The provider is unreachable or rejects the request (overload, rate limit, invalid model): the review stops with an error naming the failing part; suggestions from earlier parts stay visible. The user can simply run the review again.
-- The model returns something that is not a JSON list: the review fails with an error showing the start of the response. A response cut off mid-list keeps the complete suggestions and logs a warning.
+- The model returns something that is not a JSON list: the review fails with the error "The model did not return a valid JSON list, and it could not be repaired (response starts with: …)" (earlier versions said "…a valid JSON list of findings…"). A response cut off mid-list keeps the complete suggestions and logs a warning.
 - Suggestions whose quoted text does not occur exactly once in the document (or, when reviewing a single node, in that node) are dropped (logged as a warning, with the count of kept versus returned suggestions per chunk in `app.log`).
 
 ### Tests
@@ -71,8 +71,9 @@ annotation_review/
   routes.py                    POST /plan and POST /review
   review_logic.py              text extraction, rule gathering, review orchestration
   chunking.py                  splits <text> into review-sized raw substrings
-  prompts.py                   prompt building, response parsing and validation
-  extensions/annotation-review.js   frontend extension (menu, progress, diagnostics)
+  prompts.py                   prompt building and finding validation
+  zones.py                     page-window review of zone documents
+  extensions/annotation-review.js   frontend extension (menu, progress, unit review marks)
   tests/                       Python unit tests and the extension's node tests
 ```
 
@@ -90,8 +91,8 @@ Tools > Review document annotations
          extract_text_content(xml)          raw <text>...</text> substring
          split_into_chunks() -> chunk i
          gather_rule_excerpts(xml)          one excerpt per category
-         provider.chat_completion(...)
-         parse_and_validate_findings(raw, whole <text>)
+         complete_with_retry(...)           core: LLM call, one retry if all dropped
+           validate_findings(raw, whole <text>)
        -> {findings, chunk_count}
        extension merges diagnostics after each chunk
 ```
@@ -103,20 +104,24 @@ The frontend drives the loop and sends the full (possibly unsaved) editor conten
 - **Raw substrings, not re-serialization.** `extract_text_content()` validates the XML with lxml but returns the `<text>` element exactly as it appears in the request string, and `split_into_chunks()` only cuts that string. A finding's `old` snippet therefore matches the editor's text byte for byte, which the frontend relies on to place highlights.
 - **Chunking.** `split_into_chunks()` tokenizes tags with a regex, computes the element depth at every closing tag, and picks the shallowest depth at which every unit fits `CHUNK_MAX_CHARS`; units are then packed greedily. Concatenating the chunks yields the input. An oversized unit stays whole. Chunks may start or end with unbalanced tags, which the prompt mentions.
 - **Anti-hallucination validation.** A finding is kept only if it is an object with string `old`, `new` and `rationale`, and `old` occurs exactly once in the whole `<text>` (not only in the chunk, because the editor needs a unique location). When a single node is reviewed (`scope`), `old` must occur exactly once in that node instead; if the node shares that text with another element (the same reference cited twice), `old` and `new` are widened with the node's surrounding characters until `old` is unique in the document. A finding that would wrap the whole content of an element in another element of the same name (e.g. `<author><author>...</author></author>`, when the model proposes to "add" an annotation that is already there) is dropped too. Everything else is dropped and logged. The system prompt asks for the smallest unique snippet, verbatim, and one non-overlapping finding per problem.
-- **Tolerant parsing.** `_extract_json_list()` finds a JSON list anywhere in the response (markdown fences, prose), `_repair_json_strings()` fixes unescaped double quotes (typically in XML attribute values such as `unit="issue"`) and invalid backslash escapes inside strings, and `_salvage_truncated_list()` recovers complete objects from a list cut off by the output token limit. No list at all raises `UnusableResponseError`, which is a failed review, not "no issues".
-- **Error mapping** (`routes.py`): 404 unknown provider, 403 model not permitted, 422 malformed XML or no machine rules or bad `chunk_index`, 502 for provider failures (`LLMProviderError`, `requests` errors, unusable response).
+- **Tolerant parsing** (core, `fastapi_app/lib/llm/json_response.py`). `extract_json_list()` finds a JSON list anywhere in the response (markdown fences, prose), fixes unescaped double quotes (typically in XML attribute values such as `unit="issue"`) and invalid backslash escapes inside strings, and recovers the complete objects of a list cut off by the output token limit. No list at all raises `UnusableResponseError`, which is a failed review, not "no issues".
+- **Retry** (core, `fastapi_app/lib/llm/review_call.py`). `complete_with_retry()` calls the model and, if every finding (or zone change) it proposed was dropped, calls it once more with `build_retry_note()` (or `zones.build_retry_note()`) appended to the prompt.
+- **Error mapping** (`routes.py`, with core's `llm_http_error()` from `fastapi_app/lib/llm/http_errors.py`): 404 unknown provider, 403 model not permitted, 422 malformed XML or no machine rules or bad `chunk_index`, 429 rate limit, 502 for provider failures (`LLMProviderError`, `requests` errors, unusable response).
+- **Page windows** of zone documents: `window_lines()` and `window_range()` of core's `fastapi_app/lib/tei/zone_lines.py`.
 - **Blocking work off the event loop.** Rule fetching (`requests`, DNS) runs in `asyncio.to_thread`.
 
 ### Frontend extension
 
-`extensions/annotation-review.js` is transformed into an IIFE by the frontend-extension mechanism (imports are stripped, only the default class is registered; see `docs/development/frontend-extensions.md`), and it extends `FrontendExtensionPlugin`. Dependencies it uses through `getDependency()`: `xmleditor`, `tools`, `lint-utils`, `tei-utils`, `sl-utils`, `dialog`, `progress`, `inference-settings`.
+`extensions/annotation-review.js` is transformed into an IIFE by the frontend-extension mechanism (imports are stripped, only the default class is registered; see `docs/development/frontend-extensions.md`), and it extends `FrontendExtensionPlugin`. Dependencies it uses through `getDependency()`: `xmleditor`, `tools`, `lint-utils`, `tei-utils`, `sl-utils`, `dialog`, `progress`, `inference-settings`, `session-storage`, `llm-findings`.
+
+The display of the findings is core's `FindingsDisplay` of `app/src/modules/llm-findings.js` (shared with other LLM reviews), which the extension creates on first use and attaches in `start()`; it also provides `locateFinding()` and `buildModifiedText()`.
 
 - `review(override, hooks)` runs `/plan` and the chunk loop and returns all findings (or null after a notified failure); `hooks.onStart`, `hooks.onProgress` and `hooks.isCancelled` let `runReview()` drive the progress widget.
 - `runReview()` shows the confirmation, creates the progress widget with an `onCancel` callback, displays findings incrementally, and reports the result.
-- **Diagnostics merging.** CodeMirror keeps a single global diagnostic set that each `setDiagnostics` replaces. The extension tags its diagnostics `source: 'annotation-review'` and merges them with the foreign ones through `app/src/modules/lint-utils.js` (`applyMergedDiagnostics`). When another source (TEI validation) replaces the set, the extension re-merges from an update listener, deferred with `setTimeout` because dispatching inside a listener is illegal. The diagnostics drawer is expanded only for the first batch of findings and when cached findings are restored.
-- **Stale findings.** After document edits (debounced 300 ms), findings whose `old` no longer occurs exactly once, for example after an accepted fix, are dropped.
+- **Diagnostics merging** (`FindingsDisplay`). CodeMirror keeps a single global diagnostic set that each `setDiagnostics` replaces. The extension tags its diagnostics `source: 'annotation-review'` and merges them with the foreign ones through `app/src/modules/lint-utils.js` (`applyMergedDiagnostics`). When another source (TEI validation) replaces the set, the extension re-merges from an update listener, deferred with `setTimeout` because dispatching inside a listener is illegal. The diagnostics drawer is expanded only for the first batch of findings and when cached findings are restored.
+- **Stale findings** (`FindingsDisplay`). After document edits (debounced 300 ms), findings whose `old` no longer occurs exactly once, for example after an accepted fix, are dropped.
 - **Propose fix.** `buildModifiedText()` builds the document text with only that finding applied and passes it to `xmleditor.showMergeView()`.
-- Exported helpers `locateFinding`, `buildModifiedText` and `findingsToDiagnostics` are pure and unit-tested without a DOM.
+- The exported helper `unitMarksForChunk` is pure and unit-tested without a DOM; it takes core's `locateFinding` as its first argument. The extension's node tests load `llm-findings.js` from the editor checkout through `scripts/core.js` and register it as the `llm-findings` dependency.
 
 ### Related core pieces
 

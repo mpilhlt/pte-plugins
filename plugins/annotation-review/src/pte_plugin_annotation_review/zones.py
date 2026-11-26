@@ -26,7 +26,9 @@ import logging
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from .prompts import Finding, _extract_json_list
+from fastapi_app.plugin_api import extract_json_list
+
+from .prompts import Finding
 
 try:
     from fastapi_app.plugin_api import MISSING_LAYOUT_MESSAGE, LineLayout, get_line_layout, get_zone_labels, zone_lines
@@ -98,27 +100,6 @@ def prepare(
     else:
         windows = zone_lines.page_windows(doc, pages, max_pages=window_pages, hints=layout.hints)
     return ZoneSource(xml, list(labels), doc, layout, windows)
-
-
-def window_lines(window: Sequence["zone_lines.Page"]) -> range:
-    """The lines of a window (without its context)."""
-    return range(window[0].first_line, window[-1].end_line)
-
-
-def window_range(source: ZoneSource, window: Sequence["zone_lines.Page"]) -> tuple[int, int]:
-    """
-    Position of a window's text in the document, as (start, end) offsets in UTF-16 code units: from
-    its first text character (or `<lb/>`) to after its last.
-    """
-    lines = window_lines(window)
-    atoms = [a for a in source.doc.atoms if a.line in lines and a.kind in (zone_lines.CHAR, zone_lines.LB)]
-    if not atoms:
-        return (0, 0)
-
-    def utf16(offset: int) -> int:
-        return len(source.xml[:offset].encode("utf-16-le")) // 2
-
-    return utf16(atoms[0].start), utf16(atoms[-1].end)
 
 
 # ── Prompts ──────────────────────────────────────────────────────────
@@ -207,7 +188,7 @@ def parse_changes(raw_response: str, source: ZoneSource, window: Sequence["zone_
     Raises:
         UnusableResponseError: the response contains no JSON list.
     """
-    parsed = _extract_json_list(raw_response)
+    parsed = extract_json_list(raw_response, log_prefix="annotation-review")
     width = zone_lines.line_id_width(len(source.doc.lines))
     proposed: list[tuple["zone_lines.LabelChange", str]] = []
     problems: list[str] = []
@@ -220,7 +201,7 @@ def parse_changes(raw_response: str, source: ZoneSource, window: Sequence["zone_
             problems.append(f"unreadable: {item!r}"[:200])
             continue
         proposed.append((change, rationale if isinstance(rationale, str) else ""))
-    valid, dropped = zone_lines.check_changes(source.doc, [c for c, _ in proposed], window_lines(window))
+    valid, dropped = zone_lines.check_changes(source.doc, [c for c, _ in proposed], zone_lines.window_lines(window))
     reasons = {
         "outside": "line outside the pages under review", "label": "unknown label", "text": "text of the line changed",
         "noop": "changes nothing", "overlap": "overlaps another change",

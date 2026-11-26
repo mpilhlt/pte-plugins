@@ -19,33 +19,15 @@
  * docs/superpowers/specs/2026-09-24-llm-annotation-review-design.md
  * for the design rationale.
  *
+ * The display of the findings (diagnostics, session cache, pruning) is the editor's shared
+ * `FindingsDisplay` of `app/src/modules/llm-findings.js`, reached via `getDependency('llm-findings')`.
+ *
  * @import { PluginContext } from '../../../../app/src/modules/plugin-context.js'
- * @import { FixableDiagnostic } from '../../../../app/src/modules/lint-utils.js'
+ * @import { Finding, FindingsDisplay } from '../../../../app/src/modules/llm-findings.js'
  */
 
 /** Diagnostic source tag identifying this plugin's diagnostics. */
 const SOURCE = 'annotation-review';
-
-/** Format version of the cached review entries; entries of other versions are ignored. */
-export const CACHE_VERSION = 1;
-
-/**
- * @typedef {{id: number, old: string, new: string, rationale: string}} Finding
- */
-
-/**
- * Locate the single occurrence of `finding.old` in the current document text.
- * Returns null when it is absent or ambiguous - the document may have changed
- * since the review request was sent, and such findings are dropped silently.
- * @param {Finding} finding
- * @param {string} docText
- * @returns {{from: number, to: number}|null}
- */
-export function locateFinding(finding, docText) {
-  const from = docText.indexOf(finding.old);
-  if (from === -1 || docText.indexOf(finding.old, from + 1) !== -1) return null;
-  return { from, to: from + finding.old.length };
-}
 
 /** Maximum length of the comment of a unit marked not OK by the LLM. */
 const UNIT_COMMENT_MAX = 200;
@@ -60,6 +42,8 @@ const UNIT_COMMENT_MAX = 200;
  * not OK if a finding falls into it (with the findings' rationales as comment), OK otherwise.
  * Pages (units of zone documents, which are text ranges) are located by the chunk's range
  * instead of by its text.
+ * @param {(finding: Finding, docText: string) => {from: number, to: number}|null} locateFinding -
+ *   `locateFinding` of the llm-findings module
  * @param {ReviewUnit[]} units - Review units with positions in docText
  * @param {string} docText - Current editor text
  * @param {string} chunkText - Text of the reviewed chunk
@@ -67,7 +51,7 @@ const UNIT_COMMENT_MAX = 200;
  * @param {{start: number, end: number}} [chunkRange] - Position of the chunk in docText
  * @returns {UnitMark[]}
  */
-export function unitMarksForChunk(units, docText, chunkText, findings, chunkRange) {
+export function unitMarksForChunk(locateFinding, units, docText, chunkText, findings, chunkRange) {
   const ranges = findings
     .map(finding => ({ finding, range: locateFinding(finding, docText) }))
     .filter(entry => entry.range !== null);
@@ -88,108 +72,6 @@ export function unitMarksForChunk(units, docText, chunkText, findings, chunkRang
 }
 
 /**
- * Build the document text with only this finding applied, for the merge view.
- * Returns null if the text at [from, to) is no longer exactly `finding.old`.
- * @param {string} docText
- * @param {number} from
- * @param {number} to
- * @param {Finding} finding
- * @returns {string|null}
- */
-export function buildModifiedText(docText, from, to, finding) {
-  if (docText.slice(from, to) !== finding.old) return null;
-  return docText.slice(0, from) + finding.new + docText.slice(to);
-}
-
-/**
- * Turn findings into CodeMirror diagnostics positioned in the current text.
- * @param {Finding[]} findings
- * @param {string} docText
- * @param {(finding: Finding, from: number, to: number) => void} onProposeFix
- * @returns {FixableDiagnostic[]}
- */
-export function findingsToDiagnostics(findings, docText, onProposeFix) {
-  /** @type {FixableDiagnostic[]} */
-  const diagnostics = [];
-  for (const finding of findings) {
-    const range = locateFinding(finding, docText);
-    if (!range) continue;
-    diagnostics.push({
-      from: range.from,
-      to: range.to,
-      severity: 'info',
-      message: finding.rationale,
-      replacement: finding.new,
-      actions: [{
-        name: 'Propose fix',
-        apply: (_view, from, to) => onProposeFix(finding, from, to),
-      }],
-    });
-  }
-  return diagnostics;
-}
-
-/**
- * The storage interface of `SessionStorage` (app/src/modules/session-storage.js)
- * used by {@link FindingsCache}.
- * @typedef {object} ContextStorage
- * @property {(contextId: string, key: string, defaultValue?: any) => any} getValue
- * @property {(contextId: string, updates: Record<string, any>) => void} setState
- * @property {(contextId: string) => void} clearState
- */
-
-/**
- * A cached review of one document.
- * @typedef {object} CachedReview
- * @property {number} version - {@link CACHE_VERSION}
- * @property {Finding[]} findings
- */
-
-/**
- * Keeps the findings of the current editing session per document in session
- * storage, so that reloading the page does not require a new (expensive)
- * review. Session storage is per browser tab and cleared when it is closed.
- * Findings are anchored on their quoted text, not on positions; the caller
- * re-locates them in the loaded document and drops those that no longer occur
- * exactly once, so cached findings cannot go stale.
- */
-export class FindingsCache {
-  /**
-   * @param {ContextStorage} storage
-   */
-  constructor(storage) {
-    this._storage = storage;
-  }
-
-  /**
-   * The cached findings of the document, or [] if none (or of another format version).
-   * @param {string} docId
-   * @returns {Finding[]}
-   */
-  load(docId) {
-    /** @type {CachedReview|undefined} */
-    const entry = this._storage.getValue(docId, 'review');
-    return entry?.version === CACHE_VERSION && Array.isArray(entry.findings) ? entry.findings : [];
-  }
-
-  /**
-   * Stores the findings of the document, or removes its entry if there are none.
-   * @param {string} docId
-   * @param {Finding[]} findings
-   * @returns {void}
-   */
-  save(docId, findings) {
-    if (!findings.length) {
-      this._storage.clearState(docId);
-      return;
-    }
-    /** @type {CachedReview} */
-    const review = { version: CACHE_VERSION, findings };
-    this._storage.setState(docId, { review });
-  }
-}
-
-/**
  * Escape text for use in the dialog's HTML message.
  * @param {string} text
  * @returns {string}
@@ -204,14 +86,8 @@ export default class AnnotationReviewExtension extends FrontendExtensionPlugin {
    */
   constructor(context) {
     super(context, { name: 'annotation-review', deps: ['xmleditor', 'tools'] });
-    /** @type {Finding[]} Findings of the last review, shown as diagnostics. */
-    this._findings = [];
-    /** @type {string|null} Stable id of the document the findings belong to; null while none is loaded. */
-    this._docId = null;
-    /** @type {FindingsCache|undefined} Created in start(). */
-    this._cache = undefined;
-    /** @type {boolean} True while this plugin dispatches its own diagnostics. */
-    this._rendering = false;
+    /** @type {FindingsDisplay|undefined} Created on first use, see _display. */
+    this._findingsDisplay = undefined;
     /** @type {HTMLElement|undefined} The Tools-menu item, created in start(). */
     this._menuItem = undefined;
     /**
@@ -219,10 +95,6 @@ export default class AnnotationReviewExtension extends FrontendExtensionPlugin {
      *   its page layout; null otherwise.
      */
     this._layoutMissing = null;
-    /** @type {number} Debounce (ms) before dropping findings whose text was edited away. */
-    this._pruneDelayMs = 300;
-    /** @type {ReturnType<typeof setTimeout>|undefined} */
-    this._pruneTimer = undefined;
     /** Button shown on the focused node in the XML editor's focus mode. */
     this._focusAction = {
       label: 'LLM Review',
@@ -232,8 +104,28 @@ export default class AnnotationReviewExtension extends FrontendExtensionPlugin {
   }
 
   /**
-   * Add the Tools-menu item and re-merge stored findings whenever another
-   * source replaces the diagnostics.
+   * The display of the findings of the last review (created on first use).
+   * @returns {FindingsDisplay}
+   */
+  get _display() {
+    if (!this._findingsDisplay) {
+      const { FindingsDisplay } = this.getDependency('llm-findings');
+      const { SessionStorage } = this.getDependency('session-storage');
+      this._findingsDisplay = new FindingsDisplay({
+        source: SOURCE,
+        getXmleditor: () => this.getDependency('xmleditor'),
+        getLintUtils: () => this.getDependency('lint-utils'),
+        sessionStorage: new SessionStorage(SOURCE),
+        proposeFix: (finding, from, to) => this._proposeFix(finding, from, to),
+        getDocId: () => this.state?.xml || null,
+      });
+    }
+    return this._findingsDisplay;
+  }
+
+  /**
+   * Add the Tools-menu item, attach the findings display (re-merge when another source replaces
+   * the diagnostics, prune after edits, session cache) and restore the cached findings.
    * @returns {Promise<void>}
    */
   async start() {
@@ -247,70 +139,11 @@ export default class AnnotationReviewExtension extends FrontendExtensionPlugin {
     xmleditor.on('editorReady', () => this._updateMenuState());
     this._updateMenuState();
 
-    xmleditor.addUpdateListener(update => {
-      if (this.getDependency('lint-utils').replacesDiagnostics(update) && !this._rendering && this._findings.length) {
-        // CodeMirror forbids dispatching from inside an update listener
-        setTimeout(() => this._renderFindings(false), 0);
-      } else if (update.docChanged && !this._rendering && this._findings.length) {
-        clearTimeout(this._pruneTimer);
-        this._pruneTimer = setTimeout(() => this._pruneFindings(), this._pruneDelayMs);
-      }
-    });
-    const { SessionStorage } = this.getDependency('session-storage');
-    this._cache = new FindingsCache(new SessionStorage(SOURCE));
-    // services.load() loads the editor content before it sets `state.xml`, so the
-    // restore usually happens in onXmlChange(); this covers content loaded later
-    xmleditor.on('editorAfterLoad', () => this._restoreFindings());
-    this._restoreFindings();
+    // services.load() loads the editor content before it sets `state.xml`, so the restore
+    // usually happens in onXmlChange(); attach() also restores on editorAfterLoad
+    this._display.attach();
+    this._display.restore(this.state?.xml || null);
     this._checkLayout();
-    this.getDependency('lint-utils').addDismissListener(dismissed => this._forgetDismissed(dismissed));
-  }
-
-  /**
-   * Replace the findings and store them in the session cache of the current document.
-   * @param {Finding[]} findings
-   * @returns {void}
-   */
-  _setFindings(findings) {
-    this._findings = findings;
-    if (this._docId && this._cache) this._cache.save(this._docId, findings);
-  }
-
-  /**
-   * Once the document of `state.xml` is in the editor, make it the one the
-   * findings are stored for and show its cached findings, e.g. after a page
-   * reload, keeping only those whose quoted text still occurs exactly once.
-   * The cache itself is only rewritten when the findings change.
-   * @returns {void}
-   */
-  _restoreFindings() {
-    const docId = this.state?.xml || null;
-    if (!docId || docId === this._docId || !this._cache) return;
-    const docText = this.getDependency('xmleditor').getView().state.doc.toString();
-    // not loaded yet: editorAfterLoad calls again
-    if (!docText) return;
-    this._docId = docId;
-    const cached = this._cache.load(docId);
-    if (!cached.length) return;
-    this._findings = cached.filter(f => locateFinding(f, docText) !== null);
-    // reveal them, as after the review that produced them
-    this._renderFindings(this._findings.length > 0);
-  }
-
-  /**
-   * Drop the findings whose diagnostics the user dismissed in the
-   * diagnostics drawer, so they are not re-merged.
-   * @param {FixableDiagnostic[]} dismissed
-   * @returns {void}
-   */
-  _forgetDismissed(dismissed) {
-    const own = dismissed.filter(d => d.source === SOURCE);
-    if (!own.length) return;
-    const docText = this.getDependency('xmleditor').getView().state.doc.toString();
-    this._setFindings(this._findings.filter(f => {
-      const range = locateFinding(f, docText);
-      return !own.some(d => range && d.from === range.from && d.message === f.rationale);
-    }));
   }
 
   /**
@@ -320,8 +153,7 @@ export default class AnnotationReviewExtension extends FrontendExtensionPlugin {
    * @returns {void}
    */
   showFindings(findings, openPanel = true) {
-    this._setFindings(findings);
-    this._renderFindings(openPanel);
+    this._display.show(findings, openPanel);
   }
 
   /**
@@ -329,42 +161,7 @@ export default class AnnotationReviewExtension extends FrontendExtensionPlugin {
    * @returns {void}
    */
   clearFindings() {
-    if (!this._findings.length) return;
-    this._setFindings([]);
-    this._renderFindings();
-  }
-
-  /**
-   * Drop findings whose `old` text no longer occurs exactly once (e.g. after
-   * a proposed fix was applied), so no stale highlights remain.
-   * @returns {void}
-   */
-  _pruneFindings() {
-    const docText = this.getDependency('xmleditor').getView().state.doc.toString();
-    const kept = this._findings.filter(f => locateFinding(f, docText) !== null);
-    if (kept.length === this._findings.length) return;
-    this._setFindings(kept);
-    this._renderFindings(false);
-  }
-
-  /**
-   * Merge diagnostics for the stored findings into the editor's diagnostics.
-   * @param {boolean} [openPanel] Expand the diagnostics drawer (only for user-initiated display)
-   * @returns {void}
-   */
-  _renderFindings(openPanel = false) {
-    const view = this.getDependency('xmleditor').getView();
-    const own = findingsToDiagnostics(
-      this._findings,
-      view.state.doc.toString(),
-      (finding, from, to) => this._proposeFix(finding, from, to)
-    );
-    this._rendering = true;
-    try {
-      this.getDependency('lint-utils').applyMergedDiagnostics(view, SOURCE, own, { openPanel });
-    } finally {
-      this._rendering = false;
-    }
+    this._display.clear();
   }
 
   /**
@@ -376,6 +173,7 @@ export default class AnnotationReviewExtension extends FrontendExtensionPlugin {
    */
   async _proposeFix(finding, from, to) {
     const xmleditor = this.getDependency('xmleditor');
+    const { buildModifiedText } = this.getDependency('llm-findings');
     const modified = buildModifiedText(xmleditor.getView().state.doc.toString(), from, to, finding);
     if (modified === null) {
       this.getDependency('sl-utils').notify(
@@ -399,14 +197,12 @@ export default class AnnotationReviewExtension extends FrontendExtensionPlugin {
   /**
    * A different document is being loaded; drop the findings of the previous
    * one from the editor but keep them in the session cache, so that they are
-   * restored when it is loaded again (see _restoreFindings()).
+   * restored when it is loaded again (see `FindingsDisplay.switchDocument()`).
    * @param {string} [_doc] New document identifier
    * @returns {Promise<void>}
    */
   async onXmlChange(_doc) {
-    this._docId = null;
-    this.clearFindings();
-    this._restoreFindings();
+    this._display.switchDocument(this.state?.xml || null);
     this._layoutMissing = null;
     this._updateMenuState();
     await this._checkLayout();
@@ -507,7 +303,7 @@ export default class AnnotationReviewExtension extends FrontendExtensionPlugin {
           progress.setLabel(progressId, `${heading} (part ${Math.min(chunksDone + 1, chunksTotal)} of ${chunksTotal})`);
           // findings from a different document must not attach to another one
           if (documentChanged()) return;
-          this.showFindings(foundSoFar, this._findings.length === 0);
+          this.showFindings(foundSoFar, this._display.findings.length === 0);
         },
       });
       if (findings === null || documentChanged()) return;
@@ -592,7 +388,8 @@ export default class AnnotationReviewExtension extends FrontendExtensionPlugin {
     const docText = this.getDependency('xmleditor').getView().state.doc.toString();
     const chunkText = xml.slice(response.chunk_start, response.chunk_end);
     const chunkRange = docText === xml ? { start: response.chunk_start, end: response.chunk_end } : undefined;
-    const marks = unitMarksForChunk(unitReview.getUnits(), docText, chunkText, response.findings, chunkRange);
+    const { locateFinding } = this.getDependency('llm-findings');
+    const marks = unitMarksForChunk(locateFinding, unitReview.getUnits(), docText, chunkText, response.findings, chunkRange);
     if (!marks.length) return;
     let name = model.modelId;
     try {

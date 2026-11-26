@@ -6,6 +6,10 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
+import { coreImport } from '../../../../../scripts/core.js';
+
+// The shared findings display of the editor, which the extension reaches via getDependency('llm-findings')
+const llmFindings = await coreImport('app/src/modules/llm-findings.js');
 
 // Stub browser-only base class before the dynamic import below.
 class FakeFrontendExtensionPlugin {
@@ -25,8 +29,7 @@ class FakeFrontendExtensionPlugin {
 global.FrontendExtensionPlugin = FakeFrontendExtensionPlugin;
 global.document = { createElement: () => ({ addEventListener(t, fn) { this._click = fn; }, style: {} }) };
 
-const { default: AnnotationReviewExtension, locateFinding, buildModifiedText, findingsToDiagnostics, FindingsCache, CACHE_VERSION, unitMarksForChunk } =
-  await import('../extensions/annotation-review.js');
+const { default: AnnotationReviewExtension, unitMarksForChunk } = await import('../extensions/annotation-review.js');
 
 /**
  * In-memory stand-in for SessionStorage (app/src/modules/session-storage.js),
@@ -75,6 +78,7 @@ function buildExtension(opts = {}) {
       notify: (...args) => notifyCalls.push(args),
     },
     'session-storage': { SessionStorage: fakeSessionStorageClass(opts.sessionStore ?? new Map()) },
+    'llm-findings': llmFindings,
     'tei-utils': {
       getEditorialDeclGuides: opts.getEditorialDeclGuides ?? (() => []),
     },
@@ -200,57 +204,6 @@ describe('review', () => {
   });
 });
 
-describe('locateFinding', () => {
-  const finding = { id: 0, old: '<b>x</b>', new: '<i>x</i>', rationale: 'r' };
-
-  it('returns the range of the single occurrence', () => {
-    assert.deepStrictEqual(locateFinding(finding, 'aa<b>x</b>bb'), { from: 2, to: 10 });
-  });
-
-  it('returns null when old is absent', () => {
-    assert.strictEqual(locateFinding(finding, 'nothing here'), null);
-  });
-
-  it('returns null when old occurs more than once', () => {
-    assert.strictEqual(locateFinding(finding, '<b>x</b><b>x</b>'), null);
-  });
-});
-
-describe('buildModifiedText', () => {
-  it('replaces exactly the given range with the new text', () => {
-    const finding = { id: 0, old: 'BAD', new: 'GOOD', rationale: 'r' };
-    assert.strictEqual(buildModifiedText('a BAD b', 2, 5, finding), 'a GOOD b');
-  });
-
-  it('returns null when the text at the range no longer equals old', () => {
-    const finding = { id: 0, old: 'BAD', new: 'GOOD', rationale: 'r' };
-    assert.strictEqual(buildModifiedText('a XYZ b', 2, 5, finding), null);
-  });
-});
-
-describe('findingsToDiagnostics', () => {
-  it('builds one info diagnostic per locatable finding, with a Propose fix action', () => {
-    const findings = [
-      { id: 0, old: 'AAA', new: 'a', rationale: 'first' },
-      { id: 1, old: 'MISSING', new: 'm', rationale: 'dropped' },
-    ];
-    const proposed = [];
-    const result = findingsToDiagnostics(findings, 'x AAA y', (finding, from, to) => proposed.push([finding.id, from, to]));
-    assert.strictEqual(result.length, 1);
-    assert.strictEqual(result[0].severity, 'info');
-    assert.strictEqual(result[0].message, 'first');
-    assert.deepStrictEqual([result[0].from, result[0].to], [2, 5]);
-    assert.strictEqual(result[0].actions[0].name, 'Propose fix');
-    result[0].actions[0].apply({}, 2, 5);
-    assert.deepStrictEqual(proposed, [[0, 2, 5]]);
-  });
-
-  it('carries the new text as the replacement applied by the diagnostics drawer', () => {
-    const [d] = findingsToDiagnostics([{ id: 0, old: 'AAA', new: 'a', rationale: 'r' }], 'x AAA y', () => {});
-    assert.strictEqual(d.replacement, 'a');
-  });
-});
-
 describe('dismissing diagnostics', () => {
   it('forgets the findings whose diagnostics were dismissed, keeping the others', async () => {
     const findings = [
@@ -265,7 +218,7 @@ describe('dismissing diagnostics', () => {
       { from: 2, to: 5, severity: 'info', message: 'first', source: 'annotation-review' },
       { from: 2, to: 5, severity: 'error', message: 'first' }, // foreign: ignored
     ]);
-    assert.deepStrictEqual(ext._findings.map(f => f.id), [1]);
+    assert.deepStrictEqual(ext._display.findings.map(f => f.id), [1]);
   });
 });
 
@@ -303,16 +256,6 @@ describe('re-rendering after diagnostics are replaced', () => {
     assert.strictEqual(lintCalls.length, before + 1);
   });
 
-  it('does not re-merge while it is itself applying diagnostics', async () => {
-    const { ext, lintCalls, updateListeners } = buildExtension({ docText: 'x AAA y', replacesDiagnostics: () => true });
-    await ext.start();
-    // simulate the listener firing synchronously inside our own dispatch
-    ext._rendering = true;
-    ext._findings = [{ id: 0, old: 'AAA', new: 'a', rationale: 'why' }];
-    updateListeners[0]({ transactions: [] });
-    await new Promise(r => setTimeout(r, 5));
-    assert.strictEqual(lintCalls.length, 0);
-  });
 });
 
 describe('Propose fix', () => {
@@ -336,26 +279,6 @@ describe('onXmlChange', () => {
     ext.showFindings([{ id: 0, old: 'AAA', new: 'a', rationale: 'r' }]);
     await ext.onXmlChange('newdoc');
     assert.deepStrictEqual(lintCalls.at(-1).own, []);
-  });
-});
-
-describe('FindingsCache', () => {
-  const findings = [{ id: 0, old: 'AAA', new: 'a', rationale: 'r' }];
-
-  it('stores findings per document and removes the entry when there are none', () => {
-    const store = new Map();
-    const cache = new FindingsCache(new (fakeSessionStorageClass(store))());
-    cache.save('doc1', findings);
-    assert.deepStrictEqual(cache.load('doc1'), findings);
-    assert.deepStrictEqual(cache.load('doc2'), []);
-    cache.save('doc1', []);
-    assert.strictEqual(store.has('doc1'), false);
-  });
-
-  it('ignores entries of another format version', () => {
-    const store = new Map([['doc1', { review: { version: CACHE_VERSION + 1, findings } }]]);
-    const cache = new FindingsCache(new (fakeSessionStorageClass(store))());
-    assert.deepStrictEqual(cache.load('doc1'), []);
   });
 });
 
@@ -397,7 +320,7 @@ describe('session cache', () => {
 
     const after = buildExtension({ docText: 'x AAA BBB y', sessionStore });
     await load(after);
-    assert.deepStrictEqual(after.ext._findings.map(f => f.id), [0]);
+    assert.deepStrictEqual(after.ext._display.findings.map(f => f.id), [0]);
     assert.deepStrictEqual(after.lintCalls.at(-1).own.map(d => d.message), ['kept']);
     assert.strictEqual(after.lintCalls.at(-1).options.openPanel, true);
   });
@@ -410,7 +333,7 @@ describe('session cache', () => {
     ext.showFindings(findings);
     ext.state = { xml: 'doc2' };
     await ext.onXmlChange('doc2');
-    assert.deepStrictEqual(ext._findings, []);
+    assert.deepStrictEqual(ext._display.findings, []);
     assert.deepStrictEqual(sessionStore.get('doc1').review.findings.map(f => f.id), [0, 1]);
   });
 
@@ -559,7 +482,7 @@ describe('runReview', () => {
       },
     });
     await ext.runReview();
-    assert.deepStrictEqual(ext._findings.map(f => f.old), ['AAA']);
+    assert.deepStrictEqual(ext._display.findings.map(f => f.old), ['AAA']);
     assert.strictEqual(lintCalls.at(-1).own.length, 1);
     assert.match(notifyCalls.at(-1)[0], /failed in part 2 of 3/);
   });
@@ -777,7 +700,7 @@ describe('unit review marks', () => {
 
   it('marks the units of the chunk, not OK where a finding falls into them', () => {
     const chunk = doc.slice(doc.indexOf('<bibl>A'), doc.indexOf('<bibl>C'));
-    const marks = unitMarksForChunk(units, doc, chunk, [
+    const marks = unitMarksForChunk(llmFindings.locateFinding, units, doc, chunk, [
       { id: 0, old: '<title>T2</title>', new: '<title level="a">T2</title>', rationale: 'missing level' },
     ]);
     assert.deepStrictEqual(marks, [
@@ -796,7 +719,7 @@ describe('unit review marks', () => {
     const pages = [page('Page one <lb/>', 'p1'), page('Page two <lb/>more <lb/>', 'p2'), page('Page three <lb/>', 'p3')];
     const start = zoneDoc.indexOf('Page one');
     const end = zoneDoc.indexOf('more <lb/>') + 'more <lb/>'.length;
-    const marks = unitMarksForChunk(pages, zoneDoc, zoneDoc.slice(start, end), [
+    const marks = unitMarksForChunk(llmFindings.locateFinding, pages, zoneDoc, zoneDoc.slice(start, end), [
       { id: 0, old: '<body>Page two <lb/>more <lb/></body>', new: '<listBibl>Page two <lb/>more <lb/></listBibl>', rationale: 'references' },
     ], { start, end });
     assert.deepStrictEqual(marks, [
@@ -952,42 +875,6 @@ describe('chunked review', () => {
     });
     await ext.runReview();
     assert.deepStrictEqual(lintCalls.map(c => c.options.openPanel), [true, false]);
-  });
-});
-
-describe('pruning findings after edits', () => {
-  it('drops findings whose old text was edited away and re-renders', async () => {
-    const { ext, lintCalls, updateListeners } = buildExtension({ docText: 'x BBB y' });
-    await ext.start();
-    ext._pruneDelayMs = 1;
-    ext._findings = [
-      { id: 0, old: 'AAA', new: 'a', rationale: 'gone' },
-      { id: 1, old: 'BBB', new: 'b', rationale: 'still there' },
-    ];
-    updateListeners[0]({ transactions: [], docChanged: true });
-    await new Promise(r => setTimeout(r, 20));
-    assert.deepStrictEqual(ext._findings.map(f => f.old), ['BBB']);
-    assert.strictEqual(lintCalls.at(-1).own.length, 1);
-  });
-
-  it('does not re-render when every finding still matches', async () => {
-    const { ext, lintCalls, updateListeners } = buildExtension({ docText: 'x AAA y' });
-    await ext.start();
-    ext._pruneDelayMs = 1;
-    ext._findings = [{ id: 0, old: 'AAA', new: 'a', rationale: 'r' }];
-    updateListeners[0]({ transactions: [], docChanged: true });
-    await new Promise(r => setTimeout(r, 20));
-    assert.strictEqual(lintCalls.length, 0);
-  });
-
-  it('debounces bursts of edits into one check', async () => {
-    const { ext, lintCalls, updateListeners } = buildExtension({ docText: 'x y' });
-    await ext.start();
-    ext._pruneDelayMs = 10;
-    ext._findings = [{ id: 0, old: 'AAA', new: 'a', rationale: 'r' }];
-    for (let i = 0; i < 5; i++) updateListeners[0]({ transactions: [], docChanged: true });
-    await new Promise(r => setTimeout(r, 40));
-    assert.strictEqual(lintCalls.length, 1);
   });
 });
 

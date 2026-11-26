@@ -31,7 +31,7 @@ except ImportError:  # editor before plugin API 1.5
 
 from pte_plugin_annotation_review import routes as routes_module
 from pte_plugin_annotation_review import zones
-from pte_plugin_annotation_review.review_logic import zone_source
+from pte_plugin_annotation_review.review_logic import chunk_range, zone_source
 from pte_plugin_annotation_review.routes import router
 
 VARIANT = "grobid.training.segmentation"
@@ -93,10 +93,12 @@ class TestWindows(ZoneTestCase):
         with mock.patch.object(zones, "get_zone_labels", return_value=None):
             self.assertIsNone(zone_source(DOC, "doc1"))
 
-    def test_window_range(self):
+    def test_chunk_range_is_the_window_range(self):
         source = zone_source(DOC, "doc1")
         assert source is not None
-        start, end = zones.window_range(source, source.windows[1])
+        position = chunk_range(DOC, 1, zone=source)
+        assert position is not None
+        start, end = position
         self.assertTrue(DOC[start:end].startswith("2</page>"))
         self.assertTrue(DOC[start:end].endswith("Third page. <lb/>"))
 

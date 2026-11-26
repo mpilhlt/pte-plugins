@@ -8,7 +8,6 @@ import json
 import unittest
 
 from pte_plugin_annotation_review.prompts import (
-    UnusableResponseError,
     build_retry_note,
     build_system_prompt,
     build_user_prompt,
@@ -69,11 +68,6 @@ class TestParseAndValidateFindings(unittest.TestCase):
         self.assertEqual(findings[0]["old"], "<persName>J. Doe</persName>")
         self.assertEqual(findings[0]["rationale"], "add ref")
 
-    def test_strips_markdown_code_fence(self):
-        raw = '```json\n[{"old": "<title>A Paper</title>", "new": "<title>A Paper</title>", "rationale": "ok"}]\n```'
-        findings = parse_and_validate_findings(raw, self.SOURCE)
-        self.assertEqual(len(findings), 1)
-
     def test_drops_finding_whose_old_is_absent(self):
         raw = '[{"old": "<date>2024</date>", "new": "x", "rationale": "y"}]'
         findings = parse_and_validate_findings(raw, self.SOURCE)
@@ -98,82 +92,8 @@ class TestParseAndValidateFindings(unittest.TestCase):
         findings = parse_and_validate_findings(raw, self.SOURCE)
         self.assertEqual(findings, [])
 
-    def test_unparseable_response_raises_with_the_response_text_logged(self):
-        with (
-            self.assertLogs("pte_plugin_annotation_review.prompts", level="WARNING") as logs,
-            self.assertRaises(UnusableResponseError),
-        ):
-            parse_and_validate_findings("not json at all", self.SOURCE)
-        self.assertIn("not json at all", "\n".join(logs.output))
-
-    def test_empty_response_raises(self):
-        with self.assertRaises(UnusableResponseError):
-            parse_and_validate_findings("   ", self.SOURCE)
-
-    def test_non_list_json_raises(self):
-        with self.assertRaises(UnusableResponseError):
-            parse_and_validate_findings('{"old": "x"}', self.SOURCE)
-
-    def test_salvages_complete_findings_from_a_truncated_response(self):
-        raw = (
-            '```json\n[\n  {"old": "<persName>J. Doe</persName>", "new": "n", "rationale": "r"},\n'
-            '  {"old": "<title>A Paper</title>", "new": "n2", "rationale": "r2"},\n'
-            '  {"old": "<title>A Pa'
-        )
-        with self.assertLogs("pte_plugin_annotation_review.prompts", level="WARNING") as logs:
-            findings = parse_and_validate_findings(raw, self.SOURCE)
-        self.assertEqual([f["new"] for f in findings], ["n", "n2"])
-        self.assertIn("truncated", "\n".join(logs.output))
-
-    def test_truncated_response_without_any_complete_finding_raises(self):
-        with self.assertRaises(UnusableResponseError):
-            parse_and_validate_findings('```json\n[\n  {"old": "<persName>J. Do', self.SOURCE)
-
-    def test_repairs_unescaped_quotes_in_xml_attribute_values(self):
-        source = '<bibl>supra note <biblScope unit="issue">3</biblScope></bibl>'
-        raw = (
-            '[\n {\n "old": "supra note <biblScope unit="issue">3</biblScope>",\n'
-            ' "new": "<ref type=\\"precedingWork\\">supra</ref> note <biblScope unit=\\"issue\\">3</biblScope>",\n'
-            ' "rationale": "The word "supra", like "op. cit.", refers to an earlier work."\n }\n]'
-        )
-        findings = parse_and_validate_findings(raw, source)
-        self.assertEqual(len(findings), 1)
-        self.assertEqual(findings[0]["old"], 'supra note <biblScope unit="issue">3</biblScope>')
-        self.assertEqual(findings[0]["new"], '<ref type="precedingWork">supra</ref> note <biblScope unit="issue">3</biblScope>')
-        self.assertEqual(findings[0]["rationale"], 'The word "supra", like "op. cit.", refers to an earlier work.')
-
-    def test_repairs_invalid_escapes_and_raw_newlines(self):
-        raw = '[{"old": "<title>A Paper</title>", "new": "n", "rationale": "it\\\'s a\ntitle \\<x\\>"}]'
-        findings = parse_and_validate_findings(raw, self.SOURCE)
-        self.assertEqual(findings[0]["rationale"], "it\\'s a\ntitle \\<x\\>")
-
-    def test_quotes_in_prose_before_the_array_do_not_break_repair(self):
-        raw = 'Here is the "list":\n```json\n[{"old": "<title>A Paper</title>", "new": "<title level="a">A Paper</title>", "rationale": "r"}]\n```'
-        findings = parse_and_validate_findings(raw, self.SOURCE)
-        self.assertEqual(findings[0]["new"], '<title level="a">A Paper</title>')
-
-    def test_salvages_truncated_response_with_unescaped_quotes(self):
-        raw = (
-            '[{"old": "<title>A Paper</title>", "new": "<title level="a">A Paper</title>", "rationale": "r"},\n'
-            ' {"old": "<persName>J. Doe</persName>", "new": "<persName ref="#p'
-        )
-        with self.assertLogs("pte_plugin_annotation_review.prompts", level="WARNING"):
-            findings = parse_and_validate_findings(raw, self.SOURCE)
-        self.assertEqual([f["new"] for f in findings], ['<title level="a">A Paper</title>'])
-
-    def test_empty_list_is_a_valid_result(self):
-        self.assertEqual(parse_and_validate_findings("[]", self.SOURCE), [])
-
-    def test_extracts_array_surrounded_by_prose(self):
-        raw = 'Here are my findings:\n[{"old": "<title>A Paper</title>", "new": "n", "rationale": "r"}]\nHope this helps!'
-        self.assertEqual(len(parse_and_validate_findings(raw, self.SOURCE)), 1)
-
     def test_extracts_fenced_array_followed_by_prose(self):
         raw = '```json\n[{"old": "<title>A Paper</title>", "new": "n", "rationale": "r"}]\n```\nLet me know if you need more.'
-        self.assertEqual(len(parse_and_validate_findings(raw, self.SOURCE)), 1)
-
-    def test_bracket_in_prose_does_not_break_extraction(self):
-        raw = 'See [1] below.\n[{"old": "<title>A Paper</title>", "new": "n", "rationale": "r"}]'
         self.assertEqual(len(parse_and_validate_findings(raw, self.SOURCE)), 1)
 
     def test_ids_are_sequential_over_kept_findings_only(self):

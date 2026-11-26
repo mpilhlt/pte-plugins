@@ -19,7 +19,7 @@ from lxml import etree
 from fastapi_app.lib.core.url_cache import UrlCache
 from fastapi_app.lib.doc_rules.resource_key import normalize_resource_key
 from fastapi_app.lib.doc_rules.storage import DocumentRulesStore
-from fastapi_app.plugin_api import LLMProvider
+from fastapi_app.plugin_api import LLMProvider, complete_with_retry, zone_lines
 from fastapi_app.lib.utils.annotation_rules_utils import (
     AnnotationRuleRef,
     extract_annotation_rule_refs,
@@ -31,7 +31,6 @@ from . import zones
 from .zones import ZoneSource
 from .prompts import (
     Finding,
-    UnusableResponseError,
     build_retry_note,
     build_system_prompt,
     build_user_prompt,
@@ -275,7 +274,7 @@ def chunk_range(xml_string: str, chunk_index: int, scope: str | None = None, zon
         ValueError: see review_source().
     """
     if zone is not None:
-        return zones.window_range(zone, zone.windows[chunk_index]) if 0 <= chunk_index < len(zone.windows) else None
+        return zone_lines.window_range(zone.doc, zone.xml, zone.windows[chunk_index]) if 0 <= chunk_index < len(zone.windows) else None
     review_text = review_source(xml_string, scope)[0]
     base = xml_string.find(review_text)
     chunks = split_into_chunks(review_text)
@@ -336,15 +335,15 @@ async def run_review(
     user_prompt = build_user_prompt(
         rule_excerpts, chunks[chunk_index], (chunk_index + 1, len(chunks)), scoped=scope is not None
     )
-    raw_response = await provider.chat_completion(model_id, system_prompt, user_prompt)
-    findings, unmatched = validate_findings(raw_response, validation_text, scope)
-    if not findings and unmatched:
-        logger.info(f"annotation-review: all {len(unmatched)} finding(s) discarded, retrying once with feedback")
-        retry_response = await provider.chat_completion(model_id, system_prompt, user_prompt + build_retry_note(unmatched))
-        try:
-            findings, unmatched = validate_findings(retry_response, validation_text, scope)
-        except UnusableResponseError:
-            logger.warning("annotation-review: retry returned no usable JSON list, keeping the first attempt's result")
+    findings, unmatched = await complete_with_retry(
+        provider,
+        model_id,
+        system_prompt,
+        user_prompt,
+        parse=lambda raw: validate_findings(raw, validation_text, scope),
+        retry_note=build_retry_note,
+        log_prefix="annotation-review",
+    )
     return findings, len(chunks), len(unmatched)
 
 
@@ -366,13 +365,13 @@ async def _run_zone_review(
     window = zone.windows[chunk_index]
     system_prompt = zones.build_system_prompt()
     user_prompt = zones.build_user_prompt(rule_excerpts, zone, window, (chunk_index + 1, len(zone.windows)))
-    raw_response = await provider.chat_completion(model_id, system_prompt, user_prompt)
-    changes, problems = zones.parse_changes(raw_response, zone, window)
-    if not changes and problems:
-        logger.info(f"annotation-review: all {len(problems)} zone change(s) dropped, retrying once with feedback")
-        retry_response = await provider.chat_completion(model_id, system_prompt, user_prompt + zones.build_retry_note(problems))
-        try:
-            changes, problems = zones.parse_changes(retry_response, zone, window)
-        except UnusableResponseError:
-            logger.warning("annotation-review: retry returned no usable JSON list, keeping the first attempt's result")
+    changes, problems = await complete_with_retry(
+        provider,
+        model_id,
+        system_prompt,
+        user_prompt,
+        parse=lambda raw: zones.parse_changes(raw, zone, window),
+        retry_note=zones.build_retry_note,
+        log_prefix="annotation-review",
+    )
     return zones.findings_from_changes(zone, changes), len(zone.windows), len(problems)

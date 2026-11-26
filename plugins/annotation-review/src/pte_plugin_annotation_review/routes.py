@@ -9,21 +9,17 @@ Provides:
 
 from __future__ import annotations
 
-import logging
-
-import requests
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from fastapi_app.plugin_api import get_settings, LLMProviderError, LLMProviderRegistry, LLMRateLimitError, rate_limit_http_error
+from fastapi_app.plugin_api import get_settings, LLMProviderRegistry, llm_http_error
 from fastapi_app.lib.core.dependencies import get_document_rules_store, get_file_repository, require_authenticated_user
 from fastapi_app.lib.permissions.access_control import check_file_access
 from fastapi_app.lib.repository.file_repository import FileRepository
 from fastapi_app.lib.core.url_cache import UrlCache
 from fastapi_app.lib.doc_rules.storage import DocumentRulesStore
-from fastapi_app.lib.llm.model_access import ModelAccessDenied, check_model_access
+from fastapi_app.lib.llm.model_access import check_model_access
 from fastapi_app.lib.secrets import MissingSecretError, secret_required_detail
-from pte_plugin_annotation_review.prompts import UnusableResponseError
 from pte_plugin_annotation_review.review_logic import (
     NoRuleExcerptsError,
     chunk_range,
@@ -32,20 +28,6 @@ from pte_plugin_annotation_review.review_logic import (
     zone_source,
 )
 from pte_plugin_annotation_review.zones import MissingLayoutError, ZoneSource
-
-logger = logging.getLogger(__name__)
-
-def _upstream_error_message(error: requests.RequestException) -> str:
-    """The provider's own error message if the failed response carries one, else the exception text."""
-    if error.response is not None:
-        try:
-            message = error.response.json().get("error", {}).get("message")
-        except (ValueError, AttributeError):
-            message = None
-        if isinstance(message, str) and message:
-            return message
-    return str(error)
-
 
 router = APIRouter(prefix="/api/plugins/annotation-review", tags=["annotation-review"])
 
@@ -147,22 +129,14 @@ async def review(
         findings, chunk_count, discarded = await run_review(
             body.xml, provider, body.model_id, cache, store, current_user["username"], body.chunk_index, body.scope, zone
         )
-    except ModelAccessDenied as e:
-        raise HTTPException(status_code=403, detail=str(e)) from e
-    except ValueError as e:
+    except (ValueError, NoRuleExcerptsError) as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
-    except NoRuleExcerptsError as e:
-        raise HTTPException(status_code=422, detail=str(e)) from e
-    except UnusableResponseError as e:
-        raise HTTPException(status_code=502, detail=str(e)) from e
-    except LLMRateLimitError as e:
-        raise rate_limit_http_error(e) from e
-    except LLMProviderError as e:
-        logger.warning(f"annotation-review: provider '{body.provider_id}' failed: {e}")
-        raise HTTPException(status_code=502, detail=f"LLM provider request failed: {e}") from e
-    except requests.RequestException as e:
-        logger.warning(f"annotation-review: provider '{body.provider_id}' request failed: {e}")
-        raise HTTPException(status_code=502, detail=f"LLM provider request failed: {_upstream_error_message(e)}") from e
+    except Exception as e:
+        # model access, unusable response, rate limit and provider failures
+        http_error = llm_http_error(e, body.provider_id)
+        if http_error is None:
+            raise
+        raise http_error from e
 
     position = chunk_range(body.xml, body.chunk_index, body.scope, zone)
     return ReviewResponse(
