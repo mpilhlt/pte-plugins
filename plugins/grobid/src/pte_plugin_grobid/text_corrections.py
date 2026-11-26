@@ -80,8 +80,8 @@ def corrected_pdf_handler(xml: str, doc_id: str, pdf_path: Path, pdf_hash: str, 
     left to the cache garbage collection, since no document refers to it.
 
     Raises RuntimeError if GROBID is not configured or unreachable, the fetch fails (also when
-    GROBID returns no ZIP), the document
-    has no `revision` label or the package has no segmentation feature file.
+    GROBID returns no ZIP), the document has no `revision` label or its labels cannot be updated,
+    or the package has no segmentation feature file.
     """
     from fastapi_app.plugin_api import CorrectedPdfMismatch
 
@@ -98,6 +98,12 @@ def corrected_pdf_handler(xml: str, doc_id: str, pdf_path: Path, pdf_hash: str, 
 
     before = unmatched_lines(xml, doc_id, labels)
     _, revision = check_grobid_revision(grobid_server_url)
+    # the labels are replaced as strings: make sure they were found, or the document would keep
+    # pointing to the feature file of the old PDF
+    updated = set_pdf_hash_label(set_revision_label(xml, old_revision, revision), pdf_hash)
+    updated_labels = parse_encoding_labels(updated)
+    if updated_labels.get("revision") != revision or updated_labels.get("pdf-hash") != pdf_hash:
+        raise RuntimeError("The revision and pdf-hash labels of the document could not be updated for the corrected PDF.")
     flavor = labels.get("flavor", "default")
     try:
         temp_dir, files = TrainingHandler()._fetch_training_package(str(pdf_path), grobid_server_url, flavor)
@@ -108,8 +114,7 @@ def corrected_pdf_handler(xml: str, doc_id: str, pdf_path: Path, pdf_hash: str, 
     finally:
         shutil.rmtree(temp_dir, ignore_errors=True)
 
-    updated = set_pdf_hash_label(set_revision_label(xml, old_revision, revision), pdf_hash)
-    after = unmatched_lines(updated, doc_id, {**labels, "revision": revision, "pdf-hash": pdf_hash})
+    after =unmatched_lines(updated, doc_id, {**labels, "revision": revision, "pdf-hash": pdf_hash})
     if after is None:
         raise RuntimeError("GROBID returned no segmentation feature file for the corrected PDF.")
 

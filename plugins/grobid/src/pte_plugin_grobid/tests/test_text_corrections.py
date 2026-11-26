@@ -181,6 +181,16 @@ class TestCorrectedPdfHandler(TextCorrectionsTestBase):
                 self.handle()
         self.assertEqual(self.fetched, [])
 
+    def test_labels_that_cannot_be_updated(self):
+        # the label is found when parsed, but not by the string substitution of set_revision_label()
+        xml = DOC.replace('<label type="revision">', '<label ident="grobid" type="revision">')
+        self.write_zip(OLD_FEATURES)
+        with self.assertRaises(RuntimeError) as cm:
+            self.handle(xml=xml)
+        self.assertIn("labels", str(cm.exception))
+        # refused before the training data of the corrected PDF is fetched
+        self.assertEqual(self.fetched, [])
+
     def test_no_feature_file_in_the_package(self):
         self.new_features = None
         with self.assertRaises(RuntimeError):
