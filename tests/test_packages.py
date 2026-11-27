@@ -1,7 +1,8 @@
 """
 Checks across all plugin packages: every package is installed and found through its
 ``pte.plugins`` entry point, loads, survives initialize -> cleanup -> initialize -> cleanup, and
-its frontend extensions pass the editor's extension validator (which leaves out failing ones).
+its frontend extensions follow the editor's extension code conventions (which the editor only
+warns about when serving them).
 """
 
 import json
