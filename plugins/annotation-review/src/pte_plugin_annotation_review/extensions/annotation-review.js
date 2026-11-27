@@ -288,7 +288,7 @@ export default class AnnotationReviewExtension extends FrontendExtensionPlugin {
     // findings of the review received so far, of which the display holds those not dismissed or applied
     let received = 0;
     let appended = 0;
-    progress.show(progressId, { label: heading, value: null, cancellable: true, onCancel: () => { cancelled = true; } });
+    progress.show(progressId, { title: 'Annotation auto-review', label: heading, value: null, cancellable: true, onCancel: () => { cancelled = true; } });
     try {
       const findings = await this.review(resolved ?? undefined, {
         xpath,
