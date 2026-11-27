@@ -23,7 +23,7 @@ from fastapi_app.plugin_api import FileRepository, FileStorage
 from pte_plugin_grobid.cache import cache_training_data
 from pte_plugin_grobid.extractor import GrobidTrainingExtractor
 from pte_plugin_grobid.handlers.training import TrainingHandler
-from pte_plugin_grobid.pdf_source import get_source_pdf, is_archived_pdf
+from pte_plugin_grobid.pdf_source import get_source_pdf
 from pte_plugin_grobid.sync import parse_encoding_labels, set_pdf_hash_label, set_revision_label
 
 
@@ -46,8 +46,6 @@ class ReloadTarget:
     pdf_hash: str | None = None
     # Whether the document has no `pdf-hash` label yet (extracted before it was recorded)
     adds_pdf_hash: bool = False
-    # Whether that PDF is the archived original, replaced by text recognition (pdf-tei-editor#924)
-    from_archived_pdf: bool = False
 
 
 @dataclass
@@ -98,8 +96,8 @@ def resolve_reload_target(
         raise ReloadPreconditionError("Not a GROBID training document.")
 
     doc_id = file_meta.doc_id
-    # The PDF the version was made from: the archived original if text recognition has replaced
-    # the document's PDF since (pdf-tei-editor#924)
+    # The PDF the version was made from (pdf-tei-editor#944), not necessarily the document's
+    # most recent PDF
     pdf_file = get_source_pdf(file_repo, file_meta)
     if not pdf_file:
         raise ReloadPreconditionError("No PDF found for this document.")
@@ -109,7 +107,7 @@ def resolve_reload_target(
     recorded_hash = labels.get("pdf-hash")
     if recorded_hash and recorded_hash != pdf_file.id:
         raise ReloadPreconditionError(
-            "The PDF of this document was replaced (for example by text recognition) after this version was extracted, and the original PDF was not kept, so the feature file of the current PDF does not match its text. Extract the document again to get a version that matches the current PDF."
+            "The PDF of this document was replaced (for example by text recognition) after this version was extracted, and the original PDF was not kept, so the feature file of its PDF does not match its text. Extract the document again to get a version that matches its PDF."
         )
 
     return ReloadTarget(
@@ -122,7 +120,6 @@ def resolve_reload_target(
         pdf_path=pdf_path,
         pdf_hash=pdf_file.id,
         adds_pdf_hash=recorded_hash is None,
-        from_archived_pdf=is_archived_pdf(pdf_file),
     )
 
 
@@ -143,7 +140,7 @@ async def perform_reload(
     Re-fetch the training package from GROBID and refresh the cache entry.
 
     Overwrites the training-data cache for (doc_id, current GROBID revision,
-    current PDF). If that revision differs from the one recorded in the TEI,
+    PDF the version was made from). If that revision differs from the one recorded in the TEI,
     patches the `revision` label in place, and adds the `pdf-hash` label if the
     document has none (same stable_id, no new version) - the `<text>` content
     and any human corrections are never touched.
@@ -236,9 +233,7 @@ def render_preview_html(
             else "<p>The document's revision label is already current and will not change.</p>"
         )
         if target.adds_pdf_hash:
-            revision_html += f"<p>The document has no PDF hash label yet (it was extracted before the hash was recorded); the hash of the {'original' if target.from_archived_pdf else 'current'} PDF will be added.</p>"
-        if target.from_archived_pdf:
-            revision_html += "<p>This version was made before text recognition replaced the PDF, so the feature file is computed from the original PDF it was made from.</p>"
+            revision_html += f"<p>The document has no PDF hash label yet (it was extracted before the hash was recorded); the hash of the PDF it was made from will be added.</p>"
 
     body = (
         "<div class='notice'><strong>This is a special-case action.</strong> "
