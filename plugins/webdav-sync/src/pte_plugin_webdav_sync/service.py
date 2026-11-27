@@ -24,7 +24,7 @@ from typing import Any, Dict, List, Optional
 
 from webdav4.fsspec import WebdavFileSystem
 
-from fastapi_app.lib.models.models import FileCreate
+from fastapi_app.lib.models.models import FileCreate, FileMetadata
 from fastapi_app.plugin_api import FileRepository, FileStorage
 from fastapi_app.lib.sse.sse_service import SSEService
 from fastapi_app.lib.sync.base import SyncServiceBase
@@ -51,6 +51,18 @@ def _parse_json_field(value: Any, default: Any) -> Any:
         except (json.JSONDecodeError, TypeError):
             return default
     return value if value is not None else default
+
+
+def _known_fields(file_data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Keep only the fields of the local file model.
+
+    Ops written by an instance with another core version can carry fields this core does not
+    have, such as `superseded_by` of the archived PDFs that pdf-tei-editor#944 removed.
+    `apply_remote_metadata` writes every field it gets as a column, so an unknown field would
+    make the update fail.
+    """
+    return {k: v for k, v in file_data.items() if k in FileMetadata.model_fields}
 
 
 class SyncService(SyncServiceBase):
@@ -455,7 +467,7 @@ class SyncService(SyncServiceBase):
         """Apply a single upsert op: insert/update local DB record."""
         file_id = op["file_id"]
         stable_id = op["stable_id"]
-        file_data: Dict[str, Any] = json.loads(op["file_data"]) if op.get("file_data") else {}
+        file_data = _known_fields(json.loads(op["file_data"]) if op.get("file_data") else {})
 
         existing = self.file_repo.get_file_by_stable_id(stable_id, include_deleted=True)
 
@@ -495,12 +507,10 @@ class SyncService(SyncServiceBase):
                 doc_metadata=_parse_json_field(file_data.get("doc_metadata"), {}),
                 file_metadata=_parse_json_field(file_data.get("file_metadata"), {}),
                 created_by=file_data.get("created_by"),
-                # Version history and archived PDFs (pdf-tei-editor#924): without them, an archived
-                # PDF would arrive as a second current PDF of the document, and versions would lose
-                # their link to it. Cores without these fields ignore them (FileCreate ignores extras).
+                # Version history and the PDF each TEI file is attached to (pdf-tei-editor#944):
+                # without them, versions would lose their parent and fall back to the canonical PDF.
                 parent_stable_id=file_data.get("parent_stable_id"),
                 pdf_stable_id=file_data.get("pdf_stable_id"),
-                superseded_by=file_data.get("superseded_by"),
             )
             self.file_repo.insert_file(file_create)
             self.file_repo.mark_file_synced(file_id, op["seq"])
