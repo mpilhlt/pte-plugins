@@ -606,6 +606,8 @@ async def download_training_package(
                 cancellable=True,
                 cancel_url=cancel_url
             )
+            if hasattr(progress, "set_title"):  # widget titles need an editor core with ProgressBar.set_title()
+                progress.set_title("GROBID training package")
             await asyncio.sleep(0)  # Yield to allow SSE event delivery
 
         try:
