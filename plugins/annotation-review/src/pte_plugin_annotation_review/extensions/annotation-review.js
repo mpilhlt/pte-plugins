@@ -101,6 +101,10 @@ export default class AnnotationReviewExtension extends FrontendExtensionPlugin {
       title: 'Review the annotations of this node',
       run: () => { this.runReview(); },
     };
+    /** The focus-mode button while a review runs (disabled with editor cores that support it). */
+    this._focusActionBusy = { ...this._focusAction, disabled: true, title: 'A review is running' };
+    /** True while a review runs. */
+    this._running = false;
   }
 
   /**
@@ -237,16 +241,18 @@ export default class AnnotationReviewExtension extends FrontendExtensionPlugin {
 
   /**
    * Enable the menu item, and the "Annotation auto-review" button on the node focused in
-   * focus mode, only if a document is open and has reviewable rules.
+   * focus mode, only if a document is open and has reviewable rules; while a review runs, both
+   * are disabled.
    * No-op before start() has created the item.
    * @returns {void}
    */
   _updateMenuState() {
     if (!this._menuItem) return;
     const tree = this.getDependency('xmleditor').getXmlTree();
-    this._menuItem.disabled = !tree || !this.hasReviewableRules(tree) || this._layoutMissing !== null;
-    this._menuItem.title = this._layoutMissing ?? (this._menuItem.disabled ? 'Requires an open document whose editorialDecl has machine-readable annotation rules (a ref with subtype="machine").' : '');
-    this.getDependency('xmleditor').setFocusAction(SOURCE, this._menuItem.disabled ? null : this._focusAction);
+    const available = Boolean(tree) && this.hasReviewableRules(tree) && this._layoutMissing === null;
+    this._menuItem.disabled = !available || this._running;
+    this._menuItem.title = this._layoutMissing ?? (available ? '' : 'Requires an open document whose editorialDecl has machine-readable annotation rules (a ref with subtype="machine").');
+    this.getDependency('xmleditor').setFocusAction(SOURCE, available ? (this._running ? this._focusActionBusy : this._focusAction) : null);
   }
 
   /**
@@ -262,6 +268,7 @@ export default class AnnotationReviewExtension extends FrontendExtensionPlugin {
    * @returns {Promise<void>}
    */
   async runReview(override, options = {}) {
+    if (this._running) return;
     const resolved = override ?? this.getDependency('inference-settings').getDefaultModel();
     const xpath = options.wholeDocument ? null : (this.state?.xpath || null);
     let label = '';
@@ -288,6 +295,8 @@ export default class AnnotationReviewExtension extends FrontendExtensionPlugin {
     // findings of the review received so far, of which the display holds those not dismissed or applied
     let received = 0;
     let appended = 0;
+    this._running = true;
+    this._updateMenuState();
     progress.show(progressId, { title: 'Annotation auto-review', label: heading, value: null, cancellable: true, onCancel: () => { cancelled = true; } });
     try {
       const findings = await this.review(resolved ?? undefined, {
@@ -339,6 +348,8 @@ export default class AnnotationReviewExtension extends FrontendExtensionPlugin {
         count ? 'info-circle' : 'check-circle'
       );
     } finally {
+      this._running = false;
+      this._updateMenuState();
       progress.hide(progressId);
     }
   }
