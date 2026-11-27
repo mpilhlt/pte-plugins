@@ -1,6 +1,8 @@
 /**
  * @import { PluginContext } from '../../../../app/src/modules/plugin-context.js'
  * @import { Diagnostic } from '@codemirror/lint'
+ * @import { EditorView } from '@codemirror/view'
+ * @import { Text } from '@codemirror/state'
  */
 
 // Tokenizer matching GROBID's GrobidDefaultAnalyzer (StringTokenizer with
@@ -36,6 +38,9 @@ const LINE_WINDOW = 5;
 // PAGE_BREAK_VICINITY in the editor's zone_lines.py
 export const PAGE_BREAK_VICINITY = 3;
 
+// Source of the diagnostics, which marks them as this extension's in the shared diagnostic set
+export const SOURCE = 'grobid-sync';
+
 const PB_RE = /<(?:[\w.-]+:)?pb\b((?:"[^"]*"|'[^']*'|[^>"'])*)\/?>/g;
 
 /**
@@ -43,6 +48,13 @@ const PB_RE = /<(?:[\w.-]+:)?pb\b((?:"[^"]*"|'[^']*'|[^>"'])*)\/?>/g;
  * @property {string} token - First word of the line
  * @property {number} from - Offset of the word in the XML
  * @property {number} to - Offset after the word
+ */
+
+/**
+ * @typedef {object} FeatureTokens
+ * @property {string[]} tokens - Tokens of the feature file
+ * @property {boolean} lineBased - Whether the tokens are the first words of the lines
+ * @property {number[]} pageStarts - Indices of the tokens whose row starts a page (segmentation only)
  */
 
 /**
@@ -158,19 +170,47 @@ export default class GrobidSyncExtension extends FrontendExtensionPlugin {
    * Cache: stable_id → {tokens, lineBased, pageStarts}, or null when the file has no
    * associated feature file (non-GROBID or cache missing). pageStarts: indices of the
    * tokens whose row starts a page (segmentation only).
-   * @type {Map<string, {tokens: string[], lineBased: boolean, pageStarts: number[]}|null>}
+   * @type {Map<string, FeatureTokens|null>}
    */
   #cache = new Map();
 
   /** @type {string|null} */
   #currentStableId = null;
 
+  /**
+   * The diagnostics last computed, with the document and feature tokens they were computed from
+   * @type {{doc: Text, cached: FeatureTokens, diagnostics: Diagnostic[]}|null}
+   */
+  #last = null;
+
+  /**
+   * Keys (`from:to:message`) of the diagnostics the user dismissed since the last edit, which are
+   * not merged in again
+   * @type {Set<string>}
+   */
+  #dismissed = new Set();
+
   /** @param {object} state */
   async install(state) {
     await super.install(state);
-    this.getDependency('xmleditor').registerLintSource(
-      this.#lintSource.bind(this)
-    );
+    const xmleditor = this.getDependency('xmleditor');
+    xmleditor.registerLintSource(this.#lintSource.bind(this));
+    // Another source replacing the diagnostic set without ours (e.g. the well-formedness check
+    // that runs after a document is loaded) removes them until the next edit: merge them in again,
+    // not from inside the update. A merge that changes nothing is not dispatched.
+    const lintUtils = this.getDependency('lint-utils');
+    lintUtils.addDismissListener(dismissed => {
+      for (const d of dismissed) if (d.source === SOURCE) this.#dismissed.add(`${d.from}:${d.to}:${d.message}`);
+    });
+    xmleditor.addUpdateListener(update => {
+      if (update.docChanged) {
+        this.#dismissed.clear();
+        return;
+      }
+      if (!lintUtils.replacesDiagnostics(update)) return;
+      if (lintUtils.collectDiagnostics(update.state).some(d => d.source === SOURCE)) return;
+      setTimeout(() => this.#remergeDiagnostics(), 0);
+    });
     if (state.xml) {
       await this.onXmlChange(state.xml);
     }
@@ -199,16 +239,28 @@ export default class GrobidSyncExtension extends FrontendExtensionPlugin {
   }
 
   /**
+   * Merges the diagnostics of the current document into the editor's diagnostic set.
+   */
+  #remergeDiagnostics() {
+    const view = this.getDependency('xmleditor').getView();
+    if (!view) return;
+    const own = this.#lintSource(view).filter(d => !this.#dismissed.has(`${d.from}:${d.to}:${d.message}`));
+    this.getDependency('lint-utils').applyMergedDiagnostics(view, SOURCE, own);
+  }
+
+  /**
    * CodeMirror lint source: compares cached feature tokens against the current
    * XML document and returns diagnostics for mismatches.
-   * @param {import('@codemirror/view').EditorView} view
+   * @param {EditorView} view
    * @returns {Diagnostic[]}
    */
   #lintSource(view) {
     const cached = this.#cache.get(this.#currentStableId);
     if (!cached) return [];
+    const doc = view.state.doc;
+    if (this.#last && this.#last.doc === doc && this.#last.cached === cached) return this.#last.diagnostics;
     const { tokens: featureTokens, lineBased, pageStarts } = cached;
-    const xmlText = view.state.doc.toString();
+    const xmlText = doc.toString();
     const xmlTokens = lineBased
       ? this.#extractFirstLineTokens(xmlText)
       : this.#extractXmlTokens(xmlText);
@@ -216,7 +268,9 @@ export default class GrobidSyncExtension extends FrontendExtensionPlugin {
     if (lineBased && pageStarts.length > 0) {
       diagnostics.push(...pageBreakDiagnostics(xmlTokens, pageBreaksOf(xmlText, xmlTokens), featureTokens, pageStarts));
     }
-    return diagnostics;
+    const own = diagnostics.map(d => ({ ...d, source: SOURCE }));
+    this.#last = { doc, cached, diagnostics: own };
+    return own;
   }
 
   /**
