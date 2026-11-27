@@ -7,7 +7,7 @@
  * merged into the editor's diagnostic set, each with a "Propose fix" action
  * that opens the merge view and a `replacement` that the diagnostics drawer
  * applies directly. When node navigation is on (the `xpath` state is
- * set), the "LLM Review" button of focus mode reviews only the navigated-to node (for a
+ * set), the "Annotation auto-review" button of focus mode reviews only the navigated-to node (for a
  * milestone such as `<pb/>`, the text up to the next one, e.g. a page); the
  * menu item always reviews the whole document. While the editor's unit review mode is
  * on, the model also records its result as a reviewer: the review units of each chunk
@@ -97,7 +97,7 @@ export default class AnnotationReviewExtension extends FrontendExtensionPlugin {
     this._layoutMissing = null;
     /** Button shown on the focused node in the XML editor's focus mode. */
     this._focusAction = {
-      label: 'LLM Review',
+      label: 'Annotation auto-review',
       title: 'Review the annotations of this node',
       run: () => { this.runReview(); },
     };
@@ -236,7 +236,7 @@ export default class AnnotationReviewExtension extends FrontendExtensionPlugin {
   }
 
   /**
-   * Enable the menu item, and the "LLM Review" button on the node focused in
+   * Enable the menu item, and the "Annotation auto-review" button on the node focused in
    * focus mode, only if a document is open and has reviewable rules.
    * No-op before start() has created the item.
    * @returns {void}

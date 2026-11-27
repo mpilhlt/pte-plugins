@@ -1,6 +1,6 @@
 # LLM Reviewer: models and cost
 
-This page is for administrators. It describes how to control which language models the LLM Reviewer (**Tools** > **Review document annotations** and the **LLM Review** button in focus mode) can use, what a review costs, and what to tell users when a review fails. How users choose a model is described in [Choosing a language model](https://github.com/mpilhlt/pdf-tei-editor/blob/main/docs/user-manual/language-models.md).
+This page is for administrators. It describes how to control which language models the LLM Reviewer (**Tools** > **Review document annotations** and the **Annotation auto-review** button in focus mode) can use, what a review costs, and what to tell users when a review fails. How users choose a model is described in [Choosing a language model](https://github.com/mpilhlt/pdf-tei-editor/blob/main/docs/user-manual/language-models.md).
 
 ## The default model
 
@@ -41,7 +41,7 @@ The models of providers that run on the user's own key are not filtered.
 
 The reviewer sends the document to the model in parts of about 8,000 characters, one request after the other, and sends the annotation rules with every part. The cost of a review is therefore roughly the size of the rules times the number of parts, plus the document once. Segmentation documents are reviewed two pages at a time instead.
 
-Reviewing a whole paper can take several minutes and, with a paid model, costs money each time. Reviewing single parts with **LLM Review** in focus mode is faster and cheaper. To keep the cost under control, make a free or inexpensive model the default and restrict the paid models with the filters above.
+Reviewing a whole paper can take several minutes and, with a paid model, costs money each time. Reviewing single parts with **Annotation auto-review** in focus mode is faster and cheaper. To keep the cost under control, make a free or inexpensive model the default and restrict the paid models with the filters above.
 
 ## When a review fails
 
