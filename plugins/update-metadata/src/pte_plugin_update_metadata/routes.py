@@ -266,6 +266,8 @@ async def execute_update(
         cancellable=True,
         cancel_url=f"/api/plugins/update-metadata/cancel/{progress.progress_id}"
     )
+    if hasattr(progress, "set_title"):  # widget titles need an editor core with ProgressBar.set_title()
+        progress.set_title("Metadata update")
     await asyncio.sleep(0)  # Yield to allow SSE event delivery
 
     try:

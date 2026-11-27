@@ -404,13 +404,13 @@ describe('menu item', () => {
     assert.strictEqual(menuAdds[0].items[0].disabled, true);
   });
 
-  it('offers an "LLM Review" focus-mode button only while the review is available', async () => {
+  it('offers an "Annotation auto-review" focus-mode button only while the review is available', async () => {
     let guides = [{ category: 'p', refs: [{ target: 'x', contentType: null, subtype: 'machine' }] }];
     const { ext, handlers, focusActions } = buildExtension({ getEditorialDeclGuides: () => guides });
     await ext.start();
     handlers.editorReady();
     const action = focusActions['annotation-review'];
-    assert.strictEqual(action.label, 'LLM Review');
+    assert.strictEqual(action.label, 'Annotation auto-review');
     let ran = 0;
     ext.runReview = async () => { ran++; };
     action.run();

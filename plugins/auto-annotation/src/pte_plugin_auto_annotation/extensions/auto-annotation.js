@@ -469,7 +469,7 @@ export default class AutoAnnotationExtension extends FrontendExtensionPlugin {
     const total = job.batches.reduce((sum, b) => sum + b.length, 0) + doubtBatches.reduce((sum, b) => sum + b.length, 0);
     let cancelled = false;
     let lockLost = false;
-    progress.show(progressId, { label: `${heading} (0 of ${transfer ? total : job.unit_count} ${unitName})`, value: 0, cancellable: true, onCancel: () => { cancelled = true; } });
+    progress.show(progressId, { title: transfer ? 'Annotation transfer' : 'Annotation auto-correction', label: `${heading} (0 of ${transfer ? total : job.unit_count} ${unitName})`, value: 0, cancellable: true, onCancel: () => { cancelled = true; } });
     const refresher = setInterval(() => {
       this.callPluginApi('/api/plugins/auto-annotation/correct/heartbeat', 'POST', jobBody).catch(() => { lockLost = true; });
     }, this._lockRefreshMs);
