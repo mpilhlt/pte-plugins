@@ -387,10 +387,25 @@ class GrobidTrainingExtractor(BaseExtractor):
         if "CDATA_PLACEHOLDER_FOR_INVALID_XML" in result_xml:
             cdata_content = f"<![CDATA[\n{raw_tei_content}\n]]>"
             result_xml = result_xml.replace("CDATA_PLACEHOLDER_FOR_INVALID_XML", cdata_content)
-        elif variant_id == SEGMENTATION and doc_id:
-            result_xml = self._insert_page_breaks(result_xml, doc_id)
+        elif variant_id == SEGMENTATION:
+            if doc_id:
+                result_xml = self._insert_page_breaks(result_xml, doc_id)
+            if pdf_path:
+                result_xml = self._restore_dashes(result_xml, pdf_path)
 
         return result_xml
+
+    def _restore_dashes(self, xml: str, pdf_path: str) -> str:
+        """The segmentation document with the PDF's dashes, and the spaces after them, instead of GROBID's '-' (see `dashes.py`); unchanged if that is not possible."""
+        from pte_plugin_grobid.dashes import pdf_text, restore_dashes
+
+        try:
+            result, count = restore_dashes(xml, pdf_text(pdf_path))
+        except Exception as e:  # noqa: BLE001 - restoring dashes is an improvement, never a reason to fail the extraction
+            logger.warning(f"Dashes not restored from {pdf_path}: {e}")
+            return xml
+        logger.info(f"Restored {count} dashes from {pdf_path}")
+        return result
 
     def _insert_page_breaks(self, xml: str, doc_id: str) -> str:
         """

@@ -201,9 +201,11 @@ def line_layout_from_rows(line_tokens: list[str | None], rows: list[FeatureRow])
 
 
 def first_token(text: str) -> str | None:
-    """The first whitespace-delimited word of a line's text."""
+    """The first whitespace-delimited word of a line's text, with dashes folded to '-' like the tokens of the feature file (see `dashes.py`)."""
+    from pte_plugin_grobid.dashes import fold_dashes
+
     words = text.split()
-    return words[0] if words else None
+    return fold_dashes(words[0]) if words else None
 
 
 def feature_page_starts(zip_path: Path, suffix: str = "segmentation") -> list[int] | None:
