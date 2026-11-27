@@ -61,13 +61,13 @@ The node navigation in the statusbar of the XML editor moves through the documen
 
 The magnifier button next to the counter switches on focus mode: everything outside the current part is dimmed, so that you can concentrate on it. **‹** and **›** (or the arrow keys) move to the previous or next part, and the counter shows where you are, for example `1/5` for the first of five pages. See [XPath Navigation](https://github.com/mpilhlt/pdf-tei-editor/blob/main/docs/user-manual/editing-workflow.md#xpath-navigation) and [Focus Mode](https://github.com/mpilhlt/pdf-tei-editor/blob/main/docs/user-manual/editing-workflow.md#focus-mode) in the user manual for details.
 
-![The XML editor in focus mode with the first page in focus, the rest of the document dimmed, the LLM Review button at the bottom right of the page, and the statusbar showing Page (pb) at 1/5](images/focus-page.png)
+![The XML editor in focus mode with the first page in focus, the rest of the document dimmed, the Annotation auto-review button at the bottom right of the page, and the statusbar showing Page (pb) at 1/5](images/focus-page.png)
 
-*The first page in focus mode, with the LLM Review button.*
+*The first page in focus mode, with the Annotation auto-review button.*
 
 ## 4. Review a part
 
-Click **LLM Review** at the bottom right of the part in focus. The model reads this part, and its suggestions appear in the **Diagnostics** panel on the left and as underlined text in the editor. Each suggestion explains what the model would change and why.
+Click **Annotation auto-review** at the bottom right of the part in focus. The model reads this part, and its suggestions appear in the **Diagnostics** panel on the left and as underlined text in the editor. Each suggestion explains what the model would change and why.
 
 ![The Diagnostics panel with a suggestion of the LLM Reviewer explaining that the last three lines of the page are not part of the footnote, with the buttons Propose fix and Apply fix, next to the XML editor with the affected text underlined](images/llm-suggestion.png)
 

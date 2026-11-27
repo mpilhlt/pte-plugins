@@ -29,7 +29,7 @@ Segmentation documents mark the start of every PDF page with `<pb n="…"/>` (`n
 
 For documents extracted before, the TEI Wizard enhancement **Insert page breaks** adds the missing `<pb/>` elements from the cached feature file (fetch it with [Reload feature file](#reload-feature-file) if it is missing) and shows the result in the merge view. Running it again adds nothing to pages that have a `<pb/>`. When the feature file is cached, the sync-check lint warns about a `<pb/>` that is not near a page start and a `<pb/>` whose `n` is not its page number. Missing `<pb/>` elements get no warning.
 
-The node navigation of the XML editor offers **Page (`<pb>`)** for segmentation documents: it moves from page to page, focus mode focuses the whole page (from its `<pb/>` to the next one), and the **LLM Review** button of focus mode reviews that page.
+The node navigation of the XML editor offers **Page (`<pb>`)** for segmentation documents: it moves from page to page, focus mode focuses the whole page (from its `<pb/>` to the next one), and the **Annotation auto-review** button of focus mode reviews that page.
 
 In the XML editor's visual mode, `<lb/>` appears as a read-only badge in all GROBID training variants, and `<pb/>` in segmentation documents: they mark the layout of the PDF and cannot be edited there (`read_only` in `config/annotation_tags_scope.py`).
 
