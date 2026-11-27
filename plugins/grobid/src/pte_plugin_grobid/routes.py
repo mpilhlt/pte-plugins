@@ -467,16 +467,16 @@ def _package_source(
 ) -> tuple[list[tuple[str, str | None]], bool, str, Path | None]:
     """
     Where the training download gets the training package of a gold file from: the PDF the gold
-    file was made from, which is the archived original if text recognition has replaced the
-    document's PDF since (pdf-tei-editor#924), otherwise the current PDF.
+    file was made from (pdf-tei-editor#944), which need not be the document's PDF that the download
+    resolved.
 
     Args:
         file_repo: File repository
         file_storage: File storage
         gold_file: The gold file
         gold_content: Its TEI content (for the labels of its encodingDesc)
-        pdf_file: The document's current PDF
-        pdf_path: Storage path of the current PDF
+        pdf_file: The document's PDF, used if the gold file has none
+        pdf_path: Storage path of that PDF
         grobid_revision: Revision of the GROBID server
 
     Returns:
@@ -688,10 +688,9 @@ async def download_training_package(
                             break
 
                     # The training package of each gold file comes from the PDF it was made
-                    # from. Text recognition may have replaced the PDF since: the core then
-                    # keeps the original as an archived PDF (pdf-tei-editor#924), from which the
-                    # package can be fetched again; without it, the feature files of the earlier
-                    # PDF only exist in the cache (see cache.package_lookups()).
+                    # from (pdf-tei-editor#944), from which the package can be fetched again. A gold
+                    # file whose PDF was changed in place by text recognition before #924 has no
+                    # such PDF: its feature files only exist in the cache (see cache.package_lookups()).
                     refresh = force_refresh or is_grobid_cache_disabled()
                     packages: dict[tuple[tuple[str, str | None], ...], tuple[str, list[str]]] = {}
                     temp_dirs: list[str] = []

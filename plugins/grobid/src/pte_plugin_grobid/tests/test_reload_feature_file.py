@@ -73,7 +73,7 @@ def make_pdf_file(file_id="pdf-hash"):
 class ResolveReloadTargetTestCase(unittest.TestCase):
     def setUp(self):
         self.file_repo = mock.Mock()
-        # Without an archived PDF, the PDF of a version is the document's current PDF
+        # By default, the PDF of a version is the document's PDF
         self.file_repo.get_pdf_for_file.side_effect = lambda f: self.file_repo.get_pdf_for_document(f.doc_id)
         self.file_storage = mock.Mock()
         self.user = {"username": "reviewer1", "roles": ["reviewer"]}
@@ -182,19 +182,18 @@ class ResolveReloadTargetTestCase(unittest.TestCase):
             b'<label type="revision">rev-1</label>',
             f'<label type="revision">rev-1</label><label type="pdf-hash">{pdf_hash}</label>'.encode(),
         )
-        meta.pdf_stable_id = "pdf-archived"
+        meta.pdf_stable_id = "pdf-old"
         return meta, content
 
-    @unittest.skipUnless("superseded_by" in FileMetadata.model_fields, "core without archived PDFs (pdf-tei-editor#924)")
-    def test_uses_the_archived_pdf_of_a_version_made_before_ocr(self):
+    def test_uses_the_pdf_the_version_is_attached_to(self):
+        """A version made before text recognition stays attached to the earlier PDF (pdf-tei-editor#944)."""
         meta, content = self._tei_with_pdf_hash("old-pdf-hash")
-        archived = make_pdf_file(file_id="old-pdf-hash")
-        archived.stable_id = "pdf-archived"
-        archived.superseded_by = "pdf-1"
+        earlier = make_pdf_file(file_id="old-pdf-hash")
+        earlier.stable_id = "pdf-old"
         self.file_repo.get_file_by_stable_id.return_value = meta
         self.file_storage.read_file.return_value = content
         self.file_repo.get_pdf_for_file.side_effect = None
-        self.file_repo.get_pdf_for_file.return_value = archived
+        self.file_repo.get_pdf_for_file.return_value = earlier
         self.file_repo.get_pdf_for_document.return_value = make_pdf_file()
         self.file_storage.get_file_path.return_value = Path("/fake/old.pdf")
 
@@ -205,10 +204,9 @@ class ResolveReloadTargetTestCase(unittest.TestCase):
         self.assertEqual(target.pdf_hash, "old-pdf-hash")
         self.assertEqual(target.pdf_path, Path("/fake/old.pdf"))
         self.assertFalse(target.adds_pdf_hash)
-        self.assertTrue(target.from_archived_pdf)
-        self.assertIn("original PDF", render_preview_html(target, "rev-1", None))
 
-    def test_falls_back_to_the_current_pdf_on_cores_without_archived_pdfs(self):
+
+    def test_falls_back_to_the_document_pdf_on_cores_without_get_pdf_for_file(self):
         meta, content = make_tei_file(revision="rev-1")
         del self.file_repo.get_pdf_for_file  # core before pdf-tei-editor#924
         self.file_repo.get_file_by_stable_id.return_value = meta
@@ -220,7 +218,6 @@ class ResolveReloadTargetTestCase(unittest.TestCase):
 
         self.file_repo.get_pdf_for_document.assert_called_once_with("doc-1")
         self.assertEqual(target.pdf_hash, "pdf-hash")
-        self.assertFalse(target.from_archived_pdf)
 
 
 class PerformReloadTestCase(unittest.TestCase):
