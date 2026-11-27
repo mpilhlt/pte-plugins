@@ -85,6 +85,8 @@ For each suggestion you can:
 
 The model can be wrong. Check every suggestion against the PDF and the annotation guidelines before you accept it; if in doubt, dismiss it. Then move on to the next part with **›** and review it the same way.
 
+If you spot errors of the text recognition on the page, such as misread letters or garbled footnote numbers, click **OCR auto-corrections**: the model suggests corrections of the text, which you accept or dismiss in the same way. The button of the page then becomes **Write text corrections to PDF**, which writes the accepted corrections of the page into the text layer of the PDF within seconds, without creating a new version. See [Editing with a Language Model](https://github.com/mpilhlt/pdf-tei-editor/blob/main/docs/user-manual/llm-editing-workflow.md) in the user manual.
+
 **Tools > Annotation > Review document annotations** reviews the whole document in one go. This is handy for short documents, but for long ones the review by parts is easier to check.
 
 ## 5. Save and continue
