@@ -130,6 +130,8 @@ async def backfill_collection_metadata(
 
     progress = ProgressBar(sse_service, session_id)
     progress.show(label=f"Backfilling metadata in collection {collection}...")
+    if hasattr(progress, "set_title"):  # widget titles need an editor core with ProgressBar.set_title()
+        progress.set_title("Metadata backfill")
     await asyncio.sleep(0)
 
     def on_progress(current: int, total: int, label: str) -> None:
