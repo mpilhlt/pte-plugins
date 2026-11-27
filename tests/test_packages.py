@@ -1,6 +1,8 @@
 """
 Checks across all plugin packages: every package is installed and found through its
-``pte.plugins`` entry point, loads, and survives initialize -> cleanup -> initialize -> cleanup.
+``pte.plugins`` entry point, loads, survives initialize -> cleanup -> initialize -> cleanup, and
+its frontend extensions follow the editor's extension code conventions (which the editor only
+warns about when serving them).
 """
 
 import json
@@ -46,6 +48,16 @@ class TestPackages(unittest.IsolatedAsyncioTestCase):
         builtin = get_settings().plugins_code_dir
         checked = await check_lifecycle_conformance([builtin, *package_dirs()], builtin_dir=builtin)
         self.assertTrue({p["id"] for p in INDEX["plugins"]} & set(checked))
+
+    def test_frontend_extensions_pass_validation(self):
+        from fastapi_app.lib.plugins.plugin_tools import validate_javascript_content
+
+        files = [f for d in package_dirs() for f in sorted((d / "extensions").glob("*.js"))]
+        self.assertTrue(files)
+        for js_file in files:
+            with self.subTest(file=str(js_file.relative_to(REPO_ROOT))):
+                valid, warnings = validate_javascript_content(js_file.read_text(encoding="utf-8"), js_file.name)
+                self.assertTrue(valid, "; ".join(warnings))
 
 
 if __name__ == "__main__":
