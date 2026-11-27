@@ -35,6 +35,10 @@ Each extraction creates a new document of the chosen variant for the PDF. Switch
 
 In segmentation documents, a page break element `<pb n="…"/>` marks where each PDF page starts. The editor uses them to divide the document into pages, for example in the review and when moving from page to page in the XML editor. The extractor inserts them automatically. Documents extracted with an older version of the plugin may lack them: add them with **Insert page breaks** in the **Enhance TEI** menu, as described in [How to use the LLM Reviewer with GROBID](llm-review-tutorial.md#2-segmentation-documents-add-the-page-breaks).
 
+## Dashes in segmentation documents
+
+GROBID replaces every dash of the PDF, such as `—` and `–`, with a hyphen `-`, and leaves out the space after it. For segmentation documents, the extractor puts the PDF's dashes and the spaces after them back, so that "— II." in the PDF does not become "-II." in the document. A dash is only restored if the text around it can be found exactly once in the PDF's text; otherwise GROBID's hyphen stays. The check against the feature file treats all dashes as hyphens, as GROBID does when it is trained.
+
 ## Reload feature file
 
 Besides the training data, GROBID returns a *feature file* with the layout information of each word: on which page and line it stands, its font and so on. The editor keeps it and uses it to check your corrections: when the words of the document no longer match the words GROBID found in the PDF, for example because a word was deleted or typed in by accident, the XML editor marks the place with a warning.

@@ -10,7 +10,7 @@ import assert from 'node:assert';
 // Stub the browser-only base class before the dynamic import below.
 global.FrontendExtensionPlugin = class {};
 
-const { pageBreaksOf, alignLines, pageBreakDiagnostics } = await import('../extensions/grobid-sync.js');
+const { pageBreaksOf, alignLines, pageBreakDiagnostics, foldDashes } = await import('../extensions/grobid-sync.js');
 
 const DOC = `<TEI><teiHeader/><text>
   <pb n="1"/>
@@ -80,5 +80,13 @@ describe('grobid-sync page breaks', () => {
   it('says nothing about documents without page breaks', () => {
     const lines = lineTokens(DOC);
     assert.deepStrictEqual(pageBreakDiagnostics(lines, [], FEATURE_TOKENS, PAGE_STARTS), []);
+  });
+});
+
+describe('foldDashes', () => {
+  it('folds the dashes GROBID normalizes to "-" and keeps the length', () => {
+    const text = '— II. – x − y ‐ z - w';
+    assert.strictEqual(foldDashes(text), '- II. - x - y - z - w');
+    assert.strictEqual(foldDashes(text).length, text.length);
   });
 });

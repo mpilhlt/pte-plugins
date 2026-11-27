@@ -24,6 +24,19 @@ const TOKEN_RE = new RegExp(
   'g'
 );
 
+// The dashes GROBID normalizes to '-' (UnicodeUtil.normaliseText(): class Pd and the minus sign).
+// The extractor restores them in the TEI from the PDF (dashes.py), the feature file keeps '-'.
+const DASH_RE = /[\p{Pd}\u2212]/gu;
+
+/**
+ * Text with every dash replaced by '-', as GROBID normalizes it. Keeps the length of the text.
+ * @param {string} text
+ * @returns {string}
+ */
+export function foldDashes(text) {
+  return text.replace(DASH_RE, '-');
+}
+
 // Matches XML character and named entity references: &amp; &#60; &#x3c;
 const ENTITY_RE = /&(?:#(\d+)|#x([0-9a-fA-F]+)|([a-zA-Z][a-zA-Z0-9]*));/g;
 const NAMED_ENTITIES = { amp: '&', lt: '<', gt: '>', apos: "'", quot: '"' };
@@ -400,7 +413,7 @@ export default class GrobidSyncExtension extends FrontendExtensionPlugin {
     const m = /\S+/.exec(decoded.join(''));
     if (!m) return null;
     return {
-      token: m[0],
+      token: foldDashes(m[0]),
       from: rawSpans[m.index][0],
       to: rawSpans[m.index + m[0].length - 1][1],
     };
@@ -451,7 +464,7 @@ export default class GrobidSyncExtension extends FrontendExtensionPlugin {
       rawSpans.push([absStart + i, absStart + i + 1]);
     }
 
-    const decodedText = decoded.join('');
+    const decodedText = foldDashes(decoded.join(''));
     TOKEN_RE.lastIndex = 0;
     let m;
     while ((m = TOKEN_RE.exec(decodedText)) !== null) {
