@@ -56,6 +56,7 @@ class TestGoogleLLMProviderListModels(unittest.TestCase):
         self.assertEqual(models[0]["id"], "gemini-2.0-flash")
         self.assertEqual(models[0]["label"], "Gemini 2.0 Flash")
         self.assertIn("chat", models[0]["capabilities"])
+        self.assertIn("vision", models[0]["capabilities"])
         self.assertIsNone(models[0]["status"])
         self.assertEqual(models[1]["id"], "gemini-1.5-pro")
         self.assertEqual(models[1]["label"], "gemini-1.5-pro")  # falls back to id
@@ -231,6 +232,29 @@ class TestGoogleLLMProviderPdfInput(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(mock_client.aio.files.upload.call_args.kwargs["file"], "/x.pdf")
         self.assertEqual(mock_client.aio.models.generate_content.call_args.kwargs["contents"], [uploaded, "usr"])
         mock_client.aio.files.delete.assert_called_once_with(name="files/abc")
+
+
+class TestGoogleLLMProviderImageInput(unittest.IsolatedAsyncioTestCase):
+    """Test chat_completion_with_images() sends the images inline ahead of the prompt."""
+
+    @patch("pte_plugin_google_llm.llm_provider.genai.Client")
+    async def test_images_inline_before_prompt(self, mock_client_cls):
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.text = "[]"
+        mock_client.aio.models.generate_content = AsyncMock(return_value=mock_response)
+        mock_client_cls.return_value = mock_client
+
+        provider = GoogleLLMProvider(id="google", label="Google Gemini", api_key="k")
+        self.assertTrue(provider.supports_image_input("gemini-2.5-flash"))
+        result = await provider.chat_completion_with_images("gemini-2.5-flash", "sys", "usr", [{"data": b"img", "media_type": "image/jpeg"}])
+
+        self.assertEqual(result, "[]")
+        contents = mock_client.aio.models.generate_content.call_args.kwargs["contents"]
+        self.assertEqual(len(contents), 2)
+        self.assertEqual(contents[0].inline_data.data, b"img")
+        self.assertEqual(contents[0].inline_data.mime_type, "image/jpeg")
+        self.assertEqual(contents[1], "usr")
 
 
 class TestGoogleLLMProviderSharedKey(unittest.TestCase):
