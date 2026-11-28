@@ -88,6 +88,22 @@ def user_dir(username: str) -> Path:
     return users_dir() / user_key(username)
 
 
+def vision_presets() -> frozenset[str]:
+    """
+    The presets whose models accept images (config ``plugin.mpcdf-llm.vision-presets`` or
+    MPCDF_LLM_VISION_PRESETS, comma-separated preset names). The presets and the MPCDF model list
+    say nothing about modalities, so an administrator names them.
+    """
+    value = get_plugin_config(
+        "plugin.mpcdf-llm.vision-presets",
+        "MPCDF_LLM_VISION_PRESETS",
+        default="",
+        description="Comma-separated names of the presets whose models accept images",
+    )
+    names = value if isinstance(value, list) else str(value or "").split(",")
+    return frozenset(str(name).strip() for name in names if str(name).strip())
+
+
 def base_url() -> str:
     """Base URL of the MPCDF LLM service (config ``plugin.mpcdf-llm.base-url`` or MPCDF_LLM_BASE_URL)."""
     return get_plugin_config(

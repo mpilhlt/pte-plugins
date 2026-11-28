@@ -13,6 +13,7 @@ the endpoint URL or key.
 """
 
 import asyncio
+import base64
 import copy
 import logging
 import time
@@ -22,7 +23,7 @@ import httpx
 from mpcdf_llm.errors import LoginRequired, MpcdfError
 from mpcdf_llm.manager import ProvisioningManager
 
-from fastapi_app.plugin_api import LLMModel, LLMProvider, LLMProviderError, LLMProviderRegistry
+from fastapi_app.plugin_api import LLMImage, LLMModel, LLMProvider, LLMProviderError, LLMProviderRegistry
 
 from . import manager as manager_module
 
@@ -88,14 +89,18 @@ class MpcdfLLMProvider(LLMProvider):
             LLMModel(
                 id=self.model,
                 label=f"{self.description or self.preset} ({self.model})",
-                capabilities=frozenset({"chat"}),
+                capabilities=frozenset({"chat", "vision"} if self._vision() else {"chat"}),
                 status=None,
                 free=True,
             )
         ]
 
+    def _vision(self) -> bool:
+        """Whether an administrator listed the preset as one whose model accepts images."""
+        return self.preset in manager_module.vision_presets()
+
     def supports_image_input(self, model_id: str) -> bool:
-        return False
+        return self._vision()
 
     def supports_pdf_input(self, model_id: str) -> bool:
         return False
@@ -128,7 +133,7 @@ class MpcdfLLMProvider(LLMProvider):
         self._cached, self._cached_at = found, time.monotonic()
         return found
 
-    async def _post(self, available: Any, model_id: str, messages: list[dict[str, str]], temperature: float) -> httpx.Response:
+    async def _post(self, available: Any, model_id: str, messages: list[dict[str, object]], temperature: float) -> httpx.Response:
         creds = available.credentials
         async with new_http_client() as http:
             return await http.post(
@@ -144,9 +149,29 @@ class MpcdfLLMProvider(LLMProvider):
         user_prompt: str,
         temperature: float = 0.2,
     ) -> str:
+        return await self._chat(model_id, system_prompt, user_prompt, temperature)
+
+    async def chat_completion_with_images(
+        self,
+        model_id: str,
+        system_prompt: str,
+        user_prompt: str,
+        images: list[LLMImage],
+        temperature: float = 0.2,
+    ) -> str:
+        """Send the images as base64 data URLs in `image_url` content parts, in order, ahead of the prompt text."""
+        content: list[dict[str, object]] = [
+            {"type": "image_url", "image_url": {"url": f"data:{image['media_type']};base64,{base64.b64encode(image['data']).decode('ascii')}"}}
+            for image in images
+        ]
+        content.append({"type": "text", "text": user_prompt})
+        return await self._chat(model_id, system_prompt, content, temperature)
+
+    async def _chat(self, model_id: str, system_prompt: str, user_content: str | list[dict[str, object]], temperature: float) -> str:
+        """One chat request with the given user message content."""
         if self.username is None:  # the registered provider is never bound to a session
             raise self._gone()
-        messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}]
+        messages: list[dict[str, object]] = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_content}]
         response: httpx.Response | None = None
         for attempt in (0, 1):
             available = await self._credentials(refresh=attempt == 1)

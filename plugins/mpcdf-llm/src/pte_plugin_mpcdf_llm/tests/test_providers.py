@@ -6,6 +6,7 @@ Tests for the MPCDF providers in the inference menu, wired to the library's Fake
 """
 
 import asyncio
+import json
 from unittest.mock import patch
 
 import httpx
@@ -177,6 +178,32 @@ class TestChat(_Base):
         self.assertEqual(str(ctx.exception), GONE)
         self.assertNotIn(url, str(ctx.exception))
         self.assertNotIn(key, str(ctx.exception))
+
+    async def test_vision_preset_accepts_images(self):
+        provider = await self.ready_provider()
+        with patch.object(manager_module, "vision_presets", return_value=frozenset({"p"})):
+            self.assertTrue(provider.supports_image_input("openai/gpt-oss-120b"))
+            self.assertEqual(provider.list_models()[0]["capabilities"], frozenset({"chat", "vision"}))
+        url = self.fake.endpoints[1]["url"]
+        bodies = []
+
+        def handler(request):
+            bodies.append(request.read())
+            return httpx.Response(200, json={"choices": [{"message": {"content": "seen"}}]})
+
+        with patch.object(providers, "new_http_client", lambda: httpx.AsyncClient(transport=httpx.MockTransport(handler))):
+            answer = await provider.chat_completion_with_images("m", "s", "u", [{"data": b"img", "media_type": "image/jpeg"}])
+        self.assertEqual(answer, "seen")
+        content = json.loads(bodies[0])["messages"][1]["content"]
+        self.assertEqual([part["type"] for part in content], ["image_url", "text"])
+        self.assertEqual(content[0]["image_url"]["url"], "data:image/jpeg;base64,aW1n")
+        self.assertNotIn(url, answer)
+
+    async def test_vision_presets_from_comma_separated_config(self):
+        with patch.object(manager_module, "get_plugin_config", return_value=" p, q ,"):
+            self.assertEqual(manager_module.vision_presets(), frozenset({"p", "q"}))
+        with patch.object(manager_module, "get_plugin_config", return_value=["p"]):
+            self.assertEqual(manager_module.vision_presets(), frozenset({"p"}))
 
     async def test_unbound_provider_never_chats(self):
         provider = providers.MpcdfLLMProvider("p", "m")
