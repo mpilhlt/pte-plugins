@@ -1,4 +1,16 @@
 /**
+ * Checks whether the text of a GROBID training document still matches the cached feature file of
+ * its extraction, and reports the differences as diagnostics (source `grobid-sync`), registered as
+ * a sync source of the core (`registerSyncSource()` in lint-utils.js) so that the sync prompt asks
+ * reviewers to write intended changes into the PDF.
+ *
+ * Diagnostics have a fix (`replacement`) restoring the text of the feature file where it is known:
+ * replaced, extra and missing tokens of token-based variants, and replaced first words of the lines
+ * of segmentation documents (whose feature file only has the first words of each line).
+ * Segmentation diagnostics name their page (`page`, 0-based). On pages whose text corrections were
+ * written into the PDF page by page (`pending_pages`), the feature file still has the old text: their
+ * word diagnostics are replaced by one note per page.
+ *
  * @import { PluginContext } from '../../../../app/src/modules/plugin-context.js'
  * @import { Diagnostic } from '@codemirror/lint'
  * @import { EditorView } from '@codemirror/view'
@@ -54,6 +66,211 @@ export const PAGE_BREAK_VICINITY = 3;
 // Source of the diagnostics, which marks them as this extension's in the shared diagnostic set
 export const SOURCE = 'grobid-sync';
 
+// What the diagnostics report drift with, for the sync prompt of the core
+export const SYNC_TARGET = 'GROBID training data';
+
+// Tokens not preceded by a space when missing tokens are inserted
+const NO_SPACE_BEFORE = /^[,.;:!?)\]}»”’%]/;
+
+// Tokens not followed by a space when missing tokens are inserted
+const NO_SPACE_AFTER = /[(\[{«„“‘]$/;
+
+/**
+ * A diagnostic of this extension
+ * @typedef {Diagnostic & {replacement?: string, page?: number}} SyncDiagnostic
+ */
+
+/**
+ * A token of the document with its position in the XML
+ * @typedef {{token: string, from: number, to: number}} XmlToken
+ */
+
+/**
+ * The text as XML character data.
+ * @param {string} text
+ * @returns {string}
+ */
+export function escapeXml(text) {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+/**
+ * Tokens joined with spaces, except before closing and after opening punctuation.
+ * @param {string[]} tokens
+ * @returns {string}
+ */
+export function joinTokens(tokens) {
+  let result = '';
+  tokens.forEach((token, i) => {
+    if (i > 0 && !NO_SPACE_BEFORE.test(token) && !NO_SPACE_AFTER.test(/** @type {string} */ (tokens[i - 1]))) result += ' ';
+    result += token;
+  });
+  return result;
+}
+
+/**
+ * The page (0-based) of every line, by the feature file row it is aligned with (see
+ * `alignLines()`); a line without a row is on the page of the line before it.
+ * @param {string[]} lineTokens
+ * @param {string[]} rowTokens
+ * @param {number[]} pageStarts - Indices of the rows that start a page, ascending
+ * @returns {(number|null)[]} null for lines before the first aligned line or without page starts
+ */
+export function linePages(lineTokens, rowTokens, pageStarts) {
+  if (pageStarts.length === 0) return lineTokens.map(() => null);
+  const mapping = alignLines(lineTokens, rowTokens);
+  /** @type {(number|null)[]} */
+  const result = [];
+  /** @type {number|null} */
+  let page = null;
+  for (const row of mapping) {
+    if (row !== null) {
+      let p = 0;
+      while (p + 1 < pageStarts.length && /** @type {number} */ (pageStarts[p + 1]) <= row) p++;
+      page = p;
+    }
+    result.push(page);
+  }
+  return result;
+}
+
+/**
+ * Forward-scan diff of the feature tokens and the document's tokens with a small lookahead window
+ * to recover alignment after a mismatch, emitting one diagnostic per problem region, each with the
+ * index of its first document token (`index`). Fixes restore the feature tokens: for line-based
+ * documents (whose tokens are the first words of the lines) only replaced words get one.
+ * @param {string[]} featureTokens
+ * @param {XmlToken[]} xmlTokens
+ * @param {string} xmlText - The document the tokens are from
+ * @param {boolean} lineBased
+ * @returns {(SyncDiagnostic & {index: number})[]}
+ */
+export function diffTokens(featureTokens, xmlTokens, xmlText, lineBased) {
+  /** @type {(SyncDiagnostic & {index: number})[]} */
+  const diagnostics = [];
+  let fi = 0;
+  let xi = 0;
+
+  while (fi < featureTokens.length && xi < xmlTokens.length) {
+    const xmlToken = /** @type {XmlToken} */ (xmlTokens[xi]);
+    if (featureTokens[fi] === xmlToken.token) {
+      fi++;
+      xi++;
+      continue;
+    }
+
+    let recovered = false;
+    for (let d = 1; d <= WINDOW; d++) {
+      // Missing tokens: feature list is ahead of the XML
+      if (fi + d < featureTokens.length && featureTokens[fi + d] === xmlToken.token) {
+        /** @type {SyncDiagnostic & {index: number}} */
+        const diagnostic = {
+          from: xmlToken.from,
+          to: xmlToken.to,
+          severity: 'warning',
+          message: `Sync: ${d} token(s) missing before here (expected "${featureTokens[fi]}")`,
+          index: xi
+        };
+        if (!lineBased) {
+          const missing = featureTokens.slice(fi, fi + d);
+          diagnostic.replacement = escapeXml(joinTokens([...missing, xmlToken.token])).slice(0, -escapeXml(xmlToken.token).length) + xmlText.slice(xmlToken.from, xmlToken.to);
+        }
+        diagnostics.push(diagnostic);
+        fi += d;
+        recovered = true;
+        break;
+      }
+      // Extra tokens: XML has tokens the feature file does not
+      if (xi + d < xmlTokens.length && featureTokens[fi] === /** @type {XmlToken} */ (xmlTokens[xi + d]).token) {
+        const to = /** @type {XmlToken} */ (xmlTokens[xi + d - 1]).to;
+        /** @type {SyncDiagnostic & {index: number}} */
+        const diagnostic = {
+          from: xmlToken.from,
+          to,
+          severity: 'warning',
+          message: `Sync: unexpected token(s) "${xmlToken.token}" (expected "${featureTokens[fi]}")`,
+          index: xi
+        };
+        // only text between the tokens, no markup, is deleted with them
+        if (!lineBased && !xmlText.slice(xmlToken.from, to).includes('<')) {
+          let from = xmlToken.from;
+          while (from > 0 && /[ \t]/.test(xmlText.charAt(from - 1))) from--;
+          // keep the space if the tokens start the text after a tag or a line break
+          if (from > 0 && /[>\n]/.test(xmlText.charAt(from - 1))) from = xmlToken.from;
+          diagnostic.from = from;
+          diagnostic.replacement = '';
+        }
+        diagnostics.push(diagnostic);
+        xi += d;
+        recovered = true;
+        break;
+      }
+    }
+
+    if (!recovered) {
+      diagnostics.push({
+        from: xmlToken.from,
+        to: xmlToken.to,
+        severity: 'error',
+        message: `Sync: expected "${featureTokens[fi]}", found "${xmlToken.token}"`,
+        replacement: escapeXml(/** @type {string} */ (featureTokens[fi])),
+        index: xi
+      });
+      fi++;
+      xi++;
+    }
+  }
+
+  if (xi < xmlTokens.length && fi >= featureTokens.length) {
+    diagnostics.push({
+      from: /** @type {XmlToken} */ (xmlTokens[xi]).from,
+      to: /** @type {XmlToken} */ (xmlTokens[xmlTokens.length - 1]).to,
+      severity: 'warning',
+      message: `Sync: ${xmlTokens.length - xi} extra token(s) at end (feature file has ${featureTokens.length} tokens)`,
+      index: xi
+    });
+  }
+
+  return diagnostics;
+}
+
+/**
+ * The note shown instead of the word diagnostics of a page whose text corrections were written
+ * into the PDF page by page.
+ * @param {number} page - 0-based
+ * @returns {string}
+ */
+export function pendingPageMessage(page) {
+  return `Page ${page + 1}: the GROBID training data does not include the text corrections written to the PDF for this page yet. The next "Write text corrections to PDF" for the whole document (Tools menu) updates it.`;
+}
+
+/**
+ * The diagnostics of a line-based document with their pages: diagnostics on pages in
+ * `pendingPages` are replaced by one note (info) per page, at the first of them.
+ * @param {(SyncDiagnostic & {index: number})[]} diagnostics
+ * @param {(number|null)[]} pages - Page of every line token (see `linePages()`)
+ * @param {Set<number>} pendingPages
+ * @returns {SyncDiagnostic[]}
+ */
+export function withPages(diagnostics, pages, pendingPages) {
+  /** @type {SyncDiagnostic[]} */
+  const result = [];
+  /** @type {Set<number>} */
+  const noted = new Set();
+  for (const { index, ...diagnostic } of diagnostics) {
+    const page = pages[index] ?? null;
+    if (page === null) {
+      result.push(diagnostic);
+    } else if (!pendingPages.has(page)) {
+      result.push({ ...diagnostic, page });
+    } else if (!noted.has(page)) {
+      noted.add(page);
+      result.push({ from: diagnostic.from, to: diagnostic.to, severity: 'info', message: pendingPageMessage(page) });
+    }
+  }
+  return result;
+}
+
 const PB_RE = /<(?:[\w.-]+:)?pb\b((?:"[^"]*"|'[^']*'|[^>"'])*)\/?>/g;
 
 /**
@@ -68,6 +285,8 @@ const PB_RE = /<(?:[\w.-]+:)?pb\b((?:"[^"]*"|'[^']*'|[^>"'])*)\/?>/g;
  * @property {string[]} tokens - Tokens of the feature file
  * @property {boolean} lineBased - Whether the tokens are the first words of the lines
  * @property {number[]} pageStarts - Indices of the tokens whose row starts a page (segmentation only)
+ * @property {number[]} pendingPages - Pages (0-based) whose text corrections were written into the
+ *   PDF page by page, which the feature file does not have yet
  */
 
 /**
@@ -180,15 +399,18 @@ export default class GrobidSyncExtension extends FrontendExtensionPlugin {
   }
 
   /**
-   * Cache: stable_id → {tokens, lineBased, pageStarts}, or null when the file has no
-   * associated feature file (non-GROBID or cache missing). pageStarts: indices of the
-   * tokens whose row starts a page (segmentation only).
+   * Cache: `<stable_id>|<pdf stable_id>` → feature tokens, or null when the file has no
+   * associated feature file (non-GROBID or cache missing). Keyed by the PDF too: writing text
+   * corrections page by page attaches the document to a new PDF, which changes `pendingPages`.
    * @type {Map<string, FeatureTokens|null>}
    */
   #cache = new Map();
 
   /** @type {string|null} */
   #currentStableId = null;
+
+  /** @type {string|null} */
+  #currentPdf = null;
 
   /**
    * The diagnostics last computed, with the document and feature tokens they were computed from
@@ -212,6 +434,8 @@ export default class GrobidSyncExtension extends FrontendExtensionPlugin {
     // that runs after a document is loaded) removes them until the next edit: merge them in again,
     // not from inside the update. A merge that changes nothing is not dispatched.
     const lintUtils = this.getDependency('lint-utils');
+    // cores before the sync prompt have no sync sources
+    if (typeof lintUtils.registerSyncSource === 'function') lintUtils.registerSyncSource(SOURCE, { target: SYNC_TARGET });
     lintUtils.addDismissListener(dismissed => {
       for (const d of dismissed) if (d.source === SOURCE) this.#dismissed.add(`${d.from}:${d.to}:${d.message}`);
     });
@@ -224,6 +448,7 @@ export default class GrobidSyncExtension extends FrontendExtensionPlugin {
       if (lintUtils.collectDiagnostics(update.state).some(d => d.source === SOURCE)) return;
       setTimeout(() => this.#remergeDiagnostics(), 0);
     });
+    this.#currentPdf = state.pdf ?? null;
     if (state.xml) {
       await this.onXmlChange(state.xml);
     }
@@ -236,16 +461,43 @@ export default class GrobidSyncExtension extends FrontendExtensionPlugin {
    */
   async onXmlChange(newStableId) {
     this.#currentStableId = newStableId;
-    if (!newStableId || this.#cache.has(newStableId)) return;
+    await this.#fetchTokens();
+  }
+
+  /**
+   * Fetch feature tokens again when the document is attached to another PDF (e.g. after its text
+   * corrections were written page by page), which changes the pages the feature file lacks.
+   * @param {string|null} newPdf
+   */
+  async onPdfChange(newPdf) {
+    this.#currentPdf = newPdf;
+    await this.#fetchTokens();
+  }
+
+  /** @returns {string} */
+  #cacheKey() {
+    return `${this.#currentStableId}|${this.#currentPdf ?? ''}`;
+  }
+
+  /** Fetches the feature tokens of the current document and PDF unless they are cached. */
+  async #fetchTokens() {
+    const stableId = this.#currentStableId;
+    const key = this.#cacheKey();
+    if (!stableId || this.#cache.has(key)) return;
     try {
       const result = await this.callPluginApi(
-        `/api/plugins/grobid/feature-tokens?stable_id=${encodeURIComponent(newStableId)}`
+        `/api/plugins/grobid/feature-tokens?stable_id=${encodeURIComponent(stableId)}`
       );
-      this.#cache.set(newStableId, result.status === 'ok'
-        ? { tokens: result.tokens, lineBased: result.line_based === true, pageStarts: Array.isArray(result.page_starts) ? result.page_starts : [] }
+      this.#cache.set(key, result.status === 'ok'
+        ? {
+          tokens: result.tokens,
+          lineBased: result.line_based === true,
+          pageStarts: Array.isArray(result.page_starts) ? result.page_starts : [],
+          pendingPages: Array.isArray(result.pending_pages) ? result.pending_pages : []
+        }
         : null);
     } catch (_) {
-      this.#cache.set(newStableId, null);
+      this.#cache.set(key, null);
     }
     // Force the linter to re-run now that tokens are available.
     this.getDependency('xmleditor').refreshLinting();
@@ -268,16 +520,20 @@ export default class GrobidSyncExtension extends FrontendExtensionPlugin {
    * @returns {Diagnostic[]}
    */
   #lintSource(view) {
-    const cached = this.#cache.get(this.#currentStableId);
+    const cached = this.#cache.get(this.#cacheKey());
     if (!cached) return [];
     const doc = view.state.doc;
     if (this.#last && this.#last.doc === doc && this.#last.cached === cached) return this.#last.diagnostics;
-    const { tokens: featureTokens, lineBased, pageStarts } = cached;
+    const { tokens: featureTokens, lineBased, pageStarts, pendingPages } = cached;
     const xmlText = doc.toString();
     const xmlTokens = lineBased
       ? this.#extractFirstLineTokens(xmlText)
       : this.#extractXmlTokens(xmlText);
-    const diagnostics = this.#diffTokens(featureTokens, xmlTokens);
+    const found = diffTokens(featureTokens, xmlTokens, xmlText, lineBased);
+    /** @type {SyncDiagnostic[]} */
+    const diagnostics = lineBased
+      ? withPages(found, linePages(xmlTokens.map(t => t.token), featureTokens, pageStarts), new Set(pendingPages))
+      : found.map(({ index: _index, ...d }) => d);
     if (lineBased && pageStarts.length > 0) {
       diagnostics.push(...pageBreakDiagnostics(xmlTokens, pageBreaksOf(xmlText, xmlTokens), featureTokens, pageStarts));
     }
@@ -472,76 +728,5 @@ export default class GrobidSyncExtension extends FrontendExtensionPlugin {
       const to = rawSpans[m.index + m[0].length - 1][1];
       out.push({ token: m[0], from, to });
     }
-  }
-
-  /**
-   * Forward-scan diff with a small lookahead window to recover alignment
-   * after a mismatch, emitting one diagnostic per problem region.
-   * @param {string[]} featureTokens
-   * @param {Array<{token: string, from: number, to: number}>} xmlTokens
-   * @returns {Diagnostic[]}
-   */
-  #diffTokens(featureTokens, xmlTokens) {
-    const diagnostics = [];
-    let fi = 0;
-    let xi = 0;
-
-    while (fi < featureTokens.length && xi < xmlTokens.length) {
-      if (featureTokens[fi] === xmlTokens[xi].token) {
-        fi++;
-        xi++;
-        continue;
-      }
-
-      let recovered = false;
-      for (let d = 1; d <= WINDOW; d++) {
-        // Missing tokens: feature list is ahead of the XML
-        if (fi + d < featureTokens.length && featureTokens[fi + d] === xmlTokens[xi].token) {
-          diagnostics.push({
-            from: xmlTokens[xi].from,
-            to: xmlTokens[xi].to,
-            severity: 'warning',
-            message: `Sync: ${d} token(s) missing before here (expected "${featureTokens[fi]}")`
-          });
-          fi += d;
-          recovered = true;
-          break;
-        }
-        // Extra tokens: XML has tokens the feature file does not
-        if (xi + d < xmlTokens.length && featureTokens[fi] === xmlTokens[xi + d].token) {
-          diagnostics.push({
-            from: xmlTokens[xi].from,
-            to: xmlTokens[xi + d - 1].to,
-            severity: 'warning',
-            message: `Sync: unexpected token(s) "${xmlTokens[xi].token}" (expected "${featureTokens[fi]}")`
-          });
-          xi += d;
-          recovered = true;
-          break;
-        }
-      }
-
-      if (!recovered) {
-        diagnostics.push({
-          from: xmlTokens[xi].from,
-          to: xmlTokens[xi].to,
-          severity: 'error',
-          message: `Sync: expected "${featureTokens[fi]}", found "${xmlTokens[xi].token}"`
-        });
-        fi++;
-        xi++;
-      }
-    }
-
-    if (xi < xmlTokens.length && fi >= featureTokens.length) {
-      diagnostics.push({
-        from: xmlTokens[xi].from,
-        to: xmlTokens[xmlTokens.length - 1].to,
-        severity: 'warning',
-        message: `Sync: ${xmlTokens.length - xi} extra token(s) at end (feature file has ${featureTokens.length} tokens)`
-      });
-    }
-
-    return diagnostics;
   }
 }

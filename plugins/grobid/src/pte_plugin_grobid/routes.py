@@ -148,9 +148,10 @@ async def get_feature_tokens(
     client-side without a round-trip on every keystroke.
 
     Returns:
-        ``{"status": "ok", "tokens": [...], "count": N, "line_based": bool, "page_starts": [...]}``
+        ``{"status": "ok", "tokens": [...], "count": N, "line_based": bool, "page_starts": [...], "pending_pages": [...]}``
         on success (page_starts: indices of the tokens whose row starts a page, segmentation
-        documents only), or
+        documents only; pending_pages: 0-based pages whose text corrections were written into the
+        PDF of the document page by page, which the feature file does not have yet), or
         ``{"status": "no_feature_file", "tokens": [], "count": 0}`` when the
         cache is missing or the TEI lacks extractable labels.
     """
@@ -193,7 +194,22 @@ async def get_feature_tokens(
 
     line_based = variant_id in LINE_BASED_VARIANTS
     page_starts = (feature_page_starts(zip_path, suffix) or []) if variant_id == SEGMENTATION else []
-    return {"status": "ok", "tokens": tokens, "count": len(tokens), "line_based": line_based, "page_starts": page_starts}
+    pending_pages = _pending_pages(file_repo, file_meta) if variant_id == SEGMENTATION else []
+    return {"status": "ok", "tokens": tokens, "count": len(tokens), "line_based": line_based, "page_starts": page_starts, "pending_pages": pending_pages}
+
+
+def _pending_pages(file_repo: PluginFileRepository, file_meta: FileMetadata) -> list[int]:
+    """
+    The pages (0-based) whose text corrections were written page by page into the PDF the document
+    is attached to, since the document was last updated for its PDF (plugin API 1.11); [] with older
+    cores or without a PDF.
+    """
+    try:
+        from fastapi_app.plugin_api import pending_text_correction_pages
+    except ImportError:
+        return []
+    pdf = file_repo.get_pdf_for_file(file_meta)
+    return pending_text_correction_pages(pdf.file_metadata or {}) if pdf is not None else []
 
 
 class InsertPageBreaksRequest(BaseModel):
