@@ -251,7 +251,7 @@
       "description": "Lets every user start MPCDF-hosted LLM endpoints with their own MPCDF account and offers them as models",
       "requires": [],
       "dependencies": [
-        "mpcdf-llm[fastapi,testing] @ git+https://gitlab.mpcdf.mpg.de/cboul/llm-mpcdf.git@1ffc5c4c3226ad3efdd541e07b1104e24511d8fb"
+        "mpcdf-llm[fastapi,testing] @ git+https://gitlab.mpcdf.mpg.de/cboul/llm-mpcdf.git@717dae0f99a87d7f85234e95eafe2c59b0e1c2ab"
       ],
       "engines": {
         "pte": ">=0.89.0",

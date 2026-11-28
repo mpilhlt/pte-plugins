@@ -6,6 +6,7 @@ Tests for the MPCDF providers in the inference menu, wired to the library's Fake
 """
 
 import asyncio
+import json
 from unittest.mock import patch
 
 import httpx
@@ -177,6 +178,31 @@ class TestChat(_Base):
         self.assertEqual(str(ctx.exception), GONE)
         self.assertNotIn(url, str(ctx.exception))
         self.assertNotIn(key, str(ctx.exception))
+
+    async def test_vision_preset_accepts_images(self):
+        manager_module.catalog().put(PRESET.model_copy(update={"vision": True}))
+        provider = await self.ready_provider()
+        self.assertTrue(provider.supports_image_input("openai/gpt-oss-120b"))
+        self.assertEqual(provider.list_models()[0]["capabilities"], frozenset({"chat", "vision"}))
+        bodies = []
+
+        def handler(request):
+            bodies.append(request.read())
+            return httpx.Response(200, json={"choices": [{"message": {"content": "seen"}}]})
+
+        with patch.object(providers, "new_http_client", lambda: httpx.AsyncClient(transport=httpx.MockTransport(handler))):
+            answer = await provider.chat_completion_with_images("m", "s", "u", [{"data": b"img", "media_type": "image/jpeg"}])
+        self.assertEqual(answer, "seen")
+        content = json.loads(bodies[0])["messages"][1]["content"]
+        self.assertEqual([part["type"] for part in content], ["image_url", "text"])
+        self.assertEqual(content[0]["image_url"]["url"], "data:image/jpeg;base64,aW1n")
+
+    async def test_changed_vision_flag_reregisters_provider(self):
+        await providers.sync_providers()
+        self.assertFalse(self.registry.get_provider("mpcdf-llm-p").vision)
+        manager_module.catalog().put(PRESET.model_copy(update={"vision": True}))
+        await providers.sync_providers()
+        self.assertTrue(self.registry.get_provider("mpcdf-llm-p").vision)
 
     async def test_unbound_provider_never_chats(self):
         provider = providers.MpcdfLLMProvider("p", "m")

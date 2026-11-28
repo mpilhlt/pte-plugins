@@ -26,7 +26,9 @@ The environment variables set the initial value when the key is not yet in `conf
 
 ### API Key
 
-For KISSKI models in the inference model picker, Each user enters their own key in the web interface (user menu > API Keys); it is stored encrypted on the server (see the PDF-TEI Editor documentation on user API keys). Optionally, an administrator can set a shared key in `plugin.kisski.api.key`, which is then used for all users instead.
+Models whose `input` in KISSKI's model list includes `image` are marked as vision models in the inference model picker (eye icon) and get the page images in the editor's review of OCR errors.
+
+For KISSKI models in the inference model picker, each user enters their own key in the web interface (user menu > API Keys); it is stored encrypted on the server (see the PDF-TEI Editor documentation on user API keys). Optionally, an administrator can set a shared key in `plugin.kisski.api.key`, which is then used for all users instead.
 
 The structured-data extractor (`/api/plugins/kisski/extract`) uses only the shared key and is unavailable without it.
 

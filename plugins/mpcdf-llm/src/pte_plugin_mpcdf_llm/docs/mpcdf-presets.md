@@ -10,6 +10,8 @@ Users start models on the MPCDF LLM service from presets that administrators set
 
 A preset describes one endpoint: the framework (vLLM or Ollama), the model, the machine, the GPU type and number, the run time and queue time, extra arguments and environment variables for the framework, and the rules below. All users start from the same presets, and only administrators change them.
 
+The MPCDF service does not say whether a model accepts images. For a vision model, check **Accepts images** in the preset form: the model then shows an eye icon in the Inference menu and gets the page images in the review of OCR errors.
+
 **New preset** opens the form for a new preset, **Edit** next to a preset opens it with that preset, and **Duplicate** with a copy under a free name such as `<name>-copy`. **Delete** removes a preset. **Save preset** checks the preset against the options the service offers at the moment, so it needs your own MPCDF login in part 1.
 
 | Rule | Meaning |

@@ -5,6 +5,8 @@ Registers Kisski's chat/completions endpoint into the core LLM provider
 registry (fastapi_app/lib/llm/), in addition to (not instead of) its
 existing ExtractorRegistry/ServiceRegistry registrations in plugin.py.
 
+Reports the `vision` capability for models whose `input` modalities include
+`image`; images are sent by OpenAICompatibleProvider.chat_completion_with_images().
 Adds live per-model demand/busy status on top of the generic
 OpenAICompatibleProvider - Kisski's /models response includes a `demand`
 integer per entry, which this module classifies into the shared 3-tier
@@ -14,7 +16,7 @@ backend/utils/kisski.py, reused here as the canonical thresholds rather
 than inventing new ones.
 """
 
-from typing import Literal
+from typing import Any, Literal
 
 from fastapi_app.lib.extraction.http_utils import get_retry_session
 from fastapi_app.plugin_api import LLMModel, ModelStatus, OpenAICompatibleProvider, get_config
@@ -26,6 +28,14 @@ def _demand_to_availability(demand: int) -> Literal["available", "busy", "very_b
     if demand <= 5:
         return "busy"
     return "very_busy"
+
+
+def _capabilities(entry: dict[str, Any]) -> frozenset[str]:
+    """`chat`, plus `vision` if the model's `input` modalities in KISSKI's /models include `image`."""
+    inputs = entry.get("input")
+    if isinstance(inputs, list) and "image" in inputs:
+        return frozenset({"chat", "vision"})
+    return frozenset({"chat"})
 
 
 class KisskiLLMProvider(OpenAICompatibleProvider):
@@ -66,7 +76,7 @@ class KisskiLLMProvider(OpenAICompatibleProvider):
                 LLMModel(
                     id=entry["id"],
                     label=entry.get("name", entry["id"]),
-                    capabilities=frozenset({"chat"}),
+                    capabilities=_capabilities(entry),
                     status=status,
                     free=True,
                 )

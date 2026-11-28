@@ -52,6 +52,7 @@ class TestAnthropicLLMProviderListModels(unittest.TestCase):
         self.assertEqual(models[0]["id"], "claude-opus-4")
         self.assertEqual(models[0]["label"], "Claude Opus 4")
         self.assertIn("chat", models[0]["capabilities"])
+        self.assertIn("vision", models[0]["capabilities"])
         self.assertIsNone(models[0]["status"])
         self.assertFalse(models[0]["free"])
         self.assertEqual(models[1]["label"], "claude-haiku-4")  # falls back to id

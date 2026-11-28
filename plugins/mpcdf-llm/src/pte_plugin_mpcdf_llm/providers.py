@@ -13,6 +13,7 @@ the endpoint URL or key.
 """
 
 import asyncio
+import base64
 import copy
 import logging
 import time
@@ -22,7 +23,7 @@ import httpx
 from mpcdf_llm.errors import LoginRequired, MpcdfError
 from mpcdf_llm.manager import ProvisioningManager
 
-from fastapi_app.plugin_api import LLMModel, LLMProvider, LLMProviderError, LLMProviderRegistry
+from fastapi_app.plugin_api import LLMImage, LLMModel, LLMProvider, LLMProviderError, LLMProviderRegistry
 
 from . import manager as manager_module
 
@@ -53,19 +54,20 @@ def ready_presets(username: str) -> dict[str, str]:
 class MpcdfLLMProvider(LLMProvider):
     """LLM provider for one preset; usable only as a copy bound to a user (see for_user())."""
 
-    def __init__(self, preset: str, model: str, description: str = ""):
+    def __init__(self, preset: str, model: str, description: str = "", vision: bool = False):
         self.preset = preset
         self.model = model
         self.description = description
+        self.vision = vision
         self.id = f"{PROVIDER_ID_PREFIX}{preset}"
         self.label = f"MPCDF: {preset}"
         self.username: str | None = None
         self._cached: Any = None
         self._cached_at = 0.0
 
-    def info(self) -> tuple[str, str, str]:
+    def info(self) -> tuple[str, str, str, bool]:
         """What list_models() reports; a changed value means the provider must be re-registered."""
-        return (self.preset, self.model, self.description)
+        return (self.preset, self.model, self.description, self.vision)
 
     def for_user(self, username: str | None) -> "MpcdfLLMProvider | None":
         """A copy bound to the user if the user has a ready endpoint of this preset, else None."""
@@ -88,14 +90,15 @@ class MpcdfLLMProvider(LLMProvider):
             LLMModel(
                 id=self.model,
                 label=f"{self.description or self.preset} ({self.model})",
-                capabilities=frozenset({"chat"}),
+                capabilities=frozenset({"chat", "vision"} if self.vision else {"chat"}),
                 status=None,
                 free=True,
             )
         ]
 
     def supports_image_input(self, model_id: str) -> bool:
-        return False
+        """Whether the preset is marked as one whose model accepts images (`Preset.vision`)."""
+        return self.vision
 
     def supports_pdf_input(self, model_id: str) -> bool:
         return False
@@ -128,7 +131,7 @@ class MpcdfLLMProvider(LLMProvider):
         self._cached, self._cached_at = found, time.monotonic()
         return found
 
-    async def _post(self, available: Any, model_id: str, messages: list[dict[str, str]], temperature: float) -> httpx.Response:
+    async def _post(self, available: Any, model_id: str, messages: list[dict[str, object]], temperature: float) -> httpx.Response:
         creds = available.credentials
         async with new_http_client() as http:
             return await http.post(
@@ -144,9 +147,29 @@ class MpcdfLLMProvider(LLMProvider):
         user_prompt: str,
         temperature: float = 0.2,
     ) -> str:
+        return await self._chat(model_id, system_prompt, user_prompt, temperature)
+
+    async def chat_completion_with_images(
+        self,
+        model_id: str,
+        system_prompt: str,
+        user_prompt: str,
+        images: list[LLMImage],
+        temperature: float = 0.2,
+    ) -> str:
+        """Send the images as base64 data URLs in `image_url` content parts, in order, ahead of the prompt text."""
+        content: list[dict[str, object]] = [
+            {"type": "image_url", "image_url": {"url": f"data:{image['media_type']};base64,{base64.b64encode(image['data']).decode('ascii')}"}}
+            for image in images
+        ]
+        content.append({"type": "text", "text": user_prompt})
+        return await self._chat(model_id, system_prompt, content, temperature)
+
+    async def _chat(self, model_id: str, system_prompt: str, user_content: str | list[dict[str, object]], temperature: float) -> str:
+        """One chat request with the given user message content."""
         if self.username is None:  # the registered provider is never bound to a session
             raise self._gone()
-        messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}]
+        messages: list[dict[str, object]] = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_content}]
         response: httpx.Response | None = None
         for attempt in (0, 1):
             available = await self._credentials(refresh=attempt == 1)
@@ -207,7 +230,7 @@ def sync_catalog() -> None:
     registry = LLMProviderRegistry.get_instance()
     current: dict[str, MpcdfLLMProvider] = {}
     for preset in manager_module.catalog().list():
-        provider = MpcdfLLMProvider(preset.name, preset.model, preset.description or "")
+        provider = MpcdfLLMProvider(preset.name, preset.model, preset.description or "", preset.vision)
         current[provider.id] = provider
     for provider_id in _registered - current.keys():
         registry.unregister(provider_id)

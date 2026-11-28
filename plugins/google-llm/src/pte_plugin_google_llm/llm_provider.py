@@ -19,7 +19,7 @@ from google import genai
 from google.genai import errors as genai_errors, types
 
 from fastapi_app.lib.llm.rate_limit import DEFAULT_LIMITED_SECONDS, get_rate_limit_tracker
-from fastapi_app.plugin_api import LLMModel, LLMProvider, LLMProviderError, LLMRateLimitError, get_config
+from fastapi_app.plugin_api import LLMImage, LLMModel, LLMProvider, LLMProviderError, LLMRateLimitError, get_config
 
 logger = logging.getLogger(__name__)
 
@@ -204,7 +204,8 @@ class GoogleLLMProvider(LLMProvider):
                 LLMModel(
                     id=model_id,
                     label=model.display_name or model_id,
-                    capabilities=frozenset({"chat"}),
+                    # the listed Gemini chat models are multimodal
+                    capabilities=frozenset({"chat", "vision"}),
                     status=None,
                     free=False,
                 )
@@ -233,6 +234,33 @@ class GoogleLLMProvider(LLMProvider):
 
     def supports_pdf_input(self, model_id: str) -> bool:
         return True
+
+    def supports_image_input(self, model_id: str) -> bool:
+        return True
+
+    async def chat_completion_with_images(
+        self,
+        model_id: str,
+        system_prompt: str,
+        user_prompt: str,
+        images: list[LLMImage],
+        temperature: float = 0.2,
+    ) -> str:
+        """Send the images inline, in order, ahead of the prompt text."""
+        if self._client is None:
+            raise RuntimeError("Google LLM provider not configured (missing API key)")
+        self._raise_if_limited(model_id)
+        contents: list[types.Part | str] = [types.Part.from_bytes(data=image["data"], mime_type=image["media_type"]) for image in images]
+        contents.append(user_prompt)
+        try:
+            response = await self._client.aio.models.generate_content(
+                model=model_id,
+                contents=contents,  # type: ignore[arg-type]
+                config=_generation_config(model_id, system_prompt, temperature),
+            )
+        except _API_ERRORS as e:
+            raise self._call_error(model_id, e) from e
+        return _response_text(model_id, response)
 
     async def chat_completion_with_pdf(
         self,

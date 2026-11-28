@@ -25,7 +25,7 @@ Per preset, the supervisor (one per user, see [Multiple workers](#multiple-worke
 
 ## Models in the inference menu
 
-The plugin registers one provider per catalog preset: provider ID `mpcdf-llm-<preset>`, label `MPCDF: <preset>`, one model (the preset's model), chat only (no image or PDF input). The IDs are the same for every user, so a saved model choice works for everybody who runs that preset.
+The plugin registers one provider per catalog preset: provider ID `mpcdf-llm-<preset>`, label `MPCDF: <preset>`, one model (the preset's model), chat only (no PDF input). The model accepts images only if its preset is marked "Accepts images" (`vision` in llm-mpcdf's `Preset`), since the MPCDF service does not say which models do; it then shows the eye icon in the inference menu and gets the page images in the review of OCR errors. The IDs are the same for every user, so a saved model choice works for everybody who runs that preset.
 
 - A user sees and uses the provider only while that user has a ready endpoint of the preset. Other users, and calls without a user, do not see it (the editor's `LLMProvider.for_user()` hook). Every worker checks the endpoints of all users with a stored session every 10 seconds.
 - The user runs on their own MPCDF account, so the model counts like a model on the user's own API key: the model filter and the admin/free rules do not apply.
