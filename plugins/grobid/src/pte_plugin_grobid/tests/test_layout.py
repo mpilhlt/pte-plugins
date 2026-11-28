@@ -19,6 +19,7 @@ from pte_plugin_grobid.layout import (
     feature_page_starts,
     insert_page_breaks_from_feature_file,
     line_layout_from_rows,
+    line_token,
     parse_row,
     read_feature_rows,
     segmentation_layout,
@@ -78,6 +79,24 @@ class TestRows(unittest.TestCase):
         self.assertEqual(align(["a", None, "b"], ["a", "b"]), [0, None, 1])
         # a different token without a match nearby pairs with the next row
         self.assertEqual(align(["a", "q", "c"], ["a", "z", "c"]), [0, 1, 2])
+
+    def test_line_token_of_first_word_ending_with_dash(self):
+        # the TEI has the PDF's "— dieser" (dashes.py), GROBID's feature row "-dieser"
+        self.assertEqual(line_token("— dieser Beitrag"), ("-", "-dieser"))
+        self.assertEqual(line_token("rechts- und links"), ("rechts-", "rechts-und"))
+        self.assertEqual(line_token("— – x y"), ("-", "--x"))
+        self.assertEqual(line_token("dieser Beitrag"), "dieser")
+        self.assertEqual(line_token("—"), "-")
+        self.assertIsNone(line_token("  "))
+
+    def test_align_matches_either_form_of_a_line(self):
+        lines = ["x", ("-", "-dieser"), "b"]
+        self.assertEqual(align(lines, ["x", "-dieser", "b"]), [0, 1, 2])
+        # newer GROBID versions keep the space
+        self.assertEqual(align(lines, ["x", "-", "b"]), [0, 1, 2])
+        self.assertEqual(align(lines, ["x", "y", "-dieser", "b"]), [0, 2, 3])
+        rows = [FeatureRow("x", True, ()), FeatureRow("-dieser", False, ()), FeatureRow("b", True, ())]
+        self.assertEqual(line_layout_from_rows(lines, rows)[0], [0, 0, 1])
 
     def test_lines_without_row_inherit(self):
         rows = [FeatureRow("a", True, ("block", "top")), FeatureRow("c", True, ())]

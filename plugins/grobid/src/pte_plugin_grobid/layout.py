@@ -133,11 +133,22 @@ def read_feature_rows(zip_path: Path, suffix: str = "segmentation") -> list[Feat
     return rows
 
 
-def align(line_tokens: list[str | None], row_tokens: list[str]) -> list[int | None]:
+LineToken = str | tuple[str, ...]
+"""The first word of a line, or its forms if it ends with a dash (see `line_token()`)."""
+
+
+def token_matches(row_token: str, line: LineToken | None) -> bool:
+    """Whether a feature file row's token matches a line's token or one of its forms."""
+    if line is None:
+        return False
+    return row_token == line if isinstance(line, str) else row_token in line
+
+
+def align(line_tokens: list[LineToken | None], row_tokens: list[str]) -> list[int | None]:
     """
     The row of every line (None for lines without a row), by first tokens: a forward scan that
     skips rows or lines where a lookahead of WINDOW finds the token again, and otherwise pairs
-    the line with the next row.
+    the line with the next row. A line matches a row by any of its forms (see `line_token()`).
     """
     result: list[int | None] = [None] * len(line_tokens)
     li = ri = 0
@@ -146,19 +157,19 @@ def align(line_tokens: list[str | None], row_tokens: list[str]) -> list[int | No
         if token is None:
             li += 1
             continue
-        if token == row_tokens[ri]:
+        if token_matches(row_tokens[ri], token):
             result[li] = ri
             li += 1
             ri += 1
             continue
         skipped = False
         for d in range(1, WINDOW + 1):
-            if ri + d < len(row_tokens) and row_tokens[ri + d] == token:
+            if ri + d < len(row_tokens) and token_matches(row_tokens[ri + d], token):
                 # rows without a line (GROBID's line the XML does not have)
                 ri += d
                 skipped = True
                 break
-            if li + d < len(line_tokens) and line_tokens[li + d] == row_tokens[ri]:
+            if li + d < len(line_tokens) and token_matches(row_tokens[ri], line_tokens[li + d]):
                 # lines without a row (GROBID filtered them)
                 li += d
                 skipped = True
@@ -170,7 +181,7 @@ def align(line_tokens: list[str | None], row_tokens: list[str]) -> list[int | No
     return result
 
 
-def line_layout_from_rows(line_tokens: list[str | None], rows: list[FeatureRow]) -> tuple[list[int], list[list[str]]] | None:
+def line_layout_from_rows(line_tokens: list[LineToken | None], rows: list[FeatureRow]) -> tuple[list[int], list[list[str]]] | None:
     """
     (page index of every line, hints of every line), or None if fewer than MIN_MATCHED_SHARE of the
     lines with text have a row with their first token.
@@ -179,7 +190,7 @@ def line_layout_from_rows(line_tokens: list[str | None], rows: list[FeatureRow])
         return None
     mapping = align(line_tokens, [r.token for r in rows])
     with_text = [i for i, t in enumerate(line_tokens) if t is not None]
-    matched = sum(1 for i in with_text if (r := mapping[i]) is not None and rows[r].token == line_tokens[i])
+    matched = sum(1 for i in with_text if (r := mapping[i]) is not None and token_matches(rows[r].token, line_tokens[i]))
     if not with_text or matched / len(with_text) < MIN_MATCHED_SHARE:
         return None
     row_pages: list[int] = []
@@ -206,6 +217,29 @@ def first_token(text: str) -> str | None:
 
     words = text.split()
     return fold_dashes(words[0]) if words else None
+
+
+def line_token(text: str) -> LineToken | None:
+    """
+    The first token of a line's text (`first_token()`), and if it ends with a dash, also the words
+    up to the first that does not, joined: GROBID adds no space after a token that ends with a
+    dash, so its feature row for "— dieser Beitrag" starts with "-dieser", while the TEI has the
+    PDF's space again (`dashes.py`). Newer GROBID versions keep a wide enough space, so both forms
+    are returned.
+    """
+    from pte_plugin_grobid.dashes import fold_dashes
+
+    words = [fold_dashes(w) for w in text.split()]
+    if not words:
+        return None
+    joined = words[0]
+    if len(words) < 2 or not joined.endswith("-"):
+        return joined
+    for word in words[1:]:
+        if not joined.endswith("-"):
+            break
+        joined += word
+    return (words[0], joined)
 
 
 def feature_page_starts(zip_path: Path, suffix: str = "segmentation") -> list[int] | None:
@@ -265,7 +299,7 @@ def _feature_layout(doc, xml: str, doc_id: str) -> tuple[list[int], list[list[st
     rows = read_feature_rows(zip_path, get_feature_suffix(SEGMENTATION))
     if rows is None:
         return None
-    tokens = [first_token(" ".join(p.text for p in line.pieces)) for line in doc.lines]
+    tokens = [line_token(" ".join(p.text for p in line.pieces)) for line in doc.lines]
     result = line_layout_from_rows(tokens, rows)
     if result is None:
         logger.warning(f"grobid layout: the feature file of {doc_id} does not match the document's lines")

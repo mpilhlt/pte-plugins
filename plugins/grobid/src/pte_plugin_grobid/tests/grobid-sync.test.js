@@ -10,7 +10,7 @@ import assert from 'node:assert';
 // Stub the browser-only base class before the dynamic import below.
 global.FrontendExtensionPlugin = class {};
 
-const { pageBreaksOf, alignLines, pageBreakDiagnostics, foldDashes } = await import('../extensions/grobid-sync.js');
+const { pageBreaksOf, alignLines, pageBreakDiagnostics, foldDashes, joinedFirstWord, lineForms, diffTokens } = await import('../extensions/grobid-sync.js');
 
 const DOC = `<TEI><teiHeader/><text>
   <pb n="1"/>
@@ -88,5 +88,39 @@ describe('foldDashes', () => {
     const text = '— II. – x − y ‐ z - w';
     assert.strictEqual(foldDashes(text), '- II. - x - y - z - w');
     assert.strictEqual(foldDashes(text).length, text.length);
+  });
+});
+
+describe('first words ending with a dash', () => {
+  // The PDF and the TEI (dashes.py) have "— dieser Beitrag", GROBID's feature row "-dieser": GROBID
+  // adds no space after a token that ends with a dash
+  const xml = '<text>— dieser Beitrag <lb/>möchte</text>';
+  const lines = [
+    { token: '-', joined: '-dieser', from: 6, to: 7 },
+    { token: 'möchte', from: 30, to: 36 }
+  ];
+
+  it('joins a first word ending with a dash with the following words', () => {
+    assert.strictEqual(joinedFirstWord('— dieser Beitrag'), '-dieser');
+    assert.strictEqual(joinedFirstWord('rechts- und links'), 'rechts-und');
+    assert.strictEqual(joinedFirstWord('— – x y'), '--x');
+    assert.strictEqual(joinedFirstWord('dieser Beitrag'), null);
+    assert.strictEqual(joinedFirstWord('—'), null);
+    assert.strictEqual(joinedFirstWord('  '), null);
+  });
+
+  it('matches the feature token with and without the space', () => {
+    assert.deepStrictEqual(diffTokens(['-dieser', 'möchte'], lines, xml, true), []);
+    // newer GROBID versions keep the space if pdfalto reports one
+    assert.deepStrictEqual(diffTokens(['-', 'möchte'], lines, xml, true), []);
+    const changed = diffTokens(['-jener', 'möchte'], lines, xml, true);
+    assert.deepStrictEqual(changed.map(d => d.message), ['Sync: expected "-jener", found "-"']);
+  });
+
+  it('aligns lines by either form', () => {
+    assert.deepStrictEqual(lineForms(lines[0]), ['-', '-dieser']);
+    assert.strictEqual(lineForms(lines[1]), 'möchte');
+    assert.deepStrictEqual(alignLines(lines.map(lineForms), ['-dieser', 'möchte']), [0, 1]);
+    assert.deepStrictEqual(alignLines(['x', ...lines.map(lineForms)], ['x', 'y', '-dieser', 'möchte']), [0, 2, 3]);
   });
 });

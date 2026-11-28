@@ -49,6 +49,44 @@ export function foldDashes(text) {
   return text.replace(DASH_RE, '-');
 }
 
+/**
+ * The first word of a line as GROBID's feature file may have it if the word ends with a dash:
+ * GROBID adds no space after a token that ends with a dash (`PDFALTOSaxHandler`), so its row for
+ * "— dieser Beitrag" starts with "-dieser", while the TEI has the PDF's space again (dashes.py).
+ * Newer GROBID versions keep a wide enough space, so both forms must be accepted.
+ * @param {string} text - Decoded text of the line
+ * @returns {string|null} The words up to the first that does not end with a dash, joined and with
+ *   dashes folded; null if the first word does not end with a dash or nothing follows it
+ */
+export function joinedFirstWord(text) {
+  const words = foldDashes(text).split(/\s+/).filter(Boolean);
+  if (words.length < 2 || !/** @type {string} */ (words[0]).endsWith('-')) return null;
+  let joined = /** @type {string} */ (words[0]);
+  for (let i = 1; i < words.length && joined.endsWith('-'); i++) joined += words[i];
+  return joined;
+}
+
+/**
+ * The forms of a line's first word that match a feature row: the word, and the joined form of
+ * `joinedFirstWord()` if there is one.
+ * @param {{token: string, joined?: string}} line
+ * @returns {string|string[]}
+ */
+export function lineForms(line) {
+  return line.joined ? [line.token, line.joined] : line.token;
+}
+
+/**
+ * Whether a feature token matches a token or line of the document.
+ * @param {string|undefined} featureToken
+ * @param {string|string[]|null|undefined} forms - A token, or the forms of a line (see `lineForms()`)
+ * @returns {boolean}
+ */
+function matches(featureToken, forms) {
+  if (featureToken === undefined || forms === null || forms === undefined) return false;
+  return Array.isArray(forms) ? forms.includes(featureToken) : forms === featureToken;
+}
+
 // Matches XML character and named entity references: &amp; &#60; &#x3c;
 const ENTITY_RE = /&(?:#(\d+)|#x([0-9a-fA-F]+)|([a-zA-Z][a-zA-Z0-9]*));/g;
 const NAMED_ENTITIES = { amp: '&', lt: '<', gt: '>', apos: "'", quot: '"' };
@@ -81,8 +119,9 @@ const NO_SPACE_AFTER = /[(\[{«„“‘]$/;
  */
 
 /**
- * A token of the document with its position in the XML
- * @typedef {{token: string, from: number, to: number}} XmlToken
+ * A token of the document with its position in the XML; `joined` is the other form of the first
+ * word of a line (see `joinedFirstWord()`)
+ * @typedef {{token: string, from: number, to: number, joined?: string}} XmlToken
  */
 
 /**
@@ -111,7 +150,7 @@ export function joinTokens(tokens) {
 /**
  * The page (0-based) of every line, by the feature file row it is aligned with (see
  * `alignLines()`); a line without a row is on the page of the line before it.
- * @param {string[]} lineTokens
+ * @param {(string|string[])[]} lineTokens - See `lineForms()`
  * @param {string[]} rowTokens
  * @param {number[]} pageStarts - Indices of the rows that start a page, ascending
  * @returns {(number|null)[]} null for lines before the first aligned line or without page starts
@@ -153,7 +192,7 @@ export function diffTokens(featureTokens, xmlTokens, xmlText, lineBased) {
 
   while (fi < featureTokens.length && xi < xmlTokens.length) {
     const xmlToken = /** @type {XmlToken} */ (xmlTokens[xi]);
-    if (featureTokens[fi] === xmlToken.token) {
+    if (matches(featureTokens[fi], lineForms(xmlToken))) {
       fi++;
       xi++;
       continue;
@@ -162,7 +201,7 @@ export function diffTokens(featureTokens, xmlTokens, xmlText, lineBased) {
     let recovered = false;
     for (let d = 1; d <= WINDOW; d++) {
       // Missing tokens: feature list is ahead of the XML
-      if (fi + d < featureTokens.length && featureTokens[fi + d] === xmlToken.token) {
+      if (fi + d < featureTokens.length && matches(featureTokens[fi + d], lineForms(xmlToken))) {
         /** @type {SyncDiagnostic & {index: number}} */
         const diagnostic = {
           from: xmlToken.from,
@@ -181,7 +220,7 @@ export function diffTokens(featureTokens, xmlTokens, xmlText, lineBased) {
         break;
       }
       // Extra tokens: XML has tokens the feature file does not
-      if (xi + d < xmlTokens.length && featureTokens[fi] === /** @type {XmlToken} */ (xmlTokens[xi + d]).token) {
+      if (xi + d < xmlTokens.length && matches(featureTokens[fi], lineForms(/** @type {XmlToken} */ (xmlTokens[xi + d])))) {
         const to = /** @type {XmlToken} */ (xmlTokens[xi + d - 1]).to;
         /** @type {SyncDiagnostic & {index: number}} */
         const diagnostic = {
@@ -278,6 +317,7 @@ const PB_RE = /<(?:[\w.-]+:)?pb\b((?:"[^"]*"|'[^']*'|[^>"'])*)\/?>/g;
  * @property {string} token - First word of the line
  * @property {number} from - Offset of the word in the XML
  * @property {number} to - Offset after the word
+ * @property {string} [joined] - Its other form if it ends with a dash (see `joinedFirstWord()`)
  */
 
 /**
@@ -324,7 +364,7 @@ export function pageBreaksOf(xmlText, lines) {
 /**
  * The feature file row of every line (null for lines without a row), by first tokens: the
  * forward scan of `align()` in layout.py.
- * @param {string[]} lineTokens
+ * @param {(string|string[])[]} lineTokens - The first word of each line, or its forms (see `lineForms()`)
  * @param {string[]} rowTokens
  * @returns {(number|null)[]}
  */
@@ -334,18 +374,18 @@ export function alignLines(lineTokens, rowTokens) {
   let li = 0;
   let ri = 0;
   while (li < lineTokens.length && ri < rowTokens.length) {
-    if (lineTokens[li] === rowTokens[ri]) {
+    if (matches(rowTokens[ri], lineTokens[li])) {
       result[li++] = ri++;
       continue;
     }
     let skipped = false;
     for (let d = 1; d <= LINE_WINDOW; d++) {
-      if (ri + d < rowTokens.length && rowTokens[ri + d] === lineTokens[li]) {
+      if (ri + d < rowTokens.length && matches(rowTokens[ri + d], lineTokens[li])) {
         ri += d;
         skipped = true;
         break;
       }
-      if (li + d < lineTokens.length && lineTokens[li + d] === rowTokens[ri]) {
+      if (li + d < lineTokens.length && matches(rowTokens[ri], lineTokens[li + d])) {
         li += d;
         skipped = true;
         break;
@@ -368,7 +408,7 @@ export function alignLines(lineTokens, rowTokens) {
  */
 export function pageBreakDiagnostics(lines, pageBreaks, featureTokens, pageStarts) {
   if (pageBreaks.length === 0 || pageStarts.length === 0 || lines.length === 0) return [];
-  const mapping = alignLines(lines.map(l => l.token), featureTokens);
+  const mapping = alignLines(lines.map(lineForms), featureTokens);
   // the first line at or after each page start row
   /** @type {{line: number, page: number}[]} */
   const starts = [];
@@ -532,7 +572,7 @@ export default class GrobidSyncExtension extends FrontendExtensionPlugin {
     const found = diffTokens(featureTokens, xmlTokens, xmlText, lineBased);
     /** @type {SyncDiagnostic[]} */
     const diagnostics = lineBased
-      ? withPages(found, linePages(xmlTokens.map(t => t.token), featureTokens, pageStarts), new Set(pendingPages))
+      ? withPages(found, linePages(xmlTokens.map(lineForms), featureTokens, pageStarts), new Set(pendingPages))
       : found.map(({ index: _index, ...d }) => d);
     if (lineBased && pageStarts.length > 0) {
       diagnostics.push(...pageBreakDiagnostics(xmlTokens, pageBreaksOf(xmlText, xmlTokens), featureTokens, pageStarts));
@@ -636,7 +676,7 @@ export default class GrobidSyncExtension extends FrontendExtensionPlugin {
    * token (which is also decoded).
    *
    * @param {{seg: string, absStart: number}[]} segs
-   * @returns {{token: string, from: number, to: number}|null}
+   * @returns {LineToken|null}
    */
   #firstWordOfLine(segs) {
     const decoded = [];
@@ -666,13 +706,18 @@ export default class GrobidSyncExtension extends FrontendExtensionPlugin {
         rawSpans.push([absStart + i, absStart + i + 1]);
       }
     }
-    const m = /\S+/.exec(decoded.join(''));
+    const text = decoded.join('');
+    const m = /\S+/.exec(text);
     if (!m) return null;
-    return {
+    /** @type {LineToken} */
+    const result = {
       token: foldDashes(m[0]),
       from: rawSpans[m.index][0],
       to: rawSpans[m.index + m[0].length - 1][1],
     };
+    const joined = joinedFirstWord(text);
+    if (joined !== null) result.joined = joined;
+    return result;
   }
 
   /**

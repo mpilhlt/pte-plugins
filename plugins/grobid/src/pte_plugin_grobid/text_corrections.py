@@ -25,7 +25,7 @@ from pathlib import Path
 from pte_plugin_grobid.cache import cache_training_data, get_cache_zip
 from pte_plugin_grobid.config import get_feature_suffix, get_grobid_server_url
 from pte_plugin_grobid.handlers.training import TrainingHandler
-from pte_plugin_grobid.layout import MIN_MATCHED_SHARE, SEGMENTATION, _zone_document, align, first_token, read_feature_rows
+from pte_plugin_grobid.layout import MIN_MATCHED_SHARE, SEGMENTATION, LineToken, _zone_document, align, line_token, read_feature_rows, token_matches
 from pte_plugin_grobid.reload_feature_file import check_grobid_revision
 from pte_plugin_grobid.sync import parse_encoding_labels, set_pdf_hash_label, set_revision_label
 
@@ -34,12 +34,12 @@ logger = logging.getLogger(__name__)
 MISMATCH_MESSAGE = "The feature file of the corrected PDF does not match these lines of the document."
 
 
-def _line_tokens(xml: str, doc_id: str) -> list[str | None] | None:
-    """The first token of every zone line of a segmentation document, or None if it cannot be read as zones."""
+def _line_tokens(xml: str, doc_id: str) -> list[LineToken | None] | None:
+    """The first token (or its forms, see layout.line_token()) of every zone line of a segmentation document, or None if it cannot be read as zones."""
     doc = _zone_document(xml, doc_id)
     if doc is None:
         return None
-    return [first_token(" ".join(p.text for p in line.pieces)) for line in doc.lines]
+    return [line_token(" ".join(p.text for p in line.pieces)) for line in doc.lines]
 
 
 def unmatched_lines(xml: str, doc_id: str, labels: Mapping[str, str]) -> set[int] | None:
@@ -59,7 +59,7 @@ def unmatched_lines(xml: str, doc_id: str, labels: Mapping[str, str]) -> set[int
     if rows is None:
         return None
     mapping = align(tokens, [r.token for r in rows])
-    return {i for i, token in enumerate(tokens) if token is not None and ((r := mapping[i]) is None or rows[r].token != token)}
+    return {i for i, token in enumerate(tokens) if token is not None and ((r := mapping[i]) is None or not token_matches(rows[r].token, token))}
 
 
 def corrected_pdf_handler(xml: str, doc_id: str, pdf_path: Path, pdf_hash: str, corrected_lines: frozenset[int]) -> str:
