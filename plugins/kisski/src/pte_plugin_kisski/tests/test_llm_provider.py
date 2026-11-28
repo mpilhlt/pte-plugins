@@ -10,6 +10,7 @@ from unittest.mock import MagicMock, patch
 
 from pte_plugin_kisski.llm_provider import (
     KisskiLLMProvider,
+    _capabilities,
     _demand_to_availability,
 )
 
@@ -117,6 +118,20 @@ class TestKisskiLLMProviderSharedKey(unittest.TestCase):
 
         self.assertEqual(user_provider._api_key, "user-key")
         self.assertEqual(user_provider.secret_service, "kisski")
+
+
+
+class TestCapabilities(unittest.TestCase):
+    """Test the vision capability read from the `input` modalities of /models."""
+
+    def test_image_input_is_vision(self):
+        self.assertEqual(_capabilities({"id": "m", "input": ["text", "image"]}), frozenset({"chat", "vision"}))
+
+    def test_text_input_is_chat_only(self):
+        self.assertEqual(_capabilities({"id": "m", "input": ["text"]}), frozenset({"chat"}))
+
+    def test_missing_input_is_chat_only(self):
+        self.assertEqual(_capabilities({"id": "m"}), frozenset({"chat"}))
 
 
 if __name__ == "__main__":
