@@ -68,7 +68,8 @@ class AnthropicLLMProvider(LLMProvider):
             LLMModel(
                 id=entry["id"],
                 label=entry.get("display_name", entry["id"]),
-                capabilities=frozenset({"chat"}),
+                # every current Claude model accepts images
+                capabilities=frozenset({"chat", "vision"}),
                 status=None,
                 free=False,
             )
