@@ -432,6 +432,17 @@ export function pageBreakDiagnostics(lines, pageBreaks, featureTokens, pageStart
   return diagnostics;
 }
 
+/**
+ * A key of a diagnostic that does not depend on its position: severity, message and the text it
+ * covers, as `diagnosticKey()` in the editor's lint-utils.js.
+ * @param {Diagnostic} diagnostic
+ * @param {Text} doc - The document its positions refer to
+ * @returns {string}
+ */
+export function dismissKey(diagnostic, doc) {
+  return [diagnostic.severity, diagnostic.message, doc.sliceString(diagnostic.from, diagnostic.to)].join('\u0000');
+}
+
 export default class GrobidSyncExtension extends FrontendExtensionPlugin {
   /** @param {PluginContext} context */
   constructor(context) {
@@ -459,8 +470,8 @@ export default class GrobidSyncExtension extends FrontendExtensionPlugin {
   #last = null;
 
   /**
-   * Keys (`from:to:message`) of the diagnostics the user dismissed since the last edit, which are
-   * not merged in again
+   * Keys (see `dismissKey()`) of the diagnostics the user dismissed since the document was loaded,
+   * which are not reported again
    * @type {Set<string>}
    */
   #dismissed = new Set();
@@ -477,13 +488,12 @@ export default class GrobidSyncExtension extends FrontendExtensionPlugin {
     // cores before the sync prompt have no sync sources
     if (typeof lintUtils.registerSyncSource === 'function') lintUtils.registerSyncSource(SOURCE, { target: SYNC_TARGET });
     lintUtils.addDismissListener(dismissed => {
-      for (const d of dismissed) if (d.source === SOURCE) this.#dismissed.add(`${d.from}:${d.to}:${d.message}`);
+      const doc = xmleditor.getView()?.state.doc;
+      if (!doc) return;
+      for (const d of dismissed) if (d.source === SOURCE) this.#dismissed.add(dismissKey(d, doc));
     });
     xmleditor.addUpdateListener(update => {
-      if (update.docChanged) {
-        this.#dismissed.clear();
-        return;
-      }
+      if (update.docChanged) return;
       if (!lintUtils.replacesDiagnostics(update)) return;
       if (lintUtils.collectDiagnostics(update.state).some(d => d.source === SOURCE)) return;
       setTimeout(() => this.#remergeDiagnostics(), 0);
@@ -501,6 +511,7 @@ export default class GrobidSyncExtension extends FrontendExtensionPlugin {
    */
   async onXmlChange(newStableId) {
     this.#currentStableId = newStableId;
+    this.#dismissed.clear();
     await this.#fetchTokens();
   }
 
@@ -549,7 +560,7 @@ export default class GrobidSyncExtension extends FrontendExtensionPlugin {
   #remergeDiagnostics() {
     const view = this.getDependency('xmleditor').getView();
     if (!view) return;
-    const own = this.#lintSource(view).filter(d => !this.#dismissed.has(`${d.from}:${d.to}:${d.message}`));
+    const own = this.#lintSource(view);
     this.getDependency('lint-utils').applyMergedDiagnostics(view, SOURCE, own);
   }
 
@@ -563,7 +574,7 @@ export default class GrobidSyncExtension extends FrontendExtensionPlugin {
     const cached = this.#cache.get(this.#cacheKey());
     if (!cached) return [];
     const doc = view.state.doc;
-    if (this.#last && this.#last.doc === doc && this.#last.cached === cached) return this.#last.diagnostics;
+    if (this.#last && this.#last.doc === doc && this.#last.cached === cached) return this.#withoutDismissed(this.#last.diagnostics, doc);
     const { tokens: featureTokens, lineBased, pageStarts, pendingPages } = cached;
     const xmlText = doc.toString();
     const xmlTokens = lineBased
@@ -579,7 +590,19 @@ export default class GrobidSyncExtension extends FrontendExtensionPlugin {
     }
     const own = diagnostics.map(d => ({ ...d, source: SOURCE }));
     this.#last = { doc, cached, diagnostics: own };
-    return own;
+    return this.#withoutDismissed(own, doc);
+  }
+
+  /**
+   * The diagnostics without those the user dismissed: they stay hidden across edits and new lint
+   * runs until another document is loaded, unless the text they cover changes.
+   * @param {Diagnostic[]} diagnostics
+   * @param {Text} doc
+   * @returns {Diagnostic[]}
+   */
+  #withoutDismissed(diagnostics, doc) {
+    if (this.#dismissed.size === 0) return diagnostics;
+    return diagnostics.filter(d => !this.#dismissed.has(dismissKey(d, doc)));
   }
 
   /**

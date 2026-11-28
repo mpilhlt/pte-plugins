@@ -34,7 +34,7 @@ const tick = () => new Promise(resolve => setTimeout(resolve, 5));
  * @param {string} xml
  */
 async function setup(xml) {
-  const doc = { toString: () => xml };
+  const doc = { toString: () => xml, sliceString: (/** @type {number} */ from, /** @type {number} */ to) => xml.slice(from, to) };
   const view = { state: { doc, diagnostics: /** @type {object[]} */ ([]) } };
   /** @type {Array<(update: object) => void>} */
   const updateListeners = [];
@@ -42,9 +42,12 @@ async function setup(xml) {
   const dismissListeners = [];
   /** @type {object[][]} */
   const merges = [];
+  /** @type {(view: object) => object[]} */
+  let lint = () => [];
   dependencies = {
     xmleditor: {
-      registerLintSource() {},
+      /** @param {(view: object) => object[]} fn */
+      registerLintSource: fn => { lint = fn; },
       refreshLinting() {},
       getView: () => view,
       /** @param {(update: object) => void} fn */
@@ -81,7 +84,7 @@ async function setup(xml) {
     for (const fn of dismissListeners) fn(dismissed);
   };
   const edit = () => { for (const fn of updateListeners) fn({ docChanged: true, replaces: true, state: view.state }); };
-  return { merges, replaceDiagnostics, dismiss, edit };
+  return { merges, replaceDiagnostics, dismiss, edit, extension, lintNow: () => lint(view) };
 }
 
 describe('grobid-sync diagnostics after a replacement of the diagnostic set', () => {
@@ -110,17 +113,24 @@ describe('grobid-sync diagnostics after a replacement of the diagnostic set', ()
     assert.deepStrictEqual(merges, [[]]);
   });
 
-  it('leaves out dismissed diagnostics until the next edit', async () => {
-    const { merges, replaceDiagnostics, dismiss, edit } = await setup(XML_OUT_OF_SYNC);
+  it('leaves out dismissed diagnostics across edits and lint runs until another document is loaded', async () => {
+    const { merges, replaceDiagnostics, dismiss, edit, extension, lintNow } = await setup(XML_OUT_OF_SYNC);
     replaceDiagnostics([]);
     await tick();
     const [first] = merges[0];
+    /** @param {object[]} list */
+    const has = list => list.some(d => d.from === first.from && d.message === first.message);
     dismiss([first]);
     await tick();
-    assert.ok(!merges[1].some(d => d.from === first.from && d.message === first.message));
+    assert.ok(!has(merges[1]));
+    // an edit elsewhere (e.g. applying another fix) and the lint run after it
     edit();
+    assert.ok(!has(lintNow()));
     replaceDiagnostics([]);
     await tick();
-    assert.ok(merges[2].some(d => d.from === first.from && d.message === first.message));
+    assert.ok(!has(merges[2]));
+    // another document
+    await extension.onXmlChange('stable-2');
+    assert.ok(has(lintNow()));
   });
 });
