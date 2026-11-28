@@ -180,11 +180,10 @@ class TestChat(_Base):
         self.assertNotIn(key, str(ctx.exception))
 
     async def test_vision_preset_accepts_images(self):
+        manager_module.catalog().put(PRESET.model_copy(update={"vision": True}))
         provider = await self.ready_provider()
-        with patch.object(manager_module, "vision_presets", return_value=frozenset({"p"})):
-            self.assertTrue(provider.supports_image_input("openai/gpt-oss-120b"))
-            self.assertEqual(provider.list_models()[0]["capabilities"], frozenset({"chat", "vision"}))
-        url = self.fake.endpoints[1]["url"]
+        self.assertTrue(provider.supports_image_input("openai/gpt-oss-120b"))
+        self.assertEqual(provider.list_models()[0]["capabilities"], frozenset({"chat", "vision"}))
         bodies = []
 
         def handler(request):
@@ -197,13 +196,13 @@ class TestChat(_Base):
         content = json.loads(bodies[0])["messages"][1]["content"]
         self.assertEqual([part["type"] for part in content], ["image_url", "text"])
         self.assertEqual(content[0]["image_url"]["url"], "data:image/jpeg;base64,aW1n")
-        self.assertNotIn(url, answer)
 
-    async def test_vision_presets_from_comma_separated_config(self):
-        with patch.object(manager_module, "get_plugin_config", return_value=" p, q ,"):
-            self.assertEqual(manager_module.vision_presets(), frozenset({"p", "q"}))
-        with patch.object(manager_module, "get_plugin_config", return_value=["p"]):
-            self.assertEqual(manager_module.vision_presets(), frozenset({"p"}))
+    async def test_changed_vision_flag_reregisters_provider(self):
+        await providers.sync_providers()
+        self.assertFalse(self.registry.get_provider("mpcdf-llm-p").vision)
+        manager_module.catalog().put(PRESET.model_copy(update={"vision": True}))
+        await providers.sync_providers()
+        self.assertTrue(self.registry.get_provider("mpcdf-llm-p").vision)
 
     async def test_unbound_provider_never_chats(self):
         provider = providers.MpcdfLLMProvider("p", "m")

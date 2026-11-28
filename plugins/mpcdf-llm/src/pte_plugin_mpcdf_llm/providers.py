@@ -54,19 +54,20 @@ def ready_presets(username: str) -> dict[str, str]:
 class MpcdfLLMProvider(LLMProvider):
     """LLM provider for one preset; usable only as a copy bound to a user (see for_user())."""
 
-    def __init__(self, preset: str, model: str, description: str = ""):
+    def __init__(self, preset: str, model: str, description: str = "", vision: bool = False):
         self.preset = preset
         self.model = model
         self.description = description
+        self.vision = vision
         self.id = f"{PROVIDER_ID_PREFIX}{preset}"
         self.label = f"MPCDF: {preset}"
         self.username: str | None = None
         self._cached: Any = None
         self._cached_at = 0.0
 
-    def info(self) -> tuple[str, str, str]:
+    def info(self) -> tuple[str, str, str, bool]:
         """What list_models() reports; a changed value means the provider must be re-registered."""
-        return (self.preset, self.model, self.description)
+        return (self.preset, self.model, self.description, self.vision)
 
     def for_user(self, username: str | None) -> "MpcdfLLMProvider | None":
         """A copy bound to the user if the user has a ready endpoint of this preset, else None."""
@@ -89,18 +90,15 @@ class MpcdfLLMProvider(LLMProvider):
             LLMModel(
                 id=self.model,
                 label=f"{self.description or self.preset} ({self.model})",
-                capabilities=frozenset({"chat", "vision"} if self._vision() else {"chat"}),
+                capabilities=frozenset({"chat", "vision"} if self.vision else {"chat"}),
                 status=None,
                 free=True,
             )
         ]
 
-    def _vision(self) -> bool:
-        """Whether an administrator listed the preset as one whose model accepts images."""
-        return self.preset in manager_module.vision_presets()
-
     def supports_image_input(self, model_id: str) -> bool:
-        return self._vision()
+        """Whether the preset is marked as one whose model accepts images (`Preset.vision`)."""
+        return self.vision
 
     def supports_pdf_input(self, model_id: str) -> bool:
         return False
@@ -232,7 +230,7 @@ def sync_catalog() -> None:
     registry = LLMProviderRegistry.get_instance()
     current: dict[str, MpcdfLLMProvider] = {}
     for preset in manager_module.catalog().list():
-        provider = MpcdfLLMProvider(preset.name, preset.model, preset.description or "")
+        provider = MpcdfLLMProvider(preset.name, preset.model, preset.description or "", preset.vision)
         current[provider.id] = provider
     for provider_id in _registered - current.keys():
         registry.unregister(provider_id)
